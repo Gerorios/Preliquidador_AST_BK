@@ -16,8 +16,6 @@ from app.schemas.schemas import (
 
 router = APIRouter(prefix="/api/preliquidacion", tags=["Preliquidación"])
 
-USUARIO_ID_TEMPORAL = 1
-
 
 def get_service(
     db_propia: Session = Depends(get_db_propia),
@@ -30,18 +28,11 @@ def get_service(
 @router.post("/generar", response_model=MensajeResponse)
 def generar(
     req: PreliquidacionGenerarRequest,
+    usuario=Depends(get_usuario_actual),
     service: PreliquidacionService = Depends(get_service),
 ):
-    """
-    Primera vez: genera la preliquidación completa.
-    Llamadas siguientes: actualización incremental
-    (inserta nuevas, elimina las que ya no están en campo, ignora las existentes).
-    """
     try:
-        resultado = service.generar(
-            quincena=req.quincena,
-            usuario_id=USUARIO_ID_TEMPORAL,
-        )
+        resultado = service.generar(quincena=req.quincena, usuario_id=usuario.id)
         stats = service.estadisticas(resultado["preliquidacion_id"])
         return MensajeResponse(
             mensaje="Preliquidación procesada correctamente",
@@ -61,10 +52,7 @@ def generar(
 
 
 @router.get("/empresas")
-def listar_empresas(
-    db_sueldos: Session = Depends(get_db_sueldos),
-):
-    """Lista las empresas disponibles desde nuempleados."""
+def listar_empresas(db_sueldos: Session = Depends(get_db_sueldos)):
     from sqlalchemy import text
     resultado = db_sueldos.execute(text(
         "SELECT DISTINCT empresa FROM nuempleados "
@@ -81,9 +69,7 @@ def listar(service: PreliquidacionService = Depends(get_service)):
     for p in preliquidaciones:
         stats = service.estadisticas(p.id)
         resultado.append(PreliquidacionResponse(
-            id=p.id,
-            quincena=p.quincena,
-            creado_en=p.creado_en,
+            id=p.id, quincena=p.quincena, creado_en=p.creado_en,
             total_lineas=stats["total_lineas"],
             lineas_revisadas=stats["lineas_revisadas"],
             lineas_con_alerta=stats["lineas_con_alerta"],
@@ -91,42 +77,33 @@ def listar(service: PreliquidacionService = Depends(get_service)):
     return resultado
 
 
-@router.post("/{preliq_id}/backfill-conceptos", response_model=MensajeResponse)
-def backfill_conceptos(
+# ─── Operación unificada ──────────────────────────────────────────────────────
+
+@router.post("/{preliq_id}/aplicar", response_model=MensajeResponse)
+def aplicar(
     preliq_id: int,
     service: PreliquidacionService = Depends(get_service),
 ):
-    """
-    Rellena el maestro de conceptos con los `detalle` de las líneas
-    existentes de esta quincena (sin reglas, para completar después).
-    Útil la primera vez o tras un reset de la tabla.
-    """
+    """Recalcula precios y aplica conceptos en una sola operación."""
     try:
-        resultado = service.backfill_detalles_conceptos(preliq_id)
+        resultado = service.aplicar(preliq_id)
         return MensajeResponse(
-            mensaje="Detalles cargados en el maestro de conceptos",
-            detalle=f"{resultado['detalles_unicos']} detalles únicos · {resultado['insertados']} nuevos insertados"
+            mensaje="Precios y conceptos aplicados",
+            detalle=f"{resultado['actualizadas']} líneas con precio · {resultado['sin_precio']} sin precio · {resultado['conceptos_aplicados']} con conceptos"
         )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── Mantener endpoints viejos por compatibilidad ────────────────────────────
+
 @router.post("/{preliq_id}/aplicar-conceptos", response_model=MensajeResponse)
-def aplicar_conceptos(
-    preliq_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """
-    Aplica de forma pasiva las reglas del maestro de conceptos a todas
-    las líneas que matcheen, generando los ConceptoAdicional automáticos
-    (jornal remunerativo, no remunerativo, plus bins, etc.)
-    """
+def aplicar_conceptos(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     try:
         resultado = service.aplicar_conceptos(preliq_id)
-        return MensajeResponse(
-            mensaje="Conceptos aplicados",
-            detalle=f"{resultado['actualizadas']} líneas actualizadas · {resultado['sin_reglas']} sin reglas definidas"
-        )
+        return MensajeResponse(mensaje="Conceptos aplicados", detalle=f"{resultado['actualizadas']} líneas actualizadas")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -134,36 +111,27 @@ def aplicar_conceptos(
 
 
 @router.post("/{preliq_id}/recalcular", response_model=MensajeResponse)
-def recalcular_precios(
-    preliq_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """
-    Recalcula precios e importes de todas las lineas sin precio.
-    Util cuando se cargan precios despues de generar la preliquidacion.
-    """
+def recalcular_precios(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     try:
         resultado = service.recalcular_precios(preliq_id)
-        return MensajeResponse(
-            mensaje="Precios recalculados",
-            detalle=f"{resultado['actualizadas']} lineas actualizadas · {resultado['sin_precio']} aun sin precio"
-        )
+        return MensajeResponse(mensaje="Precios recalculados", detalle=f"{resultado['actualizadas']} líneas · {resultado['sin_precio']} sin precio")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{preliq_id}/backfill-conceptos", response_model=MensajeResponse)
+def backfill_conceptos(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
+    try:
+        resultado = service.backfill_detalles_conceptos(preliq_id)
+        return MensajeResponse(mensaje="Detalles cargados", detalle=f"{resultado['insertados']} nuevos")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{preliq_id}/dashboard-verificacion")
-def dashboard_verificacion(
-    preliq_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """
-    Controles de verificación para el liquidador: excesos de horas/tancadas/
-    plantas por empleado y día, y el resumen de importe/días/$-por-día por
-    empleado con desglose de líneas.
-    """
+def dashboard_verificacion(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     preliq = service.obtener(preliq_id)
     if not preliq:
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
@@ -174,15 +142,7 @@ def dashboard_verificacion(
 
 
 @router.get("/{preliq_id}/control-plantas-jornal")
-def control_plantas_jornal(
-    preliq_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """
-    Análisis gerencial: rendimiento (plantas/hora máquina) y cuánto cobraría
-    un jornal de 8hs a ese ritmo y precio, agrupado por cliente/finca/tarea.
-    Solo considera líneas con grupo_pago_aplicado = "PLANTAS".
-    """
+def control_plantas_jornal(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     preliq = service.obtener(preliq_id)
     if not preliq:
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
@@ -193,11 +153,7 @@ def control_plantas_jornal(
 
 
 @router.get("/{preliq_id}/filtros")
-def obtener_filtros(
-    preliq_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """Devuelve los valores únicos disponibles para filtrar en la tabla."""
+def obtener_filtros(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     from sqlalchemy import text as sql_text
     db = service.db
     def unicos(campo):
@@ -207,22 +163,15 @@ def obtener_filtros(
             f"ORDER BY {campo}"
         ), {"pid": preliq_id}).fetchall()
         return [r[0] for r in rows if r[0]]
-
     return {
-        "clientes": unicos("nombre_cliente"),
-        "fincas": unicos("nombre_finca"),
-        "tareas": unicos("nombre_tarea"),
-        "empresas": unicos("empresa_asignada"),
-        "grupos_pago": unicos("grupo_pago_aplicado"),
-        "supervisores": unicos("nombre_supervisor"),
+        "clientes": unicos("nombre_cliente"), "fincas": unicos("nombre_finca"),
+        "tareas": unicos("nombre_tarea"), "empresas": unicos("empresa_asignada"),
+        "grupos_pago": unicos("grupo_pago_aplicado"), "supervisores": unicos("nombre_supervisor"),
     }
 
 
 @router.get("/{preliq_id}/estadisticas")
-def estadisticas(
-    preliq_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
+def estadisticas(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     preliq = service.obtener(preliq_id)
     if not preliq:
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
@@ -241,27 +190,14 @@ def listar_lineas(
     preliq = service.obtener(preliq_id)
     if not preliq:
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
-    return service.listar_lineas(
-        preliq_id=preliq_id,
-        empresa=empresa,
-        revisado=revisado,
-        solo_alertas=solo_alertas,
-        nombre_empleado=nombre_empleado,
-    )
+    return service.listar_lineas(preliq_id=preliq_id, empresa=empresa, revisado=revisado,
+                                  solo_alertas=solo_alertas, nombre_empleado=nombre_empleado)
 
 
 @router.patch("/linea/{linea_id}", response_model=LineaResponse)
-def actualizar_linea(
-    linea_id: int,
-    datos: LineaUpdateRequest,
-    service: PreliquidacionService = Depends(get_service),
-):
+def actualizar_linea(linea_id: int, datos: LineaUpdateRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
     try:
-        return service.actualizar_linea(
-            linea_id=linea_id,
-            datos=datos,
-            usuario_id=USUARIO_ID_TEMPORAL,
-        )
+        return service.actualizar_linea(linea_id=linea_id, datos=datos, usuario_id=usuario.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -269,17 +205,9 @@ def actualizar_linea(
 
 
 @router.post("/linea/{linea_id}/concepto", response_model=ConceptoAdicionalResponse)
-def agregar_concepto(
-    linea_id: int,
-    datos: ConceptoAdicionalRequest,
-    service: PreliquidacionService = Depends(get_service),
-):
+def agregar_concepto(linea_id: int, datos: ConceptoAdicionalRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
     try:
-        return service.agregar_concepto(
-            linea_id=linea_id,
-            datos=datos,
-            usuario_id=USUARIO_ID_TEMPORAL,
-        )
+        return service.agregar_concepto(linea_id=linea_id, datos=datos, usuario_id=usuario.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -288,13 +216,9 @@ def agregar_concepto(
 def agregar_concepto_por_codigo(
     linea_id: int,
     datos: ConceptoPorCodigoRequest,
-    usuario = Depends(get_usuario_actual),
+    usuario=Depends(get_usuario_actual),
     service: PreliquidacionService = Depends(get_service),
 ):
-    """
-    Agrega a esta línea un concepto buscando su regla por código
-    en el maestro de conceptos (concepto_liquidacion).
-    """
     try:
         return service.agregar_concepto_por_codigo(linea_id, datos.codigo, usuario.id)
     except ValueError as e:
@@ -304,15 +228,9 @@ def agregar_concepto_por_codigo(
 
 
 @router.delete("/linea/concepto/{concepto_id}", response_model=MensajeResponse)
-def eliminar_concepto(
-    concepto_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
+def eliminar_concepto(concepto_id: int, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
     try:
-        service.eliminar_concepto(
-            concepto_id=concepto_id,
-            usuario_id=USUARIO_ID_TEMPORAL,
-        )
+        service.eliminar_concepto(concepto_id=concepto_id, usuario_id=usuario.id)
         return MensajeResponse(mensaje="Concepto eliminado correctamente")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -324,21 +242,12 @@ class ConceptoMasivoRequest(BaseModel):
 
 
 @router.post("/lineas/concepto-masivo", response_model=MensajeResponse)
-def agregar_concepto_masivo(
-    datos: ConceptoMasivoRequest,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """
-    Agrega un concepto por código a múltiples líneas seleccionadas.
-    """
+def agregar_concepto_masivo(datos: ConceptoMasivoRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
     if not datos.linea_ids or not datos.codigo:
         raise HTTPException(status_code=400, detail="Se requieren linea_ids y codigo")
     try:
-        resultado = service.agregar_concepto_masivo(datos.linea_ids, datos.codigo, USUARIO_ID_TEMPORAL)
-        return MensajeResponse(
-            mensaje="Concepto agregado",
-            detalle=f"{resultado['aplicadas']} líneas actualizadas"
-        )
+        resultado = service.agregar_concepto_masivo(datos.linea_ids, datos.codigo, usuario.id)
+        return MensajeResponse(mensaje="Concepto agregado", detalle=f"{resultado['aplicadas']} líneas actualizadas")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -346,20 +255,11 @@ def agregar_concepto_masivo(
 
 
 @router.post("/lineas/concepto-masivo/eliminar", response_model=MensajeResponse)
-def eliminar_concepto_masivo(
-    datos: ConceptoMasivoRequest,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """
-    Elimina todos los conceptos de un código de múltiples líneas.
-    """
+def eliminar_concepto_masivo(datos: ConceptoMasivoRequest, service: PreliquidacionService = Depends(get_service)):
     if not datos.linea_ids or not datos.codigo:
         raise HTTPException(status_code=400, detail="Se requieren linea_ids y codigo")
     try:
         resultado = service.eliminar_concepto_masivo(datos.linea_ids, datos.codigo)
-        return MensajeResponse(
-            mensaje="Concepto eliminado",
-            detalle=f"{resultado['eliminados']} conceptos eliminados de {resultado['lineas']} líneas"
-        )
+        return MensajeResponse(mensaje="Concepto eliminado", detalle=f"{resultado['eliminados']} conceptos eliminados de {resultado['lineas']} líneas")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

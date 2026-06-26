@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel
-from app.models.models import TipoConcepto, PrecioUsado
+from app.models.models import TipoConcepto, PrecioUsado, UnidadBaseConcepto
 
 
 class PreliquidacionGenerarRequest(BaseModel):
@@ -20,13 +20,14 @@ class PreliquidacionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class ConceptoAdicionalResponse(BaseModel):
     id: int
     descripcion: str
     tipo: Optional[TipoConcepto]
     importe: Decimal
-    codigo_concepto: Optional[int] = None   # ← agregar
-    ingresado_por: Optional[int] = None     # ← agregar
+    codigo_concepto: Optional[int] = None
+    ingresado_por: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -89,64 +90,19 @@ class ConceptoAdicionalRequest(BaseModel):
     importe: Decimal
 
 
-class PrecioMaestroRequest(BaseModel):
-    cliente_nombre: str
-    finca_nombre: str
-    tarea_nombre: str
-    grupo_pago_default: str
-    grupo_pago_override: Optional[str] = None
-    quincena: date
-    precio_a: Optional[Decimal] = None
-
-
-class PrecioMaestroResponse(BaseModel):
-    id: int
-    cliente_nombre: str
-    finca_nombre: str
-    tarea_nombre: str
-    grupo_pago_default: str
-    grupo_pago_override: Optional[str]
-    quincena: date
-    precio_a: Optional[Decimal]
-    actualizado_en: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class PrecioComunRequest(BaseModel):
-    tarea_nombre: str
-    grupo_pago: str
-    quincena: date
-    precio: Decimal
-
-
-class PrecioComunResponse(BaseModel):
-    id: int
-    tarea_nombre: str
-    grupo_pago: str
-    quincena: date
-    precio: Decimal
-    actualizado_en: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class MensajeResponse(BaseModel):
     mensaje: str
     detalle: Optional[str] = None
 
 
-# ─── Maestro de Conceptos de Liquidación ──────────────────────────────────────
-# Cada `detalle` puede tener varias reglas (códigos) asociadas.
+# ─── Maestro unificado de Conceptos ───────────────────────────────────────────
 
-from app.models.models import UnidadBaseConcepto
-
-
-class ConceptoLiquidacionResponse(BaseModel):
+class ConceptoUnifResponse(BaseModel):
     id: int
-    detalle: str
+    quincena: date
+    tarea_nombre: str
+    cliente_nombre: Optional[str] = None
+    finca_nombre: Optional[str] = None
     codigo: Optional[int] = None
     unidad_base: UnidadBaseConcepto
     precio: Optional[Decimal] = None
@@ -156,15 +112,18 @@ class ConceptoLiquidacionResponse(BaseModel):
         from_attributes = True
 
 
-class ConceptoLiquidacionRequest(BaseModel):
-    detalle: str
+class ConceptoUnifRequest(BaseModel):
+    quincena: date
+    tarea_nombre: str
+    cliente_nombre: Optional[str] = None   # NULL = común
+    finca_nombre: Optional[str] = None
     codigo: Optional[int] = None
     unidad_base: UnidadBaseConcepto = UnidadBaseConcepto.FIJO
     precio: Optional[Decimal] = None
     tipo: TipoConcepto = TipoConcepto.OTRO
 
 
-class ConceptoLiquidacionUpdateRequest(BaseModel):
+class ConceptoUnifUpdateRequest(BaseModel):
     codigo: Optional[int] = None
     unidad_base: Optional[UnidadBaseConcepto] = None
     precio: Optional[Decimal] = None
