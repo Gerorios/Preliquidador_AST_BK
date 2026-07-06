@@ -6,7 +6,7 @@ from sqlalchemy import and_, text as sql_text
 
 from app.models.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional,
-    AjusteManual, PrecioUsado, ConceptoLiquidacion,
+    AjusteManual, ConceptoLiquidacion, UnidadBaseConcepto,
 )
 from app.services.consulta_externa import ConsultaExternaService
 from app.services.motor_reglas import MotorReglas
@@ -310,8 +310,6 @@ class PreliquidacionService:
             grupo_pago_aplicado=grupo_pago,
             codigo_liquidacion=codigo_liquidacion,
             precio_a=precio_a,
-            precio_b=None,
-            precio_usado=PrecioUsado.A,
             importe_base=Decimal("0"),
             importe_total=Decimal("0"),
             revisado=False,
@@ -326,6 +324,10 @@ class PreliquidacionService:
     def _generar_conceptos_automaticos(self, linea, reglas) -> list:
         conceptos = []
         for regla in reglas:
+            # Un concepto sin precio NO genera fila: evita pagar 0 en silencio.
+            # (La marca de "línea incompleta" se unifica en WS3.)
+            if regla.precio is None:
+                continue
             unidad = regla.unidad_base.value if hasattr(regla.unidad_base, "value") else regla.unidad_base
             cantidad = self.motor.calcular_cantidad_concepto(
                 unidad_base=unidad,
@@ -334,8 +336,7 @@ class PreliquidacionService:
                 tancadas=linea.tancadas,
                 unidades=linea.unidades,
             )
-            precio = regla.precio if regla.precio is not None else (linea.precio_a or Decimal("0"))
-            importe = (cantidad * precio).quantize(Decimal("0.01"))
+            importe = (cantidad * regla.precio).quantize(Decimal("0.01"))
             conceptos.append(ConceptoAdicional(
                 linea_id=linea.id,
                 descripcion=f"Concepto {regla.codigo}",
@@ -621,28 +622,57 @@ class PreliquidacionService:
     # ─── Control Plantas vs Jornal ────────────────────────────────────────────
 
     def control_plantas_jornal(self, preliq_id: int) -> dict:
+        preliq = self.db.query(Preliquidacion).filter(
+            Preliquidacion.id == preliq_id
+        ).first()
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+
         lineas = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.preliquidacion_id == preliq_id,
             PreliquidacionLinea.grupo_pago_aplicado == "PLANTA",
         ).all()
+
+        # Precio por planta: sale del maestro (concepto con unidad_base = unidades),
+        # no del difunto precio_a. Cache específicos + comunes de la quincena.
+        precio_esp: dict[tuple, list] = {}   # (tarea, cliente, finca) -> [precios]
+        precio_com: dict[str, list] = {}     # tarea -> [precios]
+        for c in self.db.query(ConceptoLiquidacion).filter(
+            ConceptoLiquidacion.quincena == preliq.quincena,
+            ConceptoLiquidacion.unidad_base == UnidadBaseConcepto.UNIDADES,
+            ConceptoLiquidacion.precio.isnot(None),
+        ).all():
+            t = c.tarea_nombre.strip().upper()
+            if c.cliente_nombre is None:
+                precio_com.setdefault(t, []).append(c.precio)
+            else:
+                clave_esp = (t, c.cliente_nombre.strip().upper(), (c.finca_nombre or "").strip().upper())
+                precio_esp.setdefault(clave_esp, []).append(c.precio)
+
+        def precio_planta(tarea, cliente, finca):
+            t  = (tarea or "").strip().upper()
+            cl = (cliente or "").strip().upper()
+            fn = (finca or "").strip().upper()
+            precios = precio_esp.get((t, cl, fn)) or precio_com.get(t)
+            if not precios:
+                return Decimal("0")
+            return sum(precios) / len(precios)
 
         grupos = {}
         for linea in lineas:
             clave = (linea.nombre_cliente or "", linea.nombre_finca or "", linea.nombre_tarea or "")
             if clave not in grupos:
                 grupos[clave] = {"nombre_cliente": linea.nombre_cliente, "nombre_finca": linea.nombre_finca,
-                                 "nombre_tarea": linea.nombre_tarea, "suma_precio": Decimal("0"),
-                                 "cantidad_precios": 0, "unidades": Decimal("0"), "hs": Decimal("0")}
+                                 "nombre_tarea": linea.nombre_tarea,
+                                 "precio": precio_planta(linea.nombre_tarea, linea.nombre_cliente, linea.nombre_finca),
+                                 "unidades": Decimal("0"), "hs": Decimal("0")}
             g = grupos[clave]
-            if linea.precio_a is not None:
-                g["suma_precio"] += linea.precio_a
-                g["cantidad_precios"] += 1
             g["unidades"] += linea.unidades or Decimal("0")
             g["hs"] += linea.hsmaquina or Decimal("0")
 
         filas = []
         for g in grupos.values():
-            pp = float(g["suma_precio"] / g["cantidad_precios"]) if g["cantidad_precios"] else 0
+            pp = float(g["precio"])
             u  = float(g["unidades"]); h = float(g["hs"])
             phsm = (u / h) if h else 0
             filas.append({
@@ -721,8 +751,6 @@ class PreliquidacionService:
             "empresa_asignada": datos.empresa_asignada,
             "legajo_asignado": datos.legajo_asignado,
             "grupo_pago_aplicado": datos.grupo_pago_aplicado,
-            "precio_b": datos.precio_b,
-            "precio_usado": datos.precio_usado,
             "revisado": datos.revisado,
             "observacion": datos.observacion,
         }

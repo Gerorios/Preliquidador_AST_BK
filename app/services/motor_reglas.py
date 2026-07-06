@@ -1,19 +1,6 @@
-from datetime import date
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy.orm import Session
-
-GRUPOS_PAGO_HORAS = {
-    "HORAS TRACTOR", "HORAS PEON", "HORAS SUPERVISOR",
-    "HORAS TALLER", "HORAS SERENO", "HORAS ENGANCHADOR",
-    "HORAS PEON - COSECHA", "HORAS COLECTIVO",
-}
-GRUPOS_PAGO_TANCADA = {"TANCADA"}
-GRUPOS_PAGO_UNIDADES = {"PLANTA", "BINS"}
-CLIENTES_JORNAL_PROPORCIONAL: set[str] = set()
-VALOR_JORNAL = Decimal("45000.00")
-VALOR_BIN = Decimal("150.00")
-HORAS_MINIMAS_JORNAL = Decimal("5")
 
 
 class MotorReglas:
@@ -68,46 +55,6 @@ class MotorReglas:
         if self.sueldos:
             return self.sueldos.resolver_legajo(legajo_campo, empresa_asignada)
         return legajo_campo, False
-
-    # ─── Importe ──────────────────────────────────────────────────────────────
-
-    def calcular_importe(
-        self,
-        precio: Decimal,
-        grupo_pago: str,
-        hsjornal: Optional[Decimal],
-        tancadas: Optional[Decimal],
-        unidades: Optional[Decimal],
-        nombre_cliente: str = "",
-    ) -> Decimal:
-        if precio is None:
-            return Decimal("0")
-        gp = grupo_pago.upper()
-        if gp in GRUPOS_PAGO_TANCADA:
-            return precio * (tancadas or Decimal("0"))
-        if gp in GRUPOS_PAGO_UNIDADES:
-            return precio * (unidades or Decimal("0"))
-        if gp in GRUPOS_PAGO_HORAS:
-            return precio * (hsjornal or Decimal("0"))
-        return Decimal("0")
-
-    def calcular_jornal(self, hsjornal: Decimal, nombre_cliente: str = "") -> Optional[Decimal]:
-        if hsjornal is None or hsjornal <= HORAS_MINIMAS_JORNAL:
-            return None
-        cliente_upper = nombre_cliente.upper()
-        if cliente_upper in CLIENTES_JORNAL_PROPORCIONAL:
-            if hsjornal >= 12:
-                multiplicador = Decimal("1.2")
-            elif hsjornal >= 11:
-                multiplicador = Decimal("1.1")
-            else:
-                multiplicador = Decimal("1.0")
-        else:
-            multiplicador = Decimal("1.0")
-        return VALOR_JORNAL * multiplicador
-
-    def calcular_bins(self, bins: Decimal) -> Decimal:
-        return VALOR_BIN * (bins or Decimal("0"))
 
     # ─── Conceptos de liquidación automáticos ────────────────────────────────
 
