@@ -1,6 +1,16 @@
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# En Windows, sin PYTHONIOENCODING/PYTHONUTF8, stdout/stderr usan el codepage
+# de la consola (p. ej. cp1252), que no soporta los caracteres Unicode que
+# usan los prints de abajo. Sin esto, el lifespan revienta con
+# UnicodeEncodeError al arrancar y el servidor nunca queda arriba.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from app.core.config import settings
 from app.core.database import verificar_conexiones, engine_propia, Base
