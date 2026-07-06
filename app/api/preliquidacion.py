@@ -71,7 +71,6 @@ def listar(service: PreliquidacionService = Depends(get_service)):
         resultado.append(PreliquidacionResponse(
             id=p.id, quincena=p.quincena, creado_en=p.creado_en,
             total_lineas=stats["total_lineas"],
-            lineas_revisadas=stats["lineas_revisadas"],
             lineas_con_alerta=stats["lineas_con_alerta"],
         ))
     return resultado
@@ -182,7 +181,6 @@ def estadisticas(preliq_id: int, service: PreliquidacionService = Depends(get_se
 def listar_lineas(
     preliq_id: int,
     empresa: Optional[str] = Query(None),
-    revisado: Optional[bool] = Query(None),
     solo_alertas: Optional[bool] = Query(None),
     nombre_empleado: Optional[str] = Query(None),
     service: PreliquidacionService = Depends(get_service),
@@ -190,7 +188,7 @@ def listar_lineas(
     preliq = service.obtener(preliq_id)
     if not preliq:
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
-    return service.listar_lineas(preliq_id=preliq_id, empresa=empresa, revisado=revisado,
+    return service.listar_lineas(preliq_id=preliq_id, empresa=empresa,
                                   solo_alertas=solo_alertas, nombre_empleado=nombre_empleado)
 
 
