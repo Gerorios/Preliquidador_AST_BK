@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel
-from app.models.models import TipoConcepto, PrecioUsado, UnidadBaseConcepto
+from app.models.models import TipoConcepto, UnidadBaseConcepto
 
 
 class PreliquidacionGenerarRequest(BaseModel):
@@ -57,8 +57,6 @@ class LineaResponse(BaseModel):
     legajo_asignado: Optional[str]
     grupo_pago_aplicado: Optional[str]
     precio_a: Optional[Decimal]
-    precio_b: Optional[Decimal]
-    precio_usado: Optional[PrecioUsado]
     importe_base: Optional[Decimal]
     importe_total: Optional[Decimal]
     revisado: bool
@@ -77,8 +75,6 @@ class LineaUpdateRequest(BaseModel):
     empresa_asignada: Optional[str] = None
     legajo_asignado: Optional[str] = None
     grupo_pago_aplicado: Optional[str] = None
-    precio_b: Optional[Decimal] = None
-    precio_usado: Optional[PrecioUsado] = None
     revisado: Optional[bool] = None
     observacion: Optional[str] = None
     motivo_ajuste: Optional[str] = None

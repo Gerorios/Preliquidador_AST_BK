@@ -26,10 +26,6 @@ class RolUsuario(str, enum.Enum):
     JEFE = "jefe"
     GERENTE = "gerente"
 
-class PrecioUsado(str, enum.Enum):
-    A = "A"
-    B = "B"
-
 class UnidadBaseConcepto(str, enum.Enum):
     HSJORNAL    = "hsjornal"
     HSMAQUINA   = "hsmaquina"
@@ -141,8 +137,6 @@ class PreliquidacionLinea(Base):
     grupo_pago_aplicado = Column(String(50))
     codigo_liquidacion = Column(Integer)
     precio_a           = Column(Numeric(12, 4))
-    precio_b           = Column(Numeric(12, 4))
-    precio_usado       = Column(Enum(PrecioUsado), default=PrecioUsado.A)
     importe_base       = Column(Numeric(14, 2))
     importe_total      = Column(Numeric(14, 2))
     revisado           = Column(Boolean, default=False)
