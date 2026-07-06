@@ -14,7 +14,6 @@ class PreliquidacionResponse(BaseModel):
     quincena: date
     creado_en: datetime
     total_lineas: int
-    lineas_revisadas: int
     lineas_con_alerta: int
 
     class Config:
@@ -59,7 +58,6 @@ class LineaResponse(BaseModel):
     precio_a: Optional[Decimal]
     importe_base: Optional[Decimal]
     importe_total: Optional[Decimal]
-    revisado: bool
     observacion: Optional[str]
     es_duplicado: bool
     alerta_legajo: bool
@@ -75,7 +73,6 @@ class LineaUpdateRequest(BaseModel):
     empresa_asignada: Optional[str] = None
     legajo_asignado: Optional[str] = None
     grupo_pago_aplicado: Optional[str] = None
-    revisado: Optional[bool] = None
     observacion: Optional[str] = None
     motivo_ajuste: Optional[str] = None
 

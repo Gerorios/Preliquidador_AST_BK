@@ -139,7 +139,6 @@ class PreliquidacionLinea(Base):
     precio_a           = Column(Numeric(12, 4))
     importe_base       = Column(Numeric(14, 2))
     importe_total      = Column(Numeric(14, 2))
-    revisado           = Column(Boolean, default=False)
     observacion        = Column(Text)
 
     # ── Flags de validación ──

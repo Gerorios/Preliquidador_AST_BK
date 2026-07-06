@@ -7,10 +7,19 @@ from sqlalchemy import and_, text
 from app.core.database import get_db_propia, get_db_externa
 from app.models.models import ConceptoLiquidacion
 from app.services.consulta_externa import ConsultaExternaService
+from app.services.preliquidacion_service import PreliquidacionService
 from app.schemas.schemas import (
     ConceptoUnifRequest, ConceptoUnifResponse, ConceptoUnifUpdateRequest,
     MensajeResponse,
 )
+
+
+def _match(concepto: ConceptoLiquidacion) -> dict:
+    return {
+        "tarea_nombre": concepto.tarea_nombre,
+        "cliente_nombre": concepto.cliente_nombre,
+        "finca_nombre": concepto.finca_nombre,
+    }
 
 router = APIRouter(prefix="/api/precios", tags=["Precios"])
 
@@ -104,6 +113,8 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
         db.rollback()
         raise HTTPException(status_code=400, detail=f"No se pudo guardar: {e}")
     db.refresh(nuevo)
+
+    PreliquidacionService(db).recalcular_por_concepto(nuevo.quincena, actual=_match(nuevo))
     return nuevo
 
 
@@ -118,10 +129,16 @@ def actualizar_concepto(
     ).first()
     if not concepto:
         raise HTTPException(status_code=404, detail="Concepto no encontrado")
+
+    anterior = _match(concepto)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(concepto, campo, valor)
     db.commit()
     db.refresh(concepto)
+
+    PreliquidacionService(db).recalcular_por_concepto(
+        concepto.quincena, actual=_match(concepto), anterior=anterior
+    )
     return concepto
 
 
@@ -132,8 +149,12 @@ def eliminar_concepto(concepto_id: int, db: Session = Depends(get_db_propia)):
     ).first()
     if not concepto:
         raise HTTPException(status_code=404, detail="Concepto no encontrado")
+
+    quincena, match = concepto.quincena, _match(concepto)
     db.delete(concepto)
     db.commit()
+
+    PreliquidacionService(db).recalcular_por_concepto(quincena, actual=match)
     return MensajeResponse(mensaje="Concepto eliminado")
 
 

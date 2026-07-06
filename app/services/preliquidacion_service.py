@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, text as sql_text
+from sqlalchemy import and_, func, text as sql_text
 
 from app.models.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional,
@@ -39,11 +39,11 @@ def _clave_linea(fila: dict) -> tuple:
 
 class PreliquidacionService:
 
-    def __init__(self, db_propia: Session, db_externa: Session, db_sueldos: Session = None):
+    def __init__(self, db_propia: Session, db_externa: Session = None, db_sueldos: Session = None):
         self.db = db_propia
         self.sueldos = SueldosService(db_sueldos) if db_sueldos else None
         self.motor = MotorReglas(db_propia, self.sueldos)
-        self.externa = ConsultaExternaService(db_externa)
+        self.externa = ConsultaExternaService(db_externa) if db_externa else None
 
     # ─── Generar / Actualizar ─────────────────────────────────────────────────
 
@@ -312,7 +312,6 @@ class PreliquidacionService:
             precio_a=precio_a,
             importe_base=Decimal("0"),
             importe_total=Decimal("0"),
-            revisado=False,
             es_duplicado=es_duplicado,
             alerta_legajo=alerta_legajo,
             alerta_empresa=alerta_empresa,
@@ -450,31 +449,8 @@ class PreliquidacionService:
 
     # ─── Aplicar conceptos ────────────────────────────────────────────────────
 
-    def aplicar_conceptos(self, preliq_id: int) -> dict:
-        """
-        Regenera los ConceptoAdicional automáticos desde el maestro unificado.
-        Matching: tarea + cliente + finca (sin grupo_pago).
-        Específicos + comunes siempre suman.
-        Anti-lock: DELETE masivo primero, bulk INSERT después.
-        """
-        preliq = self.db.query(Preliquidacion).filter(
-            Preliquidacion.id == preliq_id
-        ).first()
-        if not preliq:
-            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
-
-        quincena = preliq.quincena
-
-        # Paso 1: borrar automáticos en un solo DELETE
-        self.db.execute(sql_text("""
-            DELETE ca FROM concepto_adicional ca
-            INNER JOIN preliquidacion_linea pl ON pl.id = ca.linea_id
-            WHERE pl.preliquidacion_id = :pid
-              AND ca.ingresado_por IS NULL
-        """), {"pid": preliq_id})
-        self.db.commit()
-
-        # Paso 2: cache del maestro para esta quincena
+    def _cache_conceptos_quincena(self, quincena):
+        """Cache comunes/específicos del maestro vigente para una quincena (solo con código)."""
         conceptos = self.db.query(ConceptoLiquidacion).filter(
             ConceptoLiquidacion.quincena == quincena,
             ConceptoLiquidacion.codigo.isnot(None),
@@ -490,10 +466,28 @@ class PreliquidacionService:
                 cl = c.cliente_nombre.strip().upper()
                 fn = (c.finca_nombre or "").strip().upper()
                 cache_especificos.setdefault((t, cl, fn), []).append(c)
+        return cache_comunes, cache_especificos
 
-        lineas = self.db.query(PreliquidacionLinea).filter(
-            PreliquidacionLinea.preliquidacion_id == preliq_id,
-        ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+    def _aplicar_conceptos_a_lineas(self, quincena, lineas: list) -> dict:
+        """
+        Reconstruye los ConceptoAdicional automáticos de las líneas dadas según
+        el maestro vigente de esa quincena, y recalcula su importe_total.
+        Preserva los conceptos manuales (ingresado_por is not None).
+        """
+        if not lineas:
+            return {"actualizadas": 0, "sin_reglas": 0}
+
+        linea_ids = [l.id for l in lineas]
+
+        # Paso 1: borrar automáticos existentes de esas líneas
+        self.db.query(ConceptoAdicional).filter(
+            ConceptoAdicional.linea_id.in_(linea_ids),
+            ConceptoAdicional.ingresado_por.is_(None),
+        ).delete(synchronize_session=False)
+        self.db.commit()
+
+        # Paso 2: cache del maestro para esta quincena
+        cache_comunes, cache_especificos = self._cache_conceptos_quincena(quincena)
 
         actualizadas = sin_reglas = 0
         conceptos_nuevos = []
@@ -540,6 +534,71 @@ class PreliquidacionService:
             self.db.commit()
 
         return {"actualizadas": actualizadas, "sin_reglas": sin_reglas}
+
+    def aplicar_conceptos(self, preliq_id: int) -> dict:
+        """
+        Recalcula TODA la quincena. Ya no es un paso obligatorio del flujo
+        (el impacto del maestro es reactivo, ver recalcular_por_concepto) —
+        se conserva como acción manual de "recalcular todo" por si hace
+        falta forzarlo.
+        """
+        preliq = self.db.query(Preliquidacion).filter(
+            Preliquidacion.id == preliq_id
+        ).first()
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.preliquidacion_id == preliq_id,
+        ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+
+        return self._aplicar_conceptos_a_lineas(preliq.quincena, lineas)
+
+    # ─── Impacto reactivo del maestro (ADR-0002) ─────────────────────────────
+
+    def _lineas_por_match(self, preliq_id, tarea_nombre, cliente_nombre=None, finca_nombre=None) -> list:
+        """Líneas de una preliquidación que matchean tarea (+cliente+finca si se pasan)."""
+        t = (tarea_nombre or "").strip().upper()
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.preliquidacion_id == preliq_id,
+            func.upper(func.trim(PreliquidacionLinea.nombre_tarea)) == t,
+        ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+
+        if cliente_nombre:
+            cl = cliente_nombre.strip().upper()
+            lineas = [l for l in lineas if (l.nombre_cliente or "").strip().upper() == cl]
+            if finca_nombre:
+                fn = finca_nombre.strip().upper()
+                lineas = [l for l in lineas if (l.nombre_finca or "").strip().upper() == fn]
+        return lineas
+
+    def recalcular_por_concepto(self, quincena, actual: dict, anterior: dict = None) -> dict:
+        """
+        Impacto reactivo de un concepto creado/editado/borrado: recalcula las
+        líneas que matchean su estado actual y, si sus claves de match
+        (tarea/cliente/finca) cambiaron, también las que matcheaba antes
+        (unión) — evita ConceptoAdicional fantasma en líneas que dejaron de
+        matchear.
+        """
+        preliq = self.db.query(Preliquidacion).filter(
+            Preliquidacion.quincena == quincena
+        ).first()
+        if not preliq:
+            return {"lineas_afectadas": 0}
+
+        vistas = {}
+        for clave in filter(None, [actual, anterior]):
+            for linea in self._lineas_por_match(
+                preliq.id,
+                clave.get("tarea_nombre"),
+                clave.get("cliente_nombre"),
+                clave.get("finca_nombre"),
+            ):
+                vistas[linea.id] = linea
+
+        lineas = list(vistas.values())
+        resultado = self._aplicar_conceptos_a_lineas(preliq.quincena, lineas)
+        return {"lineas_afectadas": len(lineas), **resultado}
 
     # ─── Dashboard de verificación ────────────────────────────────────────────
 
@@ -715,7 +774,7 @@ class PreliquidacionService:
     def obtener(self, preliq_id: int) -> Optional[Preliquidacion]:
         return self.db.query(Preliquidacion).filter(Preliquidacion.id == preliq_id).first()
 
-    def listar_lineas(self, preliq_id: int, empresa=None, revisado=None, solo_alertas=None, nombre_empleado=None):
+    def listar_lineas(self, preliq_id: int, empresa=None, solo_alertas=None, nombre_empleado=None):
         q = (
             self.db.query(PreliquidacionLinea)
             .options(joinedload(PreliquidacionLinea.conceptos))
@@ -723,8 +782,6 @@ class PreliquidacionService:
         )
         if empresa:
             q = q.filter(PreliquidacionLinea.empresa_asignada == empresa.upper())
-        if revisado is not None:
-            q = q.filter(PreliquidacionLinea.revisado == revisado)
         if solo_alertas:
             q = q.filter(
                 (PreliquidacionLinea.es_duplicado == True) |
@@ -751,7 +808,6 @@ class PreliquidacionService:
             "empresa_asignada": datos.empresa_asignada,
             "legajo_asignado": datos.legajo_asignado,
             "grupo_pago_aplicado": datos.grupo_pago_aplicado,
-            "revisado": datos.revisado,
             "observacion": datos.observacion,
         }
         for campo, valor_nuevo in campos.items():
@@ -843,7 +899,6 @@ class PreliquidacionService:
         ).all()
         return {
             "total_lineas": len(lineas),
-            "lineas_revisadas": sum(1 for l in lineas if l.revisado),
             "lineas_con_alerta": sum(1 for l in lineas if l.es_duplicado or l.alerta_legajo or l.alerta_sin_precio or l.alerta_sin_codigo),
             "sin_precio": sum(1 for l in lineas if l.alerta_sin_precio),
             "sin_codigo": sum(1 for l in lineas if l.alerta_sin_codigo),
@@ -857,10 +912,8 @@ class PreliquidacionService:
         for linea in lineas:
             emp = linea.empresa_asignada or "SIN EMPRESA"
             if emp not in resultado:
-                resultado[emp] = {"total": 0, "revisadas": 0}
+                resultado[emp] = {"total": 0}
             resultado[emp]["total"] += 1
-            if linea.revisado:
-                resultado[emp]["revisadas"] += 1
         return resultado
 
     # ─── Operaciones masivas ──────────────────────────────────────────────────
