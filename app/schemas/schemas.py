@@ -62,7 +62,7 @@ class LineaResponse(BaseModel):
     es_duplicado: bool
     alerta_legajo: bool
     alerta_empresa: bool = False
-    alerta_sin_precio: bool
+    linea_incompleta: bool
     conceptos: list[ConceptoAdicionalResponse] = []
 
     class Config:

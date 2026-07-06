@@ -210,8 +210,9 @@ def conceptos_faltantes(
     db: Session = Depends(get_db_propia),
 ):
     """
-    Combinaciones tarea+cliente+finca de la quincena que no tienen
-    ningún concepto cargado (ni común ni específico).
+    Combinaciones tarea+cliente+finca de la quincena que no tienen todavía
+    un concepto COMPLETO cargado (con código Y precio, común o específico).
+    Un concepto con código pero sin precio no cuenta como completo.
     """
     rows = db.execute(text("""
         SELECT DISTINCT
@@ -225,6 +226,8 @@ def conceptos_faltantes(
               SELECT 1 FROM concepto_liquidacion cl
               WHERE cl.quincena = :quincena
                 AND cl.tarea_nombre = pl.nombre_tarea
+                AND cl.codigo IS NOT NULL
+                AND cl.precio IS NOT NULL
                 AND (
                     cl.cliente_nombre IS NULL
                     OR (cl.cliente_nombre = pl.nombre_cliente

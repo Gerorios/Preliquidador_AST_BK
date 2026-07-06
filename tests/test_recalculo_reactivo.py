@@ -36,7 +36,7 @@ def _linea(db, preliq, tarea, cliente, finca, hsjornal=Decimal("8")):
         preliquidacion_id=preliq.id,
         nombre_tarea=tarea, nombre_cliente=cliente, nombre_finca=finca,
         hsjornal=hsjornal, tancadas=Decimal("0"), unidades=Decimal("0"), hsmaquina=Decimal("0"),
-        importe_total=Decimal("0"), alerta_sin_codigo=True,
+        importe_total=Decimal("0"), linea_incompleta=True,
     )
     db.add(l)
     db.commit()
@@ -69,7 +69,7 @@ def test_crear_concepto_impacta_reactivamente_la_linea_que_matchea(db):
 
     db.refresh(linea)
     assert resultado["lineas_afectadas"] == 1
-    assert linea.alerta_sin_codigo is False
+    assert linea.linea_incompleta is False
     assert linea.importe_total == Decimal("400.00")  # 8 hsjornal * 50
 
 
@@ -85,7 +85,7 @@ def test_concepto_no_afecta_lineas_de_otro_cliente(db):
     )
 
     db.refresh(linea_otro_cliente)
-    assert linea_otro_cliente.alerta_sin_codigo is True  # no matcheo, sigue incompleta
+    assert linea_otro_cliente.linea_incompleta is True  # no matcheo, sigue incompleta
     assert linea_otro_cliente.importe_total == Decimal("0")
 
 
@@ -101,7 +101,7 @@ def test_editar_claves_de_concepto_recalcula_union_viejo_y_nuevo(db):
         actual={"tarea_nombre": "TAREA X", "cliente_nombre": "CLIENTE A", "finca_nombre": "FINCA 1"},
     )
     db.refresh(linea_vieja)
-    assert linea_vieja.alerta_sin_codigo is False  # matcheaba antes de la edicion
+    assert linea_vieja.linea_incompleta is False  # matcheaba antes de la edicion
 
     # El liquidador edita el concepto para que ahora aplique a CLIENTE B / FINCA 2
     concepto.cliente_nombre = "CLIENTE B"
@@ -117,9 +117,9 @@ def test_editar_claves_de_concepto_recalcula_union_viejo_y_nuevo(db):
     db.refresh(linea_vieja)
     db.refresh(linea_nueva)
     assert resultado["lineas_afectadas"] == 2  # union: la vieja (para sacarselo) + la nueva (para agregarselo)
-    assert linea_vieja.alerta_sin_codigo is True   # perdio el concepto, sin fantasma
+    assert linea_vieja.linea_incompleta is True   # perdio el concepto, sin fantasma
     assert linea_vieja.importe_total == Decimal("0")
-    assert linea_nueva.alerta_sin_codigo is False  # ahora lo tiene
+    assert linea_nueva.linea_incompleta is False  # ahora lo tiene
 
 
 def test_eliminar_concepto_saca_el_importe_de_la_linea(db):
@@ -144,8 +144,30 @@ def test_eliminar_concepto_saca_el_importe_de_la_linea(db):
     )
 
     db.refresh(linea)
-    assert linea.alerta_sin_codigo is True
+    assert linea.linea_incompleta is True
     assert linea.importe_total == Decimal("0")
+
+
+def test_codigo_sin_precio_no_cuenta_como_completa(db):
+    """WS3 (ADR-0003): un concepto con código pero sin precio no debe
+    marcar la línea como completa ni generar un ConceptoAdicional de 0."""
+    preliq = _preliq(db)
+    linea = _linea(db, preliq, "TAREA X", "CLIENTE A", "FINCA 1")
+    svc = PreliquidacionService(db)
+
+    _concepto(db, preliq.quincena, "TAREA X", "CLIENTE A", "FINCA 1",
+              codigo=40, precio=None)
+    resultado = svc.recalcular_por_concepto(
+        preliq.quincena,
+        actual={"tarea_nombre": "TAREA X", "cliente_nombre": "CLIENTE A", "finca_nombre": "FINCA 1"},
+    )
+
+    db.refresh(linea)
+    assert resultado["lineas_afectadas"] == 1
+    assert linea.linea_incompleta is True
+    assert linea.codigo_liquidacion is None
+    assert linea.importe_total == Decimal("0")
+    assert len(linea.conceptos) == 0
 
 
 def test_sin_preliquidacion_para_la_quincena_no_falla(db):

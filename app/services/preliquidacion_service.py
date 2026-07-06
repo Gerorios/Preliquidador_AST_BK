@@ -272,9 +272,11 @@ class PreliquidacionService:
         # Buscar reglas del maestro: específicos + comunes suman
         reglas = self._buscar_conceptos_cache(nombre_tarea, nombre_cliente, nombre_finca, cache)
         reglas_con_codigo = [r for r in reglas if r.codigo is not None]
-        alerta_sin_codigo = len(reglas_con_codigo) == 0
-        alerta_sin_precio = len(reglas) == 0
-        codigo_liquidacion = reglas_con_codigo[0].codigo if reglas_con_codigo else None
+        # Completa = tiene código Y precio (lo único que realmente genera un
+        # ConceptoAdicional); un código sin precio no cuenta como completa.
+        reglas_completas = [r for r in reglas_con_codigo if r.precio is not None]
+        linea_incompleta = len(reglas_completas) == 0
+        codigo_liquidacion = reglas_completas[0].codigo if reglas_completas else None
 
         # precio_a: primera regla con precio definido (para importe base)
         precio_a = next((r.precio for r in reglas if r.precio is not None), None)
@@ -315,8 +317,7 @@ class PreliquidacionService:
             es_duplicado=es_duplicado,
             alerta_legajo=alerta_legajo,
             alerta_empresa=alerta_empresa,
-            alerta_sin_precio=alerta_sin_precio,
-            alerta_sin_codigo=alerta_sin_codigo,
+            linea_incompleta=linea_incompleta,
         )
         return linea, reglas_con_codigo
 
@@ -371,81 +372,6 @@ class PreliquidacionService:
             return Decimal(str(valor))
         except Exception:
             return None
-
-    # ─── Recalcular precios ───────────────────────────────────────────────────
-
-    def recalcular_precios(self, preliq_id: int) -> dict:
-        """
-        Con el modelo unificado, el importe_base siempre es 0.
-        El importe_total = suma de todos los ConceptoAdicional.
-        precio_a se guarda solo para referencia/display.
-        """
-        preliq = self.db.query(Preliquidacion).filter(
-            Preliquidacion.id == preliq_id
-        ).first()
-        if not preliq:
-            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
-
-        quincena = preliq.quincena
-
-        # Paso 0: resetear precio_a para que los pasos siguientes partan de NULL
-        self.db.execute(sql_text("""
-            UPDATE preliquidacion_linea
-            SET precio_a = NULL, alerta_sin_precio = 1
-            WHERE preliquidacion_id = :pid
-        """), {"pid": preliq_id})
-
-        # Paso 1: marcar precio_a desde concepto específico (solo referencia)
-        self.db.execute(sql_text("""
-            UPDATE preliquidacion_linea pl
-            INNER JOIN concepto_liquidacion cl
-                ON  cl.quincena        = :quincena
-                AND cl.tarea_nombre    = pl.nombre_tarea
-                AND cl.cliente_nombre  = pl.nombre_cliente
-                AND cl.finca_nombre    = pl.nombre_finca
-                AND cl.precio IS NOT NULL
-            SET
-                pl.precio_a          = cl.precio,
-                pl.alerta_sin_precio = 0,
-                pl.importe_base      = 0
-            WHERE pl.preliquidacion_id = :pid
-        """), {"pid": preliq_id, "quincena": quincena})
-
-        # Paso 2: fallback desde concepto común
-        self.db.execute(sql_text("""
-            UPDATE preliquidacion_linea pl
-            INNER JOIN concepto_liquidacion cl
-                ON  cl.quincena          = :quincena
-                AND cl.tarea_nombre      = pl.nombre_tarea
-                AND cl.cliente_nombre IS NULL
-                AND cl.precio IS NOT NULL
-            SET
-                pl.precio_a          = cl.precio,
-                pl.alerta_sin_precio = 0,
-                pl.importe_base      = 0
-            WHERE pl.preliquidacion_id = :pid
-              AND (pl.precio_a IS NULL OR pl.alerta_sin_precio = 1)
-        """), {"pid": preliq_id, "quincena": quincena})
-
-        # Paso 3: marcar sin precio las que no matchearon
-        self.db.execute(sql_text("""
-            UPDATE preliquidacion_linea
-            SET precio_a = NULL, importe_base = 0, alerta_sin_precio = 1
-            WHERE preliquidacion_id = :pid
-              AND precio_a IS NULL
-        """), {"pid": preliq_id})
-
-        self.db.commit()
-
-        stats = self.db.execute(sql_text("""
-            SELECT
-                SUM(CASE WHEN alerta_sin_precio = 0 THEN 1 ELSE 0 END),
-                SUM(CASE WHEN alerta_sin_precio = 1 THEN 1 ELSE 0 END)
-            FROM preliquidacion_linea
-            WHERE preliquidacion_id = :pid
-        """), {"pid": preliq_id}).fetchone()
-
-        return {"actualizadas": stats[0] or 0, "sin_precio": stats[1] or 0}
 
     # ─── Aplicar conceptos ────────────────────────────────────────────────────
 
@@ -503,21 +429,24 @@ class PreliquidacionService:
             com    = cache_comunes.get(t, [])
             reglas = esp + com
 
-            if not reglas:
-                if not linea.alerta_sin_codigo:
+            # nuevos ya viene filtrado por precio (ver _generar_conceptos_automaticos):
+            # una línea solo está completa si al menos una regla generó un concepto real.
+            nuevos = self._generar_conceptos_automaticos(linea, reglas) if reglas else []
+
+            if not nuevos:
+                if not linea.linea_incompleta:
                     linea.codigo_liquidacion = None
-                    linea.alerta_sin_codigo  = True
+                    linea.linea_incompleta   = True
                     self._recalcular_importe(linea)
                     actualizadas += 1
                 else:
                     sin_reglas += 1
                 continue
 
-            nuevos = self._generar_conceptos_automaticos(linea, reglas)
             conceptos_nuevos.extend(nuevos)
             ids_con_conceptos.add(linea.id)
-            linea.codigo_liquidacion = reglas[0].codigo
-            linea.alerta_sin_codigo  = False
+            linea.codigo_liquidacion = nuevos[0].codigo_concepto
+            linea.linea_incompleta  = False
             actualizadas += 1
 
         # Paso 4: insertar y commitear
@@ -759,14 +688,12 @@ class PreliquidacionService:
 
 
     def aplicar(self, preliq_id: int) -> dict:
-        """Recalcula precios y aplica conceptos en una sola operación."""
-        r1 = self.recalcular_precios(preliq_id)
-        r2 = self.aplicar_conceptos(preliq_id)
-        return {
-            "actualizadas": r1.get("actualizadas", 0),
-            "sin_precio": r1.get("sin_precio", 0),
-            "conceptos_aplicados": r2.get("actualizadas", 0),
-        }
+        """
+        Recalcula manualmente TODA la quincena (acción de emergencia; el
+        impacto normal es reactivo, ver recalcular_por_concepto).
+        """
+        resultado = self.aplicar_conceptos(preliq_id)
+        return {"conceptos_aplicados": resultado.get("actualizadas", 0)}
 
     def listar(self) -> list[Preliquidacion]:
         return self.db.query(Preliquidacion).order_by(Preliquidacion.quincena.desc()).all()
@@ -786,8 +713,7 @@ class PreliquidacionService:
             q = q.filter(
                 (PreliquidacionLinea.es_duplicado == True) |
                 (PreliquidacionLinea.alerta_legajo == True) |
-                (PreliquidacionLinea.alerta_sin_precio == True) |
-                (PreliquidacionLinea.alerta_sin_codigo == True)
+                (PreliquidacionLinea.linea_incompleta == True)
             )
         if nombre_empleado:
             q = q.filter(PreliquidacionLinea.nombre_empleado.ilike(f"%{nombre_empleado}%"))
@@ -899,9 +825,8 @@ class PreliquidacionService:
         ).all()
         return {
             "total_lineas": len(lineas),
-            "lineas_con_alerta": sum(1 for l in lineas if l.es_duplicado or l.alerta_legajo or l.alerta_sin_precio or l.alerta_sin_codigo),
-            "sin_precio": sum(1 for l in lineas if l.alerta_sin_precio),
-            "sin_codigo": sum(1 for l in lineas if l.alerta_sin_codigo),
+            "lineas_con_alerta": sum(1 for l in lineas if l.es_duplicado or l.alerta_legajo or l.linea_incompleta),
+            "incompletas": sum(1 for l in lineas if l.linea_incompleta),
             "duplicados": sum(1 for l in lineas if l.es_duplicado),
             "alerta_legajo": sum(1 for l in lineas if l.alerta_legajo),
             "por_empresa": self._agrupar_por_empresa(lineas),

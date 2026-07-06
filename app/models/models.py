@@ -145,8 +145,7 @@ class PreliquidacionLinea(Base):
     es_duplicado       = Column(Boolean, default=False)
     alerta_legajo      = Column(Boolean, default=False)
     alerta_empresa     = Column(Boolean, default=False)
-    alerta_sin_precio  = Column(Boolean, default=False)
-    alerta_sin_codigo  = Column(Boolean, default=False)
+    linea_incompleta   = Column(Boolean, default=True)
 
     preliquidacion = relationship("Preliquidacion", back_populates="lineas")
     conceptos      = relationship(
