@@ -250,3 +250,52 @@ def eliminar_concepto_masivo(datos: ConceptoMasivoRequest, service: Preliquidaci
         return MensajeResponse(mensaje="Concepto eliminado", detalle=f"{resultado['eliminados']} conceptos eliminados de {resultado['lineas']} líneas")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Reasignación masiva de empresa ────────────────────────────────────────────
+
+class LegajosPorCuilRequest(BaseModel):
+    linea_ids: list[int]
+
+
+class ReasignarEmpresaRequest(BaseModel):
+    linea_ids: list[int]
+    empresa: str
+    motivo_ajuste: Optional[str] = None
+
+
+@router.post("/lineas/legajos-por-cuil")
+def legajos_por_cuil(datos: LegajosPorCuilRequest, service: PreliquidacionService = Depends(get_service)):
+    """
+    Agrupa las líneas seleccionadas por CUIL y devuelve, para cada persona,
+    los pares (empresa, legajo) que realmente tiene — para el picker de
+    reasignación masiva de empresa.
+    """
+    if not datos.linea_ids:
+        raise HTTPException(status_code=400, detail="Se requieren linea_ids")
+    try:
+        return service.legajos_disponibles_por_cuil(datos.linea_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/lineas/reasignar-empresa", response_model=MensajeResponse)
+def reasignar_empresa_masivo(
+    datos: ReasignarEmpresaRequest,
+    usuario=Depends(get_usuario_actual),
+    service: PreliquidacionService = Depends(get_service),
+):
+    if not datos.linea_ids or not datos.empresa:
+        raise HTTPException(status_code=400, detail="Se requieren linea_ids y empresa")
+    try:
+        resultado = service.reasignar_empresa_masivo(
+            datos.linea_ids, datos.empresa, usuario.id, motivo=datos.motivo_ajuste
+        )
+        detalle = f"{resultado['reasignadas']} líneas reasignadas a {datos.empresa}"
+        if resultado["sin_legajo_en_empresa"]:
+            detalle += f" · {len(resultado['sin_legajo_en_empresa'])} sin legajo en esa empresa (no se tocaron)"
+        return MensajeResponse(mensaje="Empresa reasignada", detalle=detalle)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

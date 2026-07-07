@@ -166,6 +166,26 @@ class SueldosService:
 
         return legajo_campo, True  # no tiene legajo en esa empresa
 
+    # ─── Legajos por persona (reasignación masiva de empresa) ─────────────────
+
+    def legajos_por_cuil(self, cuil: str) -> list[dict]:
+        """Todos los registros (empresa, legajo, apellido_nombre, ...) de una
+        persona por su CUIL — los legajos que esa persona realmente tiene."""
+        self._cargar_cache()
+        cuil = str(cuil or "").strip()
+        if not cuil:
+            return []
+        return list(self._por_cuil.get(cuil, []))
+
+    def legajo_por_cuil_y_empresa(self, cuil: str, empresa: str) -> Optional[str]:
+        """Legajo de una persona (por CUIL) en una empresa específica, o None
+        si esa persona no tiene legajo en esa empresa."""
+        empresa = str(empresa).strip().upper()
+        for r in self.legajos_por_cuil(cuil):
+            if r["empresa"] == empresa:
+                return r["legajo"]
+        return None
+
     # ─── Categoría (para Mantenimiento Mecánico Talleres) ─────────────────────
 
     def obtener_categoria(self, legajo: str) -> Optional[str]:

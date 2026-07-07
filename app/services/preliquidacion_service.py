@@ -891,3 +891,90 @@ class PreliquidacionService:
             self._recalcular_importe(linea)
         self.db.commit()
         return {"eliminados": eliminados, "lineas": len(lineas)}
+
+    # ─── Reasignación masiva de empresa ───────────────────────────────────────
+
+    def legajos_disponibles_por_cuil(self, linea_ids: list[int]) -> dict:
+        """
+        Agrupa las líneas seleccionadas por CUIL (una persona puede tener
+        varios legajos, uno por empresa) y, para cada una, devuelve los
+        pares (empresa, legajo) que esa persona realmente tiene — para que
+        el liquidador solo pueda elegir una empresa donde la persona ya
+        está dada de alta.
+        """
+        if not self.sueldos:
+            raise ValueError("Servicio de sueldos no disponible")
+
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.id.in_(linea_ids)
+        ).all()
+
+        grupos: dict[str, dict] = {}
+        sin_cuil = []
+        for linea in lineas:
+            cuil = (linea.cuit or "").strip()
+            if not cuil:
+                sin_cuil.append(linea.id)
+                continue
+            if cuil not in grupos:
+                grupos[cuil] = {
+                    "cuil": cuil,
+                    "nombre_empleado": linea.nombre_empleado,
+                    "linea_ids": [],
+                    "legajos_disponibles": [
+                        {"empresa": r["empresa"], "legajo": r["legajo"]}
+                        for r in self.sueldos.legajos_por_cuil(cuil)
+                    ],
+                }
+            grupos[cuil]["linea_ids"].append(linea.id)
+
+        return {"grupos": list(grupos.values()), "sin_cuil": sin_cuil}
+
+    def reasignar_empresa_masivo(
+        self, linea_ids: list[int], empresa: str, usuario_id: int, motivo: str = None
+    ) -> dict:
+        """
+        Reasigna empresa_asignada (+ legajo_asignado correcto) a las líneas
+        dadas, solo si la persona (por CUIL) realmente tiene legajo en esa
+        empresa. Audita cada cambio en AjusteManual, igual que actualizar_linea.
+        Ningún recálculo posterior pisa esta asignación (ADR-0002/plan WS4).
+        """
+        if not self.sueldos:
+            raise ValueError("Servicio de sueldos no disponible")
+
+        empresa = empresa.strip().upper()
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.id.in_(linea_ids)
+        ).all()
+
+        reasignadas = []
+        sin_legajo_en_empresa = []
+        for linea in lineas:
+            cuil = (linea.cuit or "").strip()
+            legajo_nuevo = self.sueldos.legajo_por_cuil_y_empresa(cuil, empresa) if cuil else None
+            if not legajo_nuevo:
+                sin_legajo_en_empresa.append(linea.id)
+                continue
+
+            for campo, valor_nuevo in (
+                ("empresa_asignada", empresa),
+                ("legajo_asignado", legajo_nuevo),
+            ):
+                valor_anterior = getattr(linea, campo)
+                if str(valor_anterior) == str(valor_nuevo):
+                    continue
+                self.db.add(AjusteManual(
+                    linea_id=linea.id, campo_modificado=campo,
+                    valor_anterior=str(valor_anterior), valor_nuevo=str(valor_nuevo),
+                    motivo=motivo, usuario_id=usuario_id,
+                ))
+                setattr(linea, campo, valor_nuevo)
+
+            linea.alerta_legajo = False
+            reasignadas.append(linea.id)
+
+        self.db.commit()
+        return {
+            "reasignadas": len(reasignadas),
+            "sin_legajo_en_empresa": sin_legajo_en_empresa,
+        }

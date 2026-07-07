@@ -25,13 +25,15 @@ ontend: quitar el selector precio A/B de la pantalla de Revisión.
 2. Ajustar la query de faltantes (`precios.py:186`) para listar los combos cuyas líneas no tienen concepto **completo** (no solo los sin nada).
 3. El recálculo reactivo (WS2) es el único que setea/limpia esta bandera.
 
-## WS4 — Reasignación masiva de empresa (feature nueva)
+## WS4 — Reasignación masiva de empresa (feature nueva) ✅ implementado (rama `ws4-reasignacion-masiva-empresa`)
 
-1. Endpoint: legajos disponibles por CUIL (exponer `sueldos_service._por_cuil`, cada par empresa→legajo).
-2. Endpoint POST de reasignación masiva: agrupar líneas por CUIL, setear `empresa_asignada` + `legajo_asignado` (el de esa empresa), una fila `AjusteManual` por línea, `alerta_legajo = False`. Reusa el patrón de `actualizar_linea` (`:715`).
-3. Excluir líneas con `cuit` vacío y avisar ("estas N no tienen CUIL, editalas a mano").
-4. Frontend: multiselección de registros + picker **por persona** (un bloque por CUIL con sus legajos posibles).
-5. La reasignación persiste sola (ningún recálculo pisa la empresa).
+1. ~~Endpoint: legajos disponibles por CUIL~~ → `SueldosService.legajos_por_cuil`/`legajo_por_cuil_y_empresa` + `POST /api/preliquidacion/lineas/legajos-por-cuil`.
+2. ~~Endpoint POST de reasignación masiva~~ → `POST /api/preliquidacion/lineas/reasignar-empresa`, reusa el patrón de `AjusteManual` de `actualizar_linea`.
+3. Líneas con `cuit` vacío quedan en `sin_cuil` en la respuesta de `legajos-por-cuil` (el picker las excluye).
+4. Frontend: se extendió `LiquidacionPersona` (ya existía, agrupaba por legajo para conceptos masivos) con la acción "⇄ Reasignar empresa" — abre un picker por CUIL con los pares (empresa, legajo) reales de esa persona.
+5. La reasignación persiste sola — confirmado: `_aplicar_conceptos_a_lineas`/`recalcular_por_concepto` nunca tocan `empresa_asignada`/`legajo_asignado`.
+
+**Verificación:** 4 tests unitarios (SQLite, `SueldosService` con cache poblado a mano) + smoke test HTTP real (TestClient) contra una persona real de `db_sueldos` con dos legajos (LA ASTURIANA:4314, PROSELECT:20848) — confirmó agrupación, reasignación con el legajo correcto, bloqueo cuando la persona no tiene legajo en la empresa destino, y 6 `AjusteManual` de auditoría. Verificación visual parcial: una captura real mostró el picker de personas con el caso real de doble legajo (ALBORNOZ, HUGO FERNANDO — legajo 19320 en LA ASTURIANA y 20204 en PAMPLONA); el resto del click-through visual quedó bloqueado por saturación de recursos del entorno de pruebas (no del código — confirmado con el smoke test HTTP).
 
 ## WS5 — Copiar conceptos: auto-aplicar + precio heredado (ADR-0004)
 
