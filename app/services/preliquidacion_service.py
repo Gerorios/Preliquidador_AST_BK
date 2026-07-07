@@ -405,21 +405,29 @@ class PreliquidacionService:
 
         linea_ids = [l.id for l in lineas]
 
-        # Paso 1: borrar automáticos existentes de esas líneas
+        # Snapshot del importe manual de cada línea ANTES de tocar la sesión.
+        # linea.conceptos ya viene con joinedload desde el caller: no dispara queries.
+        importe_manual = {
+            l.id: sum(
+                (c.importe for c in l.conceptos
+                 if c.ingresado_por is not None and c.importe is not None),
+                Decimal("0"),
+            )
+            for l in lineas
+        }
+
+        # Borrar automáticos existentes de esas líneas SIN COMMIT: nos quedamos en la
+        # misma transacción para que los objetos ya cargados no expiren (evita N+1).
         self.db.query(ConceptoAdicional).filter(
             ConceptoAdicional.linea_id.in_(linea_ids),
             ConceptoAdicional.ingresado_por.is_(None),
         ).delete(synchronize_session=False)
-        self.db.commit()
 
-        # Paso 2: cache del maestro para esta quincena
         cache_comunes, cache_especificos = self._cache_conceptos_quincena(quincena)
 
         actualizadas = sin_reglas = 0
         conceptos_nuevos = []
-        ids_con_conceptos = set()
 
-        # Paso 3: emparejar reglas con cada línea
         for linea in lineas:
             t  = (linea.nombre_tarea   or "").strip().upper()
             cl = (linea.nombre_cliente or "").strip().upper()
@@ -432,35 +440,27 @@ class PreliquidacionService:
             # nuevos ya viene filtrado por precio (ver _generar_conceptos_automaticos):
             # una línea solo está completa si al menos una regla generó un concepto real.
             nuevos = self._generar_conceptos_automaticos(linea, reglas) if reglas else []
+            manual = importe_manual.get(linea.id, Decimal("0"))
 
             if not nuevos:
+                linea.codigo_liquidacion = None
+                linea.importe_total      = manual
                 if not linea.linea_incompleta:
-                    linea.codigo_liquidacion = None
-                    linea.linea_incompleta   = True
-                    self._recalcular_importe(linea)
+                    linea.linea_incompleta = True
                     actualizadas += 1
                 else:
                     sin_reglas += 1
                 continue
 
             conceptos_nuevos.extend(nuevos)
-            ids_con_conceptos.add(linea.id)
             linea.codigo_liquidacion = nuevos[0].codigo_concepto
-            linea.linea_incompleta  = False
+            linea.linea_incompleta   = False
+            linea.importe_total      = manual + sum(n.importe for n in nuevos)
             actualizadas += 1
 
-        # Paso 4: insertar y commitear
         if conceptos_nuevos:
             self.db.bulk_save_objects(conceptos_nuevos)
         self.db.commit()
-
-        # Paso 5: recalcular importe_total con los conceptos ya insertados
-        if ids_con_conceptos:
-            for linea in self.db.query(PreliquidacionLinea).filter(
-                PreliquidacionLinea.id.in_(ids_con_conceptos)
-            ).options(joinedload(PreliquidacionLinea.conceptos)).all():
-                self._recalcular_importe(linea)
-            self.db.commit()
 
         return {"actualizadas": actualizadas, "sin_reglas": sin_reglas}
 

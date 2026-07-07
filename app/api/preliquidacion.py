@@ -51,6 +51,15 @@ def generar(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/refrescar-sueldos", response_model=MensajeResponse)
+def refrescar_sueldos(_=Depends(get_usuario_actual)):
+    """Marca el maestro de sueldos (cache de proceso) para recargarse en el
+    próximo uso. Útil cuando cambió nuempleados y no se quiere esperar al TTL."""
+    from app.services.sueldos_service import refrescar_cache_sueldos
+    refrescar_cache_sueldos()
+    return MensajeResponse(mensaje="Maestro de sueldos marcado para refrescar")
+
+
 @router.get("/empresas")
 def listar_empresas(db_sueldos: Session = Depends(get_db_sueldos)):
     from sqlalchemy import text

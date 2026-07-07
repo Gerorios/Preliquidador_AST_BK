@@ -12,6 +12,7 @@ es de minutos a segundos.
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
+from datetime import datetime, timedelta
 import unicodedata
 
 
@@ -21,6 +22,34 @@ QUERY_TODOS_NUEMPLEADOS = text("""
     FROM nuempleados
     WHERE (borrado IS NULL OR borrado <> 'S')
 """)
+
+
+# ─── Cache a nivel de proceso ──────────────────────────────────────────────────
+# El maestro de empleados casi no cambia, pero se crea un SueldosService nuevo
+# en cada request. Para no recargar ~15.500 filas (~12s) por request, los índices
+# se cargan UNA vez por proceso y se reusan entre instancias hasta que vencen.
+# Single-worker (uvicorn --reload) → no hacen falta locks.
+_TTL_CACHE = timedelta(minutes=30)
+
+_STORE: dict = {
+    "por_legajo": None,          # legajo -> [registros]
+    "por_legajo_empresa": None,  # (legajo, empresa) -> registro
+    "por_cuil": None,            # cuil -> [registros]
+    "cargado_en": None,          # datetime de la última carga
+}
+
+
+def _store_fresco() -> bool:
+    cargado_en = _STORE["cargado_en"]
+    if cargado_en is None or _STORE["por_legajo"] is None:
+        return False
+    return (datetime.now() - cargado_en) < _TTL_CACHE
+
+
+def refrescar_cache_sueldos() -> None:
+    """Marca el cache de proceso como vencido para forzar la recarga en el
+    próximo uso. Llamable sin instancia."""
+    _STORE["cargado_en"] = None
 
 
 def _normalizar_nombre(nombre: str) -> str:
@@ -59,6 +88,19 @@ class SueldosService:
         if self._cache_cargado:
             return
 
+        # Si el cache de proceso está fresco, reusar sus índices sin tocar la BD.
+        if _store_fresco():
+            self._por_legajo = _STORE["por_legajo"]
+            self._por_legajo_empresa = _STORE["por_legajo_empresa"]
+            self._por_cuil = _STORE["por_cuil"]
+            self._cache_cargado = True
+            return
+
+        # Cache vacío o vencido → recargar desde la BD y poblar el store.
+        por_legajo: dict[str, list[dict]] = {}
+        por_legajo_empresa: dict[tuple, dict] = {}
+        por_cuil: dict[str, list[dict]] = {}
+
         rows = self.db.execute(QUERY_TODOS_NUEMPLEADOS).fetchall()
 
         for r in rows:
@@ -76,11 +118,19 @@ class SueldosService:
             empresa = registro["empresa"]
             cuil = registro["cuil"]
 
-            self._por_legajo.setdefault(legajo, []).append(registro)
-            self._por_legajo_empresa[(legajo, empresa)] = registro
+            por_legajo.setdefault(legajo, []).append(registro)
+            por_legajo_empresa[(legajo, empresa)] = registro
             if cuil:
-                self._por_cuil.setdefault(cuil, []).append(registro)
+                por_cuil.setdefault(cuil, []).append(registro)
 
+        _STORE["por_legajo"] = por_legajo
+        _STORE["por_legajo_empresa"] = por_legajo_empresa
+        _STORE["por_cuil"] = por_cuil
+        _STORE["cargado_en"] = datetime.now()
+
+        self._por_legajo = por_legajo
+        self._por_legajo_empresa = por_legajo_empresa
+        self._por_cuil = por_cuil
         self._cache_cargado = True
 
     # ─── Resolución de empresa ─────────────────────────────────────────────────

@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.database import Base
 from app.models.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
-    UnidadBaseConcepto, TipoConcepto,
+    ConceptoAdicional, UnidadBaseConcepto, TipoConcepto,
 )
 from app.services.preliquidacion_service import PreliquidacionService
 
@@ -54,6 +54,37 @@ def _concepto(db, quincena, tarea, cliente=None, finca=None, codigo=1,
     db.commit()
     db.refresh(c)
     return c
+
+
+def _concepto_manual(db, linea, importe=Decimal("70"), usuario_id=1):
+    c = ConceptoAdicional(
+        linea_id=linea.id, descripcion="Manual", tipo=TipoConcepto.OTRO,
+        importe=importe, ingresado_por=usuario_id,
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return c
+
+
+def test_concepto_manual_se_preserva_y_suma_al_automatico(db):
+    preliq = _preliq(db)
+    linea = _linea(db, preliq, "TAREA X", "CLIENTE A", "FINCA 1")
+    manual = _concepto_manual(db, linea, importe=Decimal("70"))
+    svc = PreliquidacionService(db)
+
+    _concepto(db, preliq.quincena, "TAREA X", "CLIENTE A", "FINCA 1", codigo=10, precio=Decimal("50"))
+    svc.recalcular_por_concepto(
+        preliq.quincena,
+        actual={"tarea_nombre": "TAREA X", "cliente_nombre": "CLIENTE A", "finca_nombre": "FINCA 1"},
+    )
+
+    db.refresh(linea)
+    # el concepto manual sigue existiendo (no se borró)
+    assert db.query(ConceptoAdicional).filter(ConceptoAdicional.id == manual.id).first() is not None
+    assert linea.linea_incompleta is False
+    # importe_total = manual (70) + automático (8 hsjornal * 50 = 400)
+    assert linea.importe_total == Decimal("470.00")
 
 
 def test_crear_concepto_impacta_reactivamente_la_linea_que_matchea(db):
