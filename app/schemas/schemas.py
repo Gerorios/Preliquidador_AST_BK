@@ -100,6 +100,7 @@ class ConceptoUnifResponse(BaseModel):
     unidad_base: UnidadBaseConcepto
     precio: Optional[Decimal] = None
     tipo: TipoConcepto
+    heredado: bool = False
 
     class Config:
         from_attributes = True

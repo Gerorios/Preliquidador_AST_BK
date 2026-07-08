@@ -78,6 +78,7 @@ class ConceptoLiquidacion(Base):
     )
     precio         = Column(Numeric(12, 4))
     tipo           = Column(Enum(TipoConcepto), default=TipoConcepto.OTRO, nullable=False)
+    heredado       = Column(Boolean, default=False, nullable=False)  # ADR-0004: precio copiado de otra quincena, sin confirmar
     creado_en      = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (

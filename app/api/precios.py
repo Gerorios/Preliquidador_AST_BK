@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, text
 
 from app.core.database import get_db_propia, get_db_externa
-from app.models.models import ConceptoLiquidacion
+from app.models.models import ConceptoLiquidacion, Preliquidacion
 from app.services.consulta_externa import ConsultaExternaService
 from app.services.preliquidacion_service import PreliquidacionService
 from app.schemas.schemas import (
@@ -131,8 +131,11 @@ def actualizar_concepto(
         raise HTTPException(status_code=404, detail="Concepto no encontrado")
 
     anterior = _match(concepto)
-    for campo, valor in datos.model_dump(exclude_unset=True).items():
+    campos = datos.model_dump(exclude_unset=True)
+    for campo, valor in campos.items():
         setattr(concepto, campo, valor)
+    if "precio" in campos:
+        concepto.heredado = False  # confirmar el precio limpia la marca (ADR-0004)
     db.commit()
     db.refresh(concepto)
 
@@ -194,14 +197,25 @@ def copiar_quincena(
             unidad_base=c.unidad_base,
             precio=c.precio,
             tipo=c.tipo,
+            heredado=True,
         ))
         copiados += 1
 
     db.commit()
-    return MensajeResponse(
-        mensaje="Conceptos copiados",
-        detalle=f"{copiados} copiados · {omitidos} ya existían",
-    )
+
+    detalle = f"{copiados} copiados · {omitidos} ya existían"
+
+    # Auto-aplica al destino (ADR-0004): si ya hay una preliquidación generada
+    # para esa quincena, recalculamos toda la quincena con el maestro actualizado.
+    if copiados:
+        preliq_destino = db.query(Preliquidacion).filter(
+            Preliquidacion.quincena == quincena_destino
+        ).first()
+        if preliq_destino:
+            resultado = PreliquidacionService(db).aplicar_conceptos(preliq_destino.id)
+            detalle += f" · {resultado['actualizadas']} líneas recalculadas"
+
+    return MensajeResponse(mensaje="Conceptos copiados", detalle=detalle)
 
 
 @router.get("/conceptos/faltantes")
