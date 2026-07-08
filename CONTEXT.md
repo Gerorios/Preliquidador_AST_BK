@@ -26,7 +26,7 @@ Identificador de una persona **dentro de una empresa** en el sistema de sueldos.
 Entidad que paga (LA ASTURIANA, PAMPLONA, …). La empresa de una línea se resuelve automáticamente (por legajo/nombre + la regla CITRUSVIL/maquinaria) y puede ser reasignada manualmente por el liquidador, eligiendo entre las empresas donde la persona tiene legajo.
 
 **Concepto**:
-Regla del maestro (`concepto_liquidacion`) que el liquidador carga por quincena para una tarea (± cliente/finca). Define código de liquidación, Unidad base, precio y tipo. Es lo que convierte una tarea en plata.
+Regla del maestro (`concepto_liquidacion`) que el liquidador carga por quincena para una tarea (± cliente/finca). Define código de liquidación, Unidad base, precio y tipo. Es un catálogo **vigente y editable**: su precio puede cambiar en cualquier momento, y cuando cambia, el modelo reactivo recalcula lo que ya aplicaba.
 _Avoid_: precio maestro, precio común (nombres del modelo viejo, eliminado)
 
 **Concepto común**:
@@ -57,5 +57,8 @@ Precio de un concepto que vino copiado de otra quincena y todavía no fue confir
 _Avoid_: precio copiado, precio viejo
 
 **Concepto adicional**:
-Fila sumable generada a partir de un concepto que matchea una línea (`cantidad = f(unidad_base) × precio`). El importe total de una línea es la suma de sus conceptos adicionales.
-_Avoid_: importe base (siempre 0; el total nace de los conceptos adicionales)
+El **hecho de pago**, no la regla: una foto congelada de cuando un Concepto se aplicó a una línea — guarda su propio `precio` y `cantidad` en ese momento, más el importe resultante (`cantidad × precio`) y, si vino del maestro, un link (`concepto_liquidacion_id`) hacia qué regla lo originó. Existe para que, aunque el Concepto del maestro cambie de precio después, el pago ya calculado no mienta. El importe total de una línea es la suma de sus conceptos adicionales.
+_Avoid_: importe base (siempre 0; el total nace de los conceptos adicionales), "el precio del concepto" para referirse al de acá (es el precio *congelado*, no el vigente — para el vigente ver Concepto)
+
+**Concepto manual**:
+Un Concepto adicional que el liquidador escribió a mano (descripción + importe), sin pasar por ningún código del maestro. No tiene `concepto_liquidacion_id`, `precio` ni `cantidad` — no le faltan, es que genuinamente no salió de ninguna regla.
