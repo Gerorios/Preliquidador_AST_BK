@@ -19,8 +19,8 @@ def _linea(**kw):
     return SimpleNamespace(**base)
 
 
-def _regla(precio, unidad_base="hsjornal", codigo=100, tipo="REMUNERATIVO"):
-    return SimpleNamespace(precio=precio, unidad_base=unidad_base, codigo=codigo, tipo=tipo)
+def _regla(precio, unidad_base="hsjornal", codigo=100, tipo="REMUNERATIVO", id=1):
+    return SimpleNamespace(precio=precio, unidad_base=unidad_base, codigo=codigo, tipo=tipo, id=id)
 
 
 def test_concepto_sin_precio_no_genera_fila():
@@ -45,3 +45,20 @@ def test_mix_solo_genera_los_que_tienen_precio():
     assert len(conceptos) == 1
     assert conceptos[0].codigo_concepto == 2
     assert conceptos[0].importe == Decimal("1500.00")  # 3 tancadas * 500
+
+
+def test_concepto_guarda_snapshot_de_precio_cantidad_y_origen():
+    """Fix de trazabilidad: concepto_adicional debe ser un hecho autocontenido
+    (precio y cantidad congelados en el momento del cálculo, más el id de la
+    regla del maestro que lo origino), no depender de que concepto_liquidacion
+    no haya cambiado despues."""
+    svc = _svc()
+    linea = _linea(hsjornal=Decimal("8"))
+    regla = _regla(precio=Decimal("1000"), unidad_base="hsjornal", codigo=42, id=777)
+    conceptos = svc._generar_conceptos_automaticos(linea, [regla])
+    assert len(conceptos) == 1
+    c = conceptos[0]
+    assert c.precio == Decimal("1000")
+    assert c.cantidad == Decimal("8")
+    assert c.concepto_liquidacion_id == 777
+    assert c.importe == Decimal("8000.00")  # cantidad * precio, sigue consistente

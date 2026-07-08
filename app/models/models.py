@@ -170,12 +170,28 @@ class ConceptoAdicional(Base):
     codigo_concepto = Column(Integer)
     tipo            = Column(Enum(TipoConcepto), default=TipoConcepto.OTRO)
     unidad_base     = Column(String(30))
+    # Snapshot del cálculo en el momento exacto en que se generó: precio y
+    # cantidad son los factores de importe = cantidad * precio. Se guardan
+    # porque concepto_liquidacion.precio es mutable (se edita todo el tiempo,
+    # ver ADR-0002) — sin este snapshot, "a qué precio se le pagó" quedaría
+    # mintiendo apenas alguien edite el maestro más tarde.
+    precio          = Column(Numeric(12, 4))
+    cantidad        = Column(Numeric(10, 2))
+    # Trazabilidad hacia la regla exacta del maestro que originó este
+    # concepto (nullable: los conceptos manuales, sin código, no tienen
+    # origen en el maestro). ON DELETE SET NULL: si se borra la regla del
+    # maestro, el hecho histórico de plata pagada no se toca — solo se
+    # pierde el link hacia una regla que ya no existe.
+    concepto_liquidacion_id = Column(
+        Integer, ForeignKey("concepto_liquidacion.id", ondelete="SET NULL"), nullable=True
+    )
     importe         = Column(Numeric(12, 2), nullable=False)
     ingresado_por   = Column(Integer, ForeignKey("usuarios.id"))
     fecha           = Column(DateTime, default=datetime.utcnow)
 
-    linea   = relationship("PreliquidacionLinea", back_populates="conceptos")
-    usuario = relationship("Usuario")
+    linea            = relationship("PreliquidacionLinea", back_populates="conceptos")
+    usuario          = relationship("Usuario")
+    concepto_origen  = relationship("ConceptoLiquidacion")
 
 
 class AjusteManual(Base):

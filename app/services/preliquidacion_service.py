@@ -343,6 +343,9 @@ class PreliquidacionService:
                 codigo_concepto=regla.codigo,
                 tipo=regla.tipo,
                 unidad_base=unidad,
+                precio=regla.precio,
+                cantidad=cantidad,
+                concepto_liquidacion_id=regla.id,
                 importe=importe,
                 ingresado_por=None,
             ))

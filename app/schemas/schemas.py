@@ -26,6 +26,10 @@ class ConceptoAdicionalResponse(BaseModel):
     tipo: Optional[TipoConcepto]
     importe: Decimal
     codigo_concepto: Optional[int] = None
+    unidad_base: Optional[str] = None
+    precio: Optional[Decimal] = None
+    cantidad: Optional[Decimal] = None
+    concepto_liquidacion_id: Optional[int] = None
     ingresado_por: Optional[int] = None
 
     class Config:
