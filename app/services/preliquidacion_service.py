@@ -266,7 +266,7 @@ class PreliquidacionService:
         legajo_asignado, alerta_legajo = self._resolver_legajo_cache(legajo, empresa, cache)
         alerta_legajo = alerta_legajo or alerta_empresa
 
-        # grupo_pago para el importe base viene del catálogo externo
+        # grupo_pago es informativo (control de PLANTA); no participa del cálculo de importe
         grupo_pago = cache["grupo_pago_catalogo"].get(nombre_tarea.strip().upper(), "")
 
         # Buscar reglas del maestro: específicos + comunes suman
