@@ -233,6 +233,7 @@ QUERY_TAREAS = text("""
            TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(ta.descripcion, ';', 3), ';', -1)) AS grupo_factura
     FROM laa_tareas ta
     WHERE ta.estado <> 9
+    ORDER BY ta.nombre
 """)
 
 QUERY_LEGAJOS = text("""
