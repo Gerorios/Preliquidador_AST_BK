@@ -469,10 +469,10 @@ class PreliquidacionService:
 
     def aplicar_conceptos(self, preliq_id: int) -> dict:
         """
-        Recalcula TODA la quincena. Ya no es un paso obligatorio del flujo
-        (el impacto del maestro es reactivo, ver recalcular_por_concepto) —
-        se conserva como acción manual de "recalcular todo" por si hace
-        falta forzarlo.
+        Recalcula TODA la quincena con el maestro vigente. No es un paso del
+        flujo del liquidador (el impacto del maestro es reactivo, ver
+        recalcular_por_concepto) — uso interno, ej. tras copiar conceptos
+        de otra quincena (ver precios.py, copiar_quincena).
         """
         preliq = self.db.query(Preliquidacion).filter(
             Preliquidacion.id == preliq_id
@@ -688,15 +688,6 @@ class PreliquidacionService:
         }
 
     # ─── Consultas ────────────────────────────────────────────────────────────
-
-
-    def aplicar(self, preliq_id: int) -> dict:
-        """
-        Recalcula manualmente TODA la quincena (acción de emergencia; el
-        impacto normal es reactivo, ver recalcular_por_concepto).
-        """
-        resultado = self.aplicar_conceptos(preliq_id)
-        return {"conceptos_aplicados": resultado.get("actualizadas", 0)}
 
     def listar(self) -> list[Preliquidacion]:
         return self.db.query(Preliquidacion).order_by(Preliquidacion.quincena.desc()).all()

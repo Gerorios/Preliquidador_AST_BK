@@ -85,39 +85,6 @@ def listar(service: PreliquidacionService = Depends(get_service)):
     return resultado
 
 
-# ─── Operación unificada ──────────────────────────────────────────────────────
-
-@router.post("/{preliq_id}/aplicar", response_model=MensajeResponse)
-def aplicar(
-    preliq_id: int,
-    service: PreliquidacionService = Depends(get_service),
-):
-    """Recalcula manualmente toda la quincena (acción de emergencia)."""
-    try:
-        resultado = service.aplicar(preliq_id)
-        return MensajeResponse(
-            mensaje="Conceptos aplicados",
-            detalle=f"{resultado['conceptos_aplicados']} líneas con conceptos"
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ─── Mantener endpoint viejo por compatibilidad ───────────────────────────────
-
-@router.post("/{preliq_id}/aplicar-conceptos", response_model=MensajeResponse)
-def aplicar_conceptos(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
-    try:
-        resultado = service.aplicar_conceptos(preliq_id)
-        return MensajeResponse(mensaje="Conceptos aplicados", detalle=f"{resultado['actualizadas']} líneas actualizadas")
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/{preliq_id}/backfill-conceptos", response_model=MensajeResponse)
 def backfill_conceptos(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     try:
