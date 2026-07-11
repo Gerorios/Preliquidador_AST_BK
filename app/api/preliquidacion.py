@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     ConceptoAdicionalRequest, ConceptoAdicionalResponse,
     ConceptoPorCodigoRequest,
     MensajeResponse, ValorHoraPulvRequest,
+    CategoriaOperarioRequest, OperarioMantenimientoResponse,
 )
 
 router = APIRouter(prefix="/api/preliquidacion", tags=["Preliquidación"])
@@ -123,6 +124,47 @@ def control_tancadas_jornal(preliq_id: int, service: PreliquidacionService = Dep
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
     try:
         return service.control_tancadas_jornal(preliq_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{preliq_id}/operarios-mantenimiento", response_model=list[OperarioMantenimientoResponse])
+def operarios_mantenimiento(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
+    """Operarios (por CUIL) con líneas de taller (Mantenimiento mecánico) en
+    esta quincena, junto con la categoría ya asignada (ADR-0008)."""
+    try:
+        return service.operarios_mantenimiento(preliq_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{preliq_id}/categoria-operario")
+def set_categoria_operario(
+    preliq_id: int,
+    datos: CategoriaOperarioRequest,
+    service: PreliquidacionService = Depends(get_service),
+):
+    """Asigna (o borra, con categoria=null) la categoría de una persona para
+    la quincena de esta preliquidación y recalcula sus líneas de taller."""
+    try:
+        return service.set_categoria_operario(preliq_id, datos.cuil, datos.categoria)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{preliq_id}/categorias-operario/heredar", response_model=MensajeResponse)
+def heredar_categorias_operario(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
+    """Copia las asignaciones de categoría de la quincena anterior hacia
+    esta, para los CUIL que todavía no tengan asignación."""
+    try:
+        resultado = service.heredar_categorias_operario(preliq_id)
+        return MensajeResponse(mensaje="Categorías heredadas", detalle=f"{resultado['heredados']} operarios")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

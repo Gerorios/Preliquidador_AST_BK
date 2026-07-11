@@ -79,11 +79,16 @@ class ConceptoLiquidacion(Base):
     precio         = Column(Numeric(12, 4))
     tipo           = Column(Enum(TipoConcepto), default=TipoConcepto.OTRO, nullable=False)
     heredado       = Column(Boolean, default=False, nullable=False)  # ADR-0004: precio copiado de otra quincena, sin confirmar
+    # ADR-0008: categoría (1-7) de mantenimiento mecánico. NULL = concepto
+    # común, se comporta igual que siempre. Con valor, el concepto solo
+    # aplica a líneas de personas cuya categoría (tabla categoria_operario,
+    # por quincena) coincida exactamente.
+    categoria      = Column(Integer, nullable=True)
     creado_en      = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint(
-            "quincena", "tarea_nombre", "cliente_nombre", "finca_nombre", "codigo",
+            "quincena", "tarea_nombre", "cliente_nombre", "finca_nombre", "codigo", "categoria",
             name="uq_concepto_unif",
         ),
     )
@@ -214,3 +219,23 @@ class AjusteManual(Base):
 
     linea   = relationship("PreliquidacionLinea", back_populates="ajustes")
     usuario = relationship("Usuario")
+
+
+# ─── Categoría de operario para Mantenimiento mecánico (ADR-0008) ────────────
+#
+# La categoría (1-7) de cada operario se administra a mano por el liquidador,
+# por quincena (una persona puede cambiar de categoría de una quincena a
+# otra). Cruza con ConceptoLiquidacion.categoria por CUIL para decidir qué
+# concepto de "MANTENIMIENTO MECANICO (TALLERES)" le corresponde a cada línea.
+
+class CategoriaOperario(Base):
+    __tablename__ = "categoria_operario"
+
+    id        = Column(Integer, primary_key=True, autoincrement=True)
+    quincena  = Column(Date, nullable=False)
+    cuil      = Column(String(20), nullable=False)
+    categoria = Column(Integer, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("quincena", "cuil", name="uq_categoria_operario"),
+    )

@@ -111,6 +111,9 @@ class ConceptoUnifResponse(BaseModel):
     precio: Optional[Decimal] = None
     tipo: TipoConcepto
     heredado: bool = False
+    # ADR-0008: categoría (1-7) de Mantenimiento mecánico. None = concepto
+    # común (comportamiento actual, sin filtro por categoría).
+    categoria: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -125,6 +128,7 @@ class ConceptoUnifRequest(BaseModel):
     unidad_base: UnidadBaseConcepto = UnidadBaseConcepto.FIJO
     precio: Optional[Decimal] = None
     tipo: TipoConcepto = TipoConcepto.OTRO
+    categoria: Optional[int] = None
 
 
 class ConceptoUnifUpdateRequest(BaseModel):
@@ -132,7 +136,22 @@ class ConceptoUnifUpdateRequest(BaseModel):
     unidad_base: Optional[UnidadBaseConcepto] = None
     precio: Optional[Decimal] = None
     tipo: Optional[TipoConcepto] = None
+    categoria: Optional[int] = None
 
 
 class ConceptoPorCodigoRequest(BaseModel):
     codigo: int
+
+
+# ─── Categoría de operario (Mantenimiento mecánico, ADR-0008) ────────────────
+
+class CategoriaOperarioRequest(BaseModel):
+    cuil: str
+    categoria: Optional[int] = None   # None = borra la asignación
+
+
+class OperarioMantenimientoResponse(BaseModel):
+    cuil: str
+    nombre_empleado: Optional[str] = None
+    legajo: Optional[str] = None
+    categoria: Optional[int] = None

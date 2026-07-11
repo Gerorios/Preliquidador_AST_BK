@@ -105,6 +105,7 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
         unidad_base=datos.unidad_base,
         precio=datos.precio,
         tipo=datos.tipo,
+        categoria=datos.categoria,
     )
     db.add(nuevo)
     try:
@@ -183,6 +184,7 @@ def copiar_quincena(
                 ConceptoLiquidacion.cliente_nombre == c.cliente_nombre,
                 ConceptoLiquidacion.finca_nombre   == c.finca_nombre,
                 ConceptoLiquidacion.codigo         == c.codigo,
+                ConceptoLiquidacion.categoria      == c.categoria,
             )
         ).first()
         if existe:
@@ -197,6 +199,7 @@ def copiar_quincena(
             unidad_base=c.unidad_base,
             precio=c.precio,
             tipo=c.tipo,
+            categoria=c.categoria,
             heredado=True,
         ))
         copiados += 1
