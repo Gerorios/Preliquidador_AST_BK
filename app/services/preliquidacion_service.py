@@ -6,7 +6,7 @@ from sqlalchemy import and_, func, text as sql_text
 
 from app.models.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional,
-    AjusteManual, ConceptoLiquidacion, UnidadBaseConcepto,
+    AjusteManual, ConceptoLiquidacion, UnidadBaseConcepto, CategoriaOperario,
 )
 from app.services.consulta_externa import ConsultaExternaService
 from app.services.motor_reglas import MotorReglas
@@ -223,15 +223,35 @@ class PreliquidacionService:
             "especificos": cache_especificos,
             "grupo_tarea": cache_grupo_tarea,
             "grupo_pago_catalogo": cache_grupo_pago_catalogo,
+            "categoria_por_cuil": self._categoria_por_cuil(quincena),
         }
 
+    def _categoria_por_cuil(self, quincena: date) -> dict:
+        """Mapa {cuil -> categoria} de categoria_operario para la quincena
+        (ADR-0008). Alimenta el filtro de conceptos de Mantenimiento mecánico
+        por categoría."""
+        rows = self.db.query(CategoriaOperario).filter(
+            CategoriaOperario.quincena == quincena
+        ).all()
+        return {r.cuil.strip(): r.categoria for r in rows}
+
+    def _filtrar_por_categoria(self, conceptos: list, cuil, categoria_por_cuil: dict) -> list:
+        """Un concepto con categoria=NULL pasa siempre (comportamiento actual
+        intacto). Un concepto con categoria=X pasa solo si la persona de la
+        línea (por CUIL) tiene esa categoría asignada en la quincena."""
+        categoria_persona = categoria_por_cuil.get((cuil or "").strip())
+        return [c for c in conceptos if c.categoria is None or c.categoria == categoria_persona]
+
     def _buscar_conceptos_cache(
-        self, tarea: str, cliente: str, finca: str, cache: dict
+        self, tarea: str, cliente: str, finca: str, cache: dict, cuil: str = None,
     ) -> list:
         """
         Devuelve todas las reglas que matchean esta línea.
         Específicos + comunes siempre suman.
         Matching: tarea + cliente + finca exactos (sin grupo_pago).
+        Además, filtra por categoría (ADR-0008): reglas con categoria=NULL
+        pasan siempre, reglas con categoria=X solo si el cuil dado tiene esa
+        categoría asignada en la quincena.
         """
         t  = tarea.strip().upper()
         cl = (cliente or "").strip().upper()
@@ -239,7 +259,8 @@ class PreliquidacionService:
 
         esp = cache["especificos"].get((t, cl, fn), [])
         com = cache["comunes"].get(t, [])
-        return esp + com
+        todas = esp + com
+        return self._filtrar_por_categoria(todas, cuil, cache.get("categoria_por_cuil", {}))
 
     def _procesar_fila_con_cache(
         self,
@@ -269,8 +290,10 @@ class PreliquidacionService:
         # grupo_pago es informativo (control de PLANTA); no participa del cálculo de importe
         grupo_pago = cache["grupo_pago_catalogo"].get(nombre_tarea.strip().upper(), "")
 
-        # Buscar reglas del maestro: específicos + comunes suman
-        reglas = self._buscar_conceptos_cache(nombre_tarea, nombre_cliente, nombre_finca, cache)
+        # Buscar reglas del maestro: específicos + comunes suman, filtradas
+        # por categoría de la persona (ADR-0008)
+        cuil = str(fila.get("cuit", "") or "")
+        reglas = self._buscar_conceptos_cache(nombre_tarea, nombre_cliente, nombre_finca, cache, cuil=cuil)
         reglas_con_codigo = [r for r in reglas if r.codigo is not None]
         # Completa = tiene código Y precio (lo único que realmente genera un
         # ConceptoAdicional); un código sin precio no cuenta como completa.
@@ -427,6 +450,7 @@ class PreliquidacionService:
         ).delete(synchronize_session=False)
 
         cache_comunes, cache_especificos = self._cache_conceptos_quincena(quincena)
+        categoria_por_cuil = self._categoria_por_cuil(quincena)
 
         actualizadas = sin_reglas = 0
         conceptos_nuevos = []
@@ -438,7 +462,7 @@ class PreliquidacionService:
 
             esp    = cache_especificos.get((t, cl, fn), [])
             com    = cache_comunes.get(t, [])
-            reglas = esp + com
+            reglas = self._filtrar_por_categoria(esp + com, linea.cuit, categoria_por_cuil)
 
             # nuevos ya viene filtrado por precio (ver _generar_conceptos_automaticos):
             # una línea solo está completa si al menos una regla generó un concepto real.
@@ -531,6 +555,168 @@ class PreliquidacionService:
         lineas = list(vistas.values())
         resultado = self._aplicar_conceptos_a_lineas(preliq.quincena, lineas)
         return {"lineas_afectadas": len(lineas), **resultado}
+
+    # ─── Mantenimiento mecánico por categoría (ADR-0008) ─────────────────────
+
+    def _tareas_con_categoria(self, quincena: date) -> list:
+        """Nombres de tarea (normalizados) que en el maestro de esa quincena
+        tienen al menos un concepto con categoria NOT NULL — son las tareas
+        de "taller" que dependen de la categoría del operario."""
+        rows = self.db.query(ConceptoLiquidacion.tarea_nombre).filter(
+            ConceptoLiquidacion.quincena == quincena,
+            ConceptoLiquidacion.categoria.isnot(None),
+        ).distinct().all()
+        return [r[0].strip().upper() for r in rows if r[0]]
+
+    def recalcular_por_categoria(self, quincena: date, cuil: str) -> dict:
+        """
+        Impacto reactivo de cambiar la categoría asignada a una persona:
+        regenera las líneas de esa quincena, de esa persona (por CUIL), cuya
+        tarea tenga conceptos por categoría en el maestro vigente. Reusa
+        _aplicar_conceptos_a_lineas (borra automáticos, preserva manuales).
+        """
+        preliq = self.db.query(Preliquidacion).filter(
+            Preliquidacion.quincena == quincena
+        ).first()
+        if not preliq:
+            return {"lineas_afectadas": 0}
+
+        tareas = self._tareas_con_categoria(quincena)
+        if not tareas:
+            return {"lineas_afectadas": 0}
+
+        cuil_norm = (cuil or "").strip().upper()
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.preliquidacion_id == preliq.id,
+            func.upper(func.trim(PreliquidacionLinea.cuit)) == cuil_norm,
+            func.upper(func.trim(PreliquidacionLinea.nombre_tarea)).in_(tareas),
+        ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+
+        resultado = self._aplicar_conceptos_a_lineas(preliq.quincena, lineas)
+        return {"lineas_afectadas": len(lineas), **resultado}
+
+    def operarios_mantenimiento(self, preliq_id: int) -> list:
+        """
+        Personas (agrupadas por CUIL) que tienen líneas de "taller" en la
+        quincena — es decir, líneas cuya tarea matchea algún concepto del
+        maestro con categoria NOT NULL. Incluye la categoría ya asignada
+        (o None si todavía no se asignó).
+        """
+        preliq = self.obtener(preliq_id)
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+
+        tareas = self._tareas_con_categoria(preliq.quincena)
+        if not tareas:
+            return []
+
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.preliquidacion_id == preliq_id,
+            func.upper(func.trim(PreliquidacionLinea.nombre_tarea)).in_(tareas),
+        ).all()
+
+        categoria_por_cuil = self._categoria_por_cuil(preliq.quincena)
+
+        por_cuil = {}
+        for linea in lineas:
+            cuil = (linea.cuit or "").strip()
+            if not cuil:
+                continue
+            if cuil not in por_cuil:
+                por_cuil[cuil] = {
+                    "cuil": cuil,
+                    "nombre_empleado": linea.nombre_empleado,
+                    "legajo": linea.legajo_asignado,
+                    "categoria": categoria_por_cuil.get(cuil),
+                }
+
+        resultado = list(por_cuil.values())
+        resultado.sort(key=lambda x: (x["nombre_empleado"] or ""))
+        return resultado
+
+    def set_categoria_operario(self, preliq_id: int, cuil: str, categoria: Optional[int]) -> dict:
+        """
+        Upsert de la categoría de una persona para la quincena de esta
+        preliquidación. categoria=None borra la asignación (la persona vuelve
+        a no tener categoría asignada). Dispara el recálculo reactivo de sus
+        líneas de taller.
+        """
+        preliq = self.obtener(preliq_id)
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+
+        cuil_norm = (cuil or "").strip()
+        if not cuil_norm:
+            raise ValueError("Se requiere cuil")
+
+        existente = self.db.query(CategoriaOperario).filter(
+            CategoriaOperario.quincena == preliq.quincena,
+            CategoriaOperario.cuil == cuil_norm,
+        ).first()
+
+        if categoria is None:
+            if existente:
+                self.db.delete(existente)
+                self.db.commit()
+        else:
+            if existente:
+                existente.categoria = categoria
+            else:
+                self.db.add(CategoriaOperario(
+                    quincena=preliq.quincena, cuil=cuil_norm, categoria=categoria,
+                ))
+            self.db.commit()
+
+        resultado = self.recalcular_por_categoria(preliq.quincena, cuil_norm)
+        return {
+            "cuil": cuil_norm,
+            "categoria": categoria,
+            "lineas_afectadas": resultado["lineas_afectadas"],
+        }
+
+    def heredar_categorias_operario(self, preliq_id: int) -> dict:
+        """
+        Copia las asignaciones de categoria_operario de la quincena
+        inmediatamente anterior (la mayor quincena con asignaciones cargadas,
+        anterior a la actual) hacia la quincena de esta preliquidación —
+        solo para los CUIL que todavía no tengan asignación en la actual.
+        Recalcula las líneas de las personas heredadas.
+        """
+        preliq = self.obtener(preliq_id)
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+
+        fila_anterior = self.db.query(CategoriaOperario.quincena).filter(
+            CategoriaOperario.quincena < preliq.quincena
+        ).order_by(CategoriaOperario.quincena.desc()).first()
+        if not fila_anterior:
+            return {"heredados": 0}
+        quincena_anterior = fila_anterior[0]
+
+        existentes_actual = {
+            r[0] for r in self.db.query(CategoriaOperario.cuil).filter(
+                CategoriaOperario.quincena == preliq.quincena
+            ).all()
+        }
+
+        asignaciones_anteriores = self.db.query(CategoriaOperario).filter(
+            CategoriaOperario.quincena == quincena_anterior
+        ).all()
+
+        cuils_heredados = []
+        for asignacion in asignaciones_anteriores:
+            if asignacion.cuil in existentes_actual:
+                continue
+            self.db.add(CategoriaOperario(
+                quincena=preliq.quincena, cuil=asignacion.cuil, categoria=asignacion.categoria,
+            ))
+            cuils_heredados.append(asignacion.cuil)
+        self.db.commit()
+
+        for cuil in cuils_heredados:
+            self.recalcular_por_categoria(preliq.quincena, cuil)
+
+        return {"heredados": len(cuils_heredados)}
 
     # ─── Dashboard de verificación ────────────────────────────────────────────
 
