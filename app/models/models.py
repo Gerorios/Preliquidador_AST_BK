@@ -98,6 +98,12 @@ class Preliquidacion(Base):
     quincena   = Column(Date, nullable=False, unique=True)
     creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     creado_en  = Column(DateTime, default=datetime.utcnow)
+    # Valor hora de jornal de pulverización de esta quincena, que el liquidador
+    # carga a mano (ADR-0007). Sirve para valorizar "a jornal" el trabajo de
+    # pulverización y compararlo contra el pago "a tancada" en el control
+    # Tancadas vs Jornal. Nullable: las quincenas viejas y las recién creadas
+    # arrancan sin cargarlo, y en ese caso la comparación se muestra sin dato.
+    valor_hora_pulv = Column(Numeric(12, 2), nullable=True)
 
     creador = relationship("Usuario")
     lineas  = relationship(

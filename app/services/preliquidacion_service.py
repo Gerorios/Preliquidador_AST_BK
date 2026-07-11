@@ -610,7 +610,23 @@ class PreliquidacionService:
             "exceso_plantas": exceso_plantas, "resumen_empleados": resumen_empleados,
         }
 
-    # ─── Control Plantas vs Jornal ────────────────────────────────────────────
+    # ─── Controles de razonabilidad (Plantas / Tancadas vs Jornal) ────────────
+
+    def _lineas_por_unidad_base(self, preliq_id: int, unidad_base: str) -> list:
+        """Líneas de la preliquidación que tienen al menos un concepto aplicado
+        con esa unidad base (ej. "unidades", "tancadas"). Es el criterio correcto
+        de "cómo se paga de verdad" — la Unidad base del concepto, no el grupo de
+        pago (que es informativo; ver glosario)."""
+        return (
+            self.db.query(PreliquidacionLinea)
+            .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
+            .filter(
+                PreliquidacionLinea.preliquidacion_id == preliq_id,
+                ConceptoAdicional.unidad_base == unidad_base,
+            )
+            .distinct()
+            .all()
+        )
 
     def control_plantas_jornal(self, preliq_id: int) -> dict:
         preliq = self.db.query(Preliquidacion).filter(
@@ -619,10 +635,11 @@ class PreliquidacionService:
         if not preliq:
             raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
 
-        lineas = self.db.query(PreliquidacionLinea).filter(
-            PreliquidacionLinea.preliquidacion_id == preliq_id,
-            PreliquidacionLinea.grupo_pago_aplicado == "PLANTA",
-        ).all()
+        # Las líneas que este control mide son las que se pagan por planta = las
+        # que tienen un concepto aplicado con unidad_base = "unidades". Antes se
+        # filtraba por grupo_pago_aplicado == "PLANTA", pero el grupo de pago es
+        # informativo y no decide cómo se paga; se alineó con Tancadas vs Jornal.
+        lineas = self._lineas_por_unidad_base(preliq_id, "unidades")
 
         # Precio por planta: sale del maestro (concepto con unidad_base = unidades),
         # no del difunto precio_a. Cache específicos + comunes de la quincena.
@@ -686,6 +703,129 @@ class PreliquidacionService:
                 "plantas_por_hsm_x8": round(tphsm * 8, 2), "prom_jornal": round(tphsm * 8 * tp, 2),
             },
         }
+
+    # Recargo fijo de pulverización sobre el valor hora de jornal (ADR-0007).
+    RECARGO_PULV = Decimal("1.3")
+
+    def control_tancadas_jornal(self, preliq_id: int) -> dict:
+        """Compara, por (cliente, finca, tarea), lo que costó pagar el trabajo
+        "a tancada" contra lo que habría costado "a jornal" de pulverización.
+        La tancada se cuenta ida y vuelta, así que el dato viene doblado y se
+        divide /2 al valorizar (ver glosario: Tancada)."""
+        preliq = self.db.query(Preliquidacion).filter(
+            Preliquidacion.id == preliq_id
+        ).first()
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+
+        lineas = self._lineas_por_unidad_base(preliq_id, "tancadas")
+
+        # Precio de la tancada: del maestro (concepto con unidad_base = tancadas),
+        # promedio de específicos + comunes de la quincena. Misma mecánica que
+        # precio_planta en Plantas vs Jornal.
+        precio_esp: dict[tuple, list] = {}   # (tarea, cliente, finca) -> [precios]
+        precio_com: dict[str, list] = {}     # tarea -> [precios]
+        for c in self.db.query(ConceptoLiquidacion).filter(
+            ConceptoLiquidacion.quincena == preliq.quincena,
+            ConceptoLiquidacion.unidad_base == UnidadBaseConcepto.TANCADAS,
+            ConceptoLiquidacion.precio.isnot(None),
+        ).all():
+            t = c.tarea_nombre.strip().upper()
+            if c.cliente_nombre is None:
+                precio_com.setdefault(t, []).append(c.precio)
+            else:
+                clave_esp = (t, c.cliente_nombre.strip().upper(), (c.finca_nombre or "").strip().upper())
+                precio_esp.setdefault(clave_esp, []).append(c.precio)
+
+        def precio_tancada(tarea, cliente, finca):
+            t  = (tarea or "").strip().upper()
+            cl = (cliente or "").strip().upper()
+            fn = (finca or "").strip().upper()
+            precios = precio_esp.get((t, cl, fn)) or precio_com.get(t)
+            if not precios:
+                return Decimal("0")
+            return sum(precios) / len(precios)
+
+        # Valor hora de jornal de pulverización (con recargo fijo). Si el
+        # liquidador no lo cargó, no se puede valorizar "a jornal": VALOR S/JORNAL
+        # y DIFF quedan en null en toda la tabla (no en 0, para no mentir).
+        valor_hora_pulv = preliq.valor_hora_pulv
+        valor_hs_pulv = (valor_hora_pulv * self.RECARGO_PULV) if valor_hora_pulv is not None else None
+
+        grupos = {}
+        for linea in lineas:
+            clave = (linea.nombre_cliente or "", linea.nombre_finca or "", linea.nombre_tarea or "")
+            if clave not in grupos:
+                grupos[clave] = {"nombre_cliente": linea.nombre_cliente, "nombre_finca": linea.nombre_finca,
+                                 "nombre_tarea": linea.nombre_tarea,
+                                 "precio": precio_tancada(linea.nombre_tarea, linea.nombre_cliente, linea.nombre_finca),
+                                 "tancadas": Decimal("0"), "hsjornal": Decimal("0"), "hsmaquina": Decimal("0")}
+            g = grupos[clave]
+            g["tancadas"]  += linea.tancadas or Decimal("0")
+            g["hsjornal"]  += linea.hsjornal or Decimal("0")
+            g["hsmaquina"] += linea.hsmaquina or Decimal("0")
+
+        filas = []
+        for g in grupos.values():
+            precio   = g["precio"]
+            tancadas = g["tancadas"]; hsjornal = g["hsjornal"]; hsmaquina = g["hsmaquina"]
+            # /2: la tancada es ida y vuelta (dato doblado).
+            valor_jornal  = (hsjornal / 2 * valor_hs_pulv) if valor_hs_pulv is not None else None
+            valor_tancada = tancadas / 2 * precio
+            # DIFF = (tancada - jornal) / jornal. null si no hay jornal contra
+            # qué comparar (valor hora sin cargar, o jornal = 0 por hsjornal 0).
+            diff = None
+            if valor_jornal is not None and valor_jornal != 0:
+                diff = round(float((valor_tancada - valor_jornal) / valor_jornal), 4)
+            filas.append({
+                "nombre_cliente": g["nombre_cliente"], "nombre_finca": g["nombre_finca"],
+                "nombre_tarea": g["nombre_tarea"],
+                "tancadas": round(float(tancadas), 2),
+                "hsjornal": round(float(hsjornal), 2),
+                "hsmaquina": round(float(hsmaquina), 2),
+                "valor_jornal": round(float(valor_jornal), 2) if valor_jornal is not None else None,
+                "precio": round(float(precio), 2),
+                "valor_tancada": round(float(valor_tancada), 2),
+                "diff": diff,
+            })
+        filas.sort(key=lambda f: (f["nombre_cliente"] or "", f["nombre_finca"] or "", f["nombre_tarea"] or ""))
+
+        # Totales: sumas donde corresponde, precio promediado, DIFF recalculado
+        # sobre los totales (NO promedio de los DIFF por fila, que mentiría).
+        tt  = sum(f["tancadas"]  for f in filas)
+        thj = sum(f["hsjornal"]  for f in filas)
+        thm = sum(f["hsmaquina"] for f in filas)
+        tvt = sum(f["valor_tancada"] for f in filas)
+        tp  = sum(f["precio"] for f in filas) / len(filas) if filas else 0
+        if valor_hs_pulv is not None:
+            tvj = sum(f["valor_jornal"] for f in filas)
+            total_diff = round(float((tvt - tvj) / tvj), 4) if tvj else None
+        else:
+            tvj = None
+            total_diff = None
+
+        return {
+            "valor_hora_pulv": float(valor_hora_pulv) if valor_hora_pulv is not None else None,
+            "filas": filas,
+            "totales": {
+                "tancadas": round(tt, 2), "hsjornal": round(thj, 2), "hsmaquina": round(thm, 2),
+                "valor_jornal": round(tvj, 2) if tvj is not None else None,
+                "precio": round(tp, 2),
+                "valor_tancada": round(tvt, 2),
+                "diff": total_diff,
+            },
+        }
+
+    def set_valor_hora_pulv(self, preliq_id: int, valor):
+        """Setea (o limpia con None) el valor hora de pulverización de la
+        quincena. Devuelve la Preliquidacion actualizada."""
+        preliq = self.obtener(preliq_id)
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+        preliq.valor_hora_pulv = valor
+        self.db.commit()
+        self.db.refresh(preliq)
+        return preliq
 
     # ─── Consultas ────────────────────────────────────────────────────────────
 

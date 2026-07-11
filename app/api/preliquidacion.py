@@ -11,7 +11,7 @@ from app.schemas.schemas import (
     LineaResponse, LineaUpdateRequest,
     ConceptoAdicionalRequest, ConceptoAdicionalResponse,
     ConceptoPorCodigoRequest,
-    MensajeResponse,
+    MensajeResponse, ValorHoraPulvRequest,
 )
 
 router = APIRouter(prefix="/api/preliquidacion", tags=["Preliquidación"])
@@ -112,6 +112,28 @@ def control_plantas_jornal(preliq_id: int, service: PreliquidacionService = Depe
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
     try:
         return service.control_plantas_jornal(preliq_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{preliq_id}/control-tancadas-jornal")
+def control_tancadas_jornal(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
+    preliq = service.obtener(preliq_id)
+    if not preliq:
+        raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
+    try:
+        return service.control_tancadas_jornal(preliq_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{preliq_id}/valor-hora-pulv")
+def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+    try:
+        preliq = service.set_valor_hora_pulv(preliq_id, datos.valor_hora_pulv)
+        return {"valor_hora_pulv": float(preliq.valor_hora_pulv) if preliq.valor_hora_pulv is not None else None}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -92,6 +92,12 @@ class MensajeResponse(BaseModel):
     detalle: Optional[str] = None
 
 
+class ValorHoraPulvRequest(BaseModel):
+    # Valor hora de jornal de pulverización de la quincena (ADR-0007). None
+    # limpia el valor (deja la comparación Tancadas vs Jornal sin dato).
+    valor_hora_pulv: Optional[Decimal] = None
+
+
 # ─── Maestro unificado de Conceptos ───────────────────────────────────────────
 
 class ConceptoUnifResponse(BaseModel):

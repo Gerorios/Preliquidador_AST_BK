@@ -45,6 +45,13 @@ _Avoid_: unidad, tipo de cálculo
 **Jornal tope 1**:
 Unidad base especial calculada sobre las horas de jornal: **5 horas o más → 1 jornal** (sin importar el excedente); más de 0 y menos de 5 → medio jornal (0,5); 0 horas → 0.
 
+**Tancada**:
+Unidad de trabajo de pulverización que se registra en la línea. Se cuenta **ida y vuelta**, por lo que el dato cargado viene doblado: los controles que la valorizan lo dividen `/2` para contar la pasada real. Puede ser Unidad base de un concepto (la tarea se paga por tancada).
+_Avoid_: confundir la tancada (el hecho medible) con el grupo de pago TANCADA (atributo informativo del catálogo; ver Grupo de pago).
+
+**Valor hora pulverización**:
+Costo de una hora de jornal de pulverización que el liquidador carga **por quincena**. Sirve para valorizar "a jornal" el trabajo de pulverización y compararlo contra lo que costó pagarlo "a tancada" (control Tancadas vs Jornal). Sobre este valor se aplica un recargo fijo de pulverización (×1,3) antes de comparar.
+
 **Tipo**:
 Clasificación/descripción del concepto (REMUNERATIVO, NO_REMUNERATIVO, JORNAL, BONO_BOLSON, OTRO). Etiqueta el concepto; no cambia el cálculo.
 
