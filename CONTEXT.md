@@ -69,3 +69,10 @@ _Avoid_: importe base (siempre 0; el total nace de los conceptos adicionales), "
 
 **Concepto manual**:
 Un Concepto adicional que el liquidador escribió a mano (descripción + importe), sin pasar por ningún código del maestro. No tiene `concepto_liquidacion_id`, `precio` ni `cantidad` — no le faltan, es que genuinamente no salió de ninguna regla.
+
+**Categoría de operario**:
+Nivel (**1 a 7**) que el liquidador le asigna **por quincena** a un operario de taller, y del que depende cuánto cobra la tarea de mantenimiento mecánico. No viene del sistema de campo —que carga todo como una sola tarea "MANTENIMIENTO MECANICO (TALLERES)", sin diferenciar categoría— ni de la categoría de convenio del sistema de sueldos: es un dato **propio** del preliquidador, editable por quincena. Se cruza con la persona por su **CUIL** (no por legajo), y se hereda de la quincena anterior al abrir una nueva.
+_Avoid_: confundir con la categoría de convenio de `nuempleados` (otra cosa, de solo lectura, no manipulable).
+
+**Precio por categoría**:
+Modo de pago en el que el precio de un Concepto depende de la Categoría de operario de la persona, en vez de ser único por tarea/cliente/finca. En el maestro se cargan varias filas del mismo Concepto (una por categoría, mismo código, distinto precio); a cada línea se le aplica la fila cuya categoría coincide con la de la persona. Los Conceptos **sin** categoría se comportan igual que siempre y **suman** con el de categoría; no se reemplazan. Si la persona no tiene categoría asignada, o su categoría no tiene precio cargado, la línea queda **incompleta** (ver Línea incompleta).
