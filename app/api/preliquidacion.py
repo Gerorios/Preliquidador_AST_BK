@@ -75,9 +75,10 @@ def listar_empresas(db_sueldos: Session = Depends(get_db_sueldos)):
 @router.get("/", response_model=list[PreliquidacionResponse])
 def listar(service: PreliquidacionService = Depends(get_service)):
     preliquidaciones = service.listar()
+    stats_por_id = service.estadisticas_batch([p.id for p in preliquidaciones])
     resultado = []
     for p in preliquidaciones:
-        stats = service.estadisticas(p.id)
+        stats = stats_por_id[p.id]
         resultado.append(PreliquidacionResponse(
             id=p.id, quincena=p.quincena, creado_en=p.creado_en,
             total_lineas=stats["total_lineas"],

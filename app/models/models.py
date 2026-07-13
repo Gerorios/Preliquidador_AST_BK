@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
-    Date, Numeric, Text, Enum, ForeignKey, UniqueConstraint
+    Date, Numeric, Text, Enum, ForeignKey, UniqueConstraint, Index
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -171,6 +171,17 @@ class PreliquidacionLinea(Base):
         cascade="all, delete-orphan",
     )
 
+    # WS9 (latencia, DIFERIBLE — ver migrations/ws9_indices_latencia.sql):
+    # índices de solo velocidad, no cambian comportamiento observable.
+    __table_args__ = (
+        Index(
+            "ix_linea_orden",
+            "preliquidacion_id", "empresa_asignada", "nombre_empleado", "fecha_tarea",
+        ),
+        Index("ix_linea_cuit", "preliquidacion_id", "cuit"),
+        Index("ix_linea_tarea", "preliquidacion_id", "nombre_tarea"),
+    )
+
 
 class ConceptoAdicional(Base):
     __tablename__ = "concepto_adicional"
@@ -203,6 +214,11 @@ class ConceptoAdicional(Base):
     linea            = relationship("PreliquidacionLinea", back_populates="conceptos")
     usuario          = relationship("Usuario")
     concepto_origen  = relationship("ConceptoLiquidacion")
+
+    # WS9 (latencia, DIFERIBLE — ver migrations/ws9_indices_latencia.sql).
+    __table_args__ = (
+        Index("ix_concepto_linea_ingresado", "linea_id", "ingresado_por"),
+    )
 
 
 class AjusteManual(Base):
