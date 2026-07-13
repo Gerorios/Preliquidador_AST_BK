@@ -78,6 +78,14 @@ class PreliquidacionService:
                 )
                 lineas_y_reglas.append((linea, reglas))
 
+            # No optimizable sin RETURNING: cada ConceptoAdicional necesita el
+            # linea.id generado por el INSERT de PreliquidacionLinea. Un
+            # bulk_insert_mappings evitaría el flush por-fila, pero en MySQL 8
+            # (motor real) no soporta RETURNING, así que no devolvería los ids
+            # y no podríamos linkear los conceptos sin una query extra (que
+            # anularía la ganancia y arriesgaría el orden/matching). Se deja
+            # el flush único de abajo, que ya agrupa el add() en un solo lote
+            # y hace un solo round-trip de INSERT+flush para todas las líneas.
             for linea, _ in lineas_y_reglas:
                 self.db.add(linea)
             self.db.flush()
@@ -159,6 +167,9 @@ class PreliquidacionService:
                 )
                 nuevas_lineas_y_reglas.append((linea, reglas))
 
+            # Mismo motivo que en generar(): no optimizable a bulk_insert sin
+            # RETURNING (MySQL 8 real no lo soporta) porque los
+            # ConceptoAdicional necesitan el linea.id recién generado.
             for linea, _ in nuevas_lineas_y_reglas:
                 self.db.add(linea)
             self.db.flush()
@@ -1273,22 +1284,35 @@ class PreliquidacionService:
         if not regla:
             raise ValueError(f"No existe el código {codigo} en el maestro de esta quincena")
 
+        # Antes: una query + flush + recálculo POR linea_id (N+1). Ahora: una
+        # sola query trae todas las líneas (con sus conceptos ya cargados vía
+        # joinedload), se procesan en memoria y se persisten en un solo lote.
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.id.in_(linea_ids)
+        ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+        lineas_por_id = {l.id: l for l in lineas}
+
         aplicadas = 0
+        conceptos_nuevos = []
         for linea_id in linea_ids:
-            linea = self.db.query(PreliquidacionLinea).filter(
-                PreliquidacionLinea.id == linea_id
-            ).options(joinedload(PreliquidacionLinea.conceptos)).first()
+            linea = lineas_por_id.get(linea_id)
             if not linea:
                 continue
             nuevos = self._generar_conceptos_automaticos(linea, [regla])
             concepto = nuevos[0]
             concepto.ingresado_por = usuario_id
             concepto.descripcion = f"Concepto {regla.codigo} (masivo)"
-            self.db.add(concepto)
-            self.db.flush()
-            self._recalcular_importe(linea)
+            conceptos_nuevos.append(concepto)
+            # _recalcular_importe suma linea.conceptos (ya cargados) + el
+            # concepto nuevo, que todavía no está en la sesión ni en la
+            # colección — lo sumamos a mano para no depender de un flush.
+            linea.importe_base = Decimal("0")
+            suma_existente = sum(c.importe for c in linea.conceptos if c.importe)
+            linea.importe_total = suma_existente + (concepto.importe or Decimal("0"))
             aplicadas += 1
 
+        if conceptos_nuevos:
+            self.db.bulk_save_objects(conceptos_nuevos)
         self.db.commit()
         return {"aplicadas": aplicadas}
 

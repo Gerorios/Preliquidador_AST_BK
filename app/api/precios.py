@@ -2,7 +2,7 @@ from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, text
+from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
 from app.models.models import ConceptoLiquidacion, Preliquidacion
@@ -175,22 +175,29 @@ def copiar_quincena(
     if not origen:
         raise HTTPException(status_code=404, detail=f"No hay conceptos para {quincena_origen}")
 
+    # Antes: un SELECT de existencia por cada concepto origen (N+1). Ahora:
+    # traemos todos los conceptos ya existentes en el destino en una sola
+    # query y armamos la misma clave de comparación en memoria (incluye
+    # categoria, igual que el filtro `and_` original).
+    existentes_destino = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.quincena == quincena_destino
+    ).all()
+
+    def _clave(c):
+        return (
+            c.tarea_nombre, c.cliente_nombre, c.finca_nombre,
+            c.codigo, c.categoria,
+        )
+
+    claves_existentes = {_clave(c) for c in existentes_destino}
+
     copiados = omitidos = 0
+    nuevos = []
     for c in origen:
-        existe = db.query(ConceptoLiquidacion).filter(
-            and_(
-                ConceptoLiquidacion.quincena       == quincena_destino,
-                ConceptoLiquidacion.tarea_nombre   == c.tarea_nombre,
-                ConceptoLiquidacion.cliente_nombre == c.cliente_nombre,
-                ConceptoLiquidacion.finca_nombre   == c.finca_nombre,
-                ConceptoLiquidacion.codigo         == c.codigo,
-                ConceptoLiquidacion.categoria      == c.categoria,
-            )
-        ).first()
-        if existe:
+        if _clave(c) in claves_existentes:
             omitidos += 1
             continue
-        db.add(ConceptoLiquidacion(
+        nuevos.append(ConceptoLiquidacion(
             quincena=quincena_destino,
             tarea_nombre=c.tarea_nombre,
             cliente_nombre=c.cliente_nombre,
@@ -204,6 +211,8 @@ def copiar_quincena(
         ))
         copiados += 1
 
+    if nuevos:
+        db.bulk_save_objects(nuevos)
     db.commit()
 
     detalle = f"{copiados} copiados · {omitidos} ya existían"
