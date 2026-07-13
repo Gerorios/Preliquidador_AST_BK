@@ -2,6 +2,7 @@ import io
 from decimal import Decimal
 
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
 from sqlalchemy.orm import Session, joinedload
 
@@ -56,13 +57,19 @@ def generar_export_excel(db: Session, preliq_id: int) -> io.BytesIO:
         .all()
     )
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Preliquidacion"
+    # write_only=True: streaming de filas (sin representación en memoria de
+    # celdas ya escritas) — en write_only no se puede releer/editar una celda
+    # después de escrita, pero el código ya escribe secuencialmente (append
+    # fila por fila), así que encaja sin cambiar el output.
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet("Preliquidacion")
 
-    ws.append(COLUMNAS)
-    for celda in ws[1]:
+    header = []
+    for titulo in COLUMNAS:
+        celda = WriteOnlyCell(ws, value=titulo)
         celda.font = Font(bold=True)
+        header.append(celda)
+    ws.append(header)
 
     for linea in lineas:
         base = [
