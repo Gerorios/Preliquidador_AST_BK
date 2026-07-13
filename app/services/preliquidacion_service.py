@@ -253,12 +253,25 @@ class PreliquidacionService:
         categoria_persona = categoria_por_cuil.get((cuil or "").strip())
         return [c for c in conceptos if c.categoria is None or c.categoria == categoria_persona]
 
+    def _aplicar_reemplazo_comun(self, esp: list, com: list) -> list:
+        """
+        WS11: si alguno de los específicos aplicables (esp) tiene
+        reemplaza_comun=True, se descartan los comunes (com) — la línea paga
+        solo lo específico. Si ninguno lo tiene, comportamiento actual
+        (esp + com, siempre suman). Compartido entre el path de generación
+        (_buscar_conceptos_cache) y el de recálculo (_aplicar_conceptos_a_lineas).
+        """
+        if any(c.reemplaza_comun for c in esp):
+            return esp
+        return esp + com
+
     def _buscar_conceptos_cache(
         self, tarea: str, cliente: str, finca: str, cache: dict, cuil: str = None,
     ) -> list:
         """
         Devuelve todas las reglas que matchean esta línea.
-        Específicos + comunes siempre suman.
+        Específicos + comunes suman, salvo que algún específico tenga el
+        tilde reemplaza_comun (WS11): en ese caso se descartan los comunes.
         Matching: tarea + cliente + finca exactos (sin grupo_pago).
         Además, filtra por categoría (ADR-0008): reglas con categoria=NULL
         pasan siempre, reglas con categoria=X solo si el cuil dado tiene esa
@@ -270,8 +283,10 @@ class PreliquidacionService:
 
         esp = cache["especificos"].get((t, cl, fn), [])
         com = cache["comunes"].get(t, [])
-        todas = esp + com
-        return self._filtrar_por_categoria(todas, cuil, cache.get("categoria_por_cuil", {}))
+        categoria_por_cuil = cache.get("categoria_por_cuil", {})
+        esp = self._filtrar_por_categoria(esp, cuil, categoria_por_cuil)
+        com = self._filtrar_por_categoria(com, cuil, categoria_por_cuil)
+        return self._aplicar_reemplazo_comun(esp, com)
 
     def _procesar_fila_con_cache(
         self,
@@ -473,7 +488,9 @@ class PreliquidacionService:
 
             esp    = cache_especificos.get((t, cl, fn), [])
             com    = cache_comunes.get(t, [])
-            reglas = self._filtrar_por_categoria(esp + com, linea.cuit, categoria_por_cuil)
+            esp    = self._filtrar_por_categoria(esp, linea.cuit, categoria_por_cuil)
+            com    = self._filtrar_por_categoria(com, linea.cuit, categoria_por_cuil)
+            reglas = self._aplicar_reemplazo_comun(esp, com)
 
             # nuevos ya viene filtrado por precio (ver _generar_conceptos_automaticos):
             # una línea solo está completa si al menos una regla generó un concepto real.

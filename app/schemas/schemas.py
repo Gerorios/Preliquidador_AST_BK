@@ -114,6 +114,11 @@ class ConceptoUnifResponse(BaseModel):
     # ADR-0008: categoría (1-7) de Mantenimiento mecánico. None = concepto
     # común (comportamiento actual, sin filtro por categoría).
     categoria: Optional[int] = None
+    # WS11: tilde opcional, solo tiene sentido en un concepto ESPECÍFICO. Si
+    # True, descarta los comunes de la tarea para las líneas que matcheen
+    # este específico (paga solo lo específico). Default False = comportamiento
+    # actual (comunes y específicos suman).
+    reemplaza_comun: bool = False
 
     class Config:
         from_attributes = True
@@ -129,6 +134,7 @@ class ConceptoUnifRequest(BaseModel):
     precio: Optional[Decimal] = None
     tipo: TipoConcepto = TipoConcepto.OTRO
     categoria: Optional[int] = None
+    reemplaza_comun: bool = False
 
 
 class ConceptoUnifUpdateRequest(BaseModel):
@@ -137,6 +143,7 @@ class ConceptoUnifUpdateRequest(BaseModel):
     precio: Optional[Decimal] = None
     tipo: Optional[TipoConcepto] = None
     categoria: Optional[int] = None
+    reemplaza_comun: Optional[bool] = None
 
 
 class ConceptoPorCodigoRequest(BaseModel):
@@ -156,6 +163,7 @@ class ConceptoPanelResponse(BaseModel):
     tipo: TipoConcepto
     precio: Optional[Decimal] = None
     heredado: bool = False
+    reemplaza_comun: bool = False
     precio_anterior: Optional[Decimal] = None
 
     class Config:
