@@ -713,17 +713,32 @@ class PreliquidacionService:
             cuils_heredados.append(asignacion.cuil)
         self.db.commit()
 
-        for cuil in cuils_heredados:
-            self.recalcular_por_categoria(preliq.quincena, cuil)
+        # Recálculo en un solo lote (antes: un recalcular_por_categoria por
+        # CUIL heredado, cada uno reconstruyendo caches y commiteando aparte).
+        # Mismo resultado: unimos las líneas de taller de TODOS los CUIL
+        # heredados y aplicamos los conceptos una única vez.
+        if cuils_heredados:
+            tareas = self._tareas_con_categoria(preliq.quincena)
+            if tareas:
+                cuils_norm = {(c or "").strip().upper() for c in cuils_heredados}
+                lineas = self.db.query(PreliquidacionLinea).filter(
+                    PreliquidacionLinea.preliquidacion_id == preliq.id,
+                    func.upper(func.trim(PreliquidacionLinea.cuit)).in_(cuils_norm),
+                    func.upper(func.trim(PreliquidacionLinea.nombre_tarea)).in_(tareas),
+                ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+                if lineas:
+                    self._aplicar_conceptos_a_lineas(preliq.quincena, lineas)
 
         return {"heredados": len(cuils_heredados)}
 
     # ─── Dashboard de verificación ────────────────────────────────────────────
 
     def dashboard_verificacion(self, preliq_id: int) -> dict:
+        # Sin joinedload(conceptos): este método no lee linea.conceptos en
+        # ningún punto, así que el joinedload solo multiplicaba filas sin uso.
         lineas = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.preliquidacion_id == preliq_id
-        ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+        ).all()
 
         por_empleado_fecha = {}
         for linea in lineas:
@@ -798,19 +813,39 @@ class PreliquidacionService:
 
     # ─── Controles de razonabilidad (Plantas / Tancadas vs Jornal) ────────────
 
-    def _lineas_por_unidad_base(self, preliq_id: int, unidad_base: str) -> list:
-        """Líneas de la preliquidación que tienen al menos un concepto aplicado
-        con esa unidad base (ej. "unidades", "tancadas"). Es el criterio correcto
-        de "cómo se paga de verdad" — la Unidad base del concepto, no el grupo de
-        pago (que es informativo; ver glosario)."""
-        return (
-            self.db.query(PreliquidacionLinea)
+    def _sumar_por_unidad_base(self, preliq_id: int, unidad_base: str, columnas: list) -> list:
+        """Agregado en SQL (GROUP BY) de las líneas que tienen al menos un
+        concepto aplicado con esa unidad base (ej. "unidades", "tancadas") —
+        criterio correcto de "cómo se paga de verdad": la Unidad base del
+        concepto, no el grupo de pago (que es informativo; ver glosario).
+
+        Antes traía las líneas completas a Python y sumaba ahí; ahora suma
+        directo en SQL por (cliente, finca, tarea). Devuelve tuplas
+        (nombre_cliente, nombre_finca, nombre_tarea, suma_col1, suma_col2, ...)
+        en el orden de `columnas`.
+        """
+        ids_subq = (
+            self.db.query(PreliquidacionLinea.id)
             .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
             .filter(
                 PreliquidacionLinea.preliquidacion_id == preliq_id,
                 ConceptoAdicional.unidad_base == unidad_base,
             )
-            .distinct()
+        )
+        sumas = [func.sum(getattr(PreliquidacionLinea, col)) for col in columnas]
+        return (
+            self.db.query(
+                PreliquidacionLinea.nombre_cliente,
+                PreliquidacionLinea.nombre_finca,
+                PreliquidacionLinea.nombre_tarea,
+                *sumas,
+            )
+            .filter(PreliquidacionLinea.id.in_(ids_subq))
+            .group_by(
+                PreliquidacionLinea.nombre_cliente,
+                PreliquidacionLinea.nombre_finca,
+                PreliquidacionLinea.nombre_tarea,
+            )
             .all()
         )
 
@@ -825,7 +860,7 @@ class PreliquidacionService:
         # que tienen un concepto aplicado con unidad_base = "unidades". Antes se
         # filtraba por grupo_pago_aplicado == "PLANTA", pero el grupo de pago es
         # informativo y no decide cómo se paga; se alineó con Tancadas vs Jornal.
-        lineas = self._lineas_por_unidad_base(preliq_id, "unidades")
+        agregados = self._sumar_por_unidad_base(preliq_id, "unidades", ["unidades", "hsmaquina"])
 
         # Precio por planta: sale del maestro (concepto con unidad_base = unidades),
         # no del difunto precio_a. Cache específicos + comunes de la quincena.
@@ -852,26 +887,15 @@ class PreliquidacionService:
                 return Decimal("0")
             return sum(precios) / len(precios)
 
-        grupos = {}
-        for linea in lineas:
-            clave = (linea.nombre_cliente or "", linea.nombre_finca or "", linea.nombre_tarea or "")
-            if clave not in grupos:
-                grupos[clave] = {"nombre_cliente": linea.nombre_cliente, "nombre_finca": linea.nombre_finca,
-                                 "nombre_tarea": linea.nombre_tarea,
-                                 "precio": precio_planta(linea.nombre_tarea, linea.nombre_cliente, linea.nombre_finca),
-                                 "unidades": Decimal("0"), "hs": Decimal("0")}
-            g = grupos[clave]
-            g["unidades"] += linea.unidades or Decimal("0")
-            g["hs"] += linea.hsmaquina or Decimal("0")
-
         filas = []
-        for g in grupos.values():
-            pp = float(g["precio"])
-            u  = float(g["unidades"]); h = float(g["hs"])
+        for cliente, finca, tarea, suma_unidades, suma_hs in agregados:
+            precio = precio_planta(tarea, cliente, finca)
+            pp = float(precio)
+            u  = float(suma_unidades or 0); h = float(suma_hs or 0)
             phsm = (u / h) if h else 0
             filas.append({
-                "nombre_cliente": g["nombre_cliente"], "nombre_finca": g["nombre_finca"],
-                "nombre_tarea": g["nombre_tarea"], "precio_promedio": round(pp, 2),
+                "nombre_cliente": cliente, "nombre_finca": finca,
+                "nombre_tarea": tarea, "precio_promedio": round(pp, 2),
                 "unidades": round(u, 2), "hs": round(h, 2),
                 "plantas_por_hsm": round(phsm, 2), "plantas_por_hsm_x8": round(phsm * 8, 2),
                 "prom_jornal": round(phsm * 8 * pp, 2),
@@ -904,7 +928,7 @@ class PreliquidacionService:
         if not preliq:
             raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
 
-        lineas = self._lineas_por_unidad_base(preliq_id, "tancadas")
+        agregados = self._sumar_por_unidad_base(preliq_id, "tancadas", ["tancadas", "hsjornal", "hsmaquina"])
 
         # Precio de la tancada: del maestro (concepto con unidad_base = tancadas),
         # promedio de específicos + comunes de la quincena. Misma mecánica que
@@ -938,23 +962,12 @@ class PreliquidacionService:
         valor_hora_pulv = preliq.valor_hora_pulv
         valor_hs_pulv = (valor_hora_pulv * self.RECARGO_PULV) if valor_hora_pulv is not None else None
 
-        grupos = {}
-        for linea in lineas:
-            clave = (linea.nombre_cliente or "", linea.nombre_finca or "", linea.nombre_tarea or "")
-            if clave not in grupos:
-                grupos[clave] = {"nombre_cliente": linea.nombre_cliente, "nombre_finca": linea.nombre_finca,
-                                 "nombre_tarea": linea.nombre_tarea,
-                                 "precio": precio_tancada(linea.nombre_tarea, linea.nombre_cliente, linea.nombre_finca),
-                                 "tancadas": Decimal("0"), "hsjornal": Decimal("0"), "hsmaquina": Decimal("0")}
-            g = grupos[clave]
-            g["tancadas"]  += linea.tancadas or Decimal("0")
-            g["hsjornal"]  += linea.hsjornal or Decimal("0")
-            g["hsmaquina"] += linea.hsmaquina or Decimal("0")
-
         filas = []
-        for g in grupos.values():
-            precio   = g["precio"]
-            tancadas = g["tancadas"]; hsjornal = g["hsjornal"]; hsmaquina = g["hsmaquina"]
+        for cliente, finca, tarea, suma_tancadas, suma_hsjornal, suma_hsmaquina in agregados:
+            precio    = precio_tancada(tarea, cliente, finca)
+            tancadas  = suma_tancadas or Decimal("0")
+            hsjornal  = suma_hsjornal or Decimal("0")
+            hsmaquina = suma_hsmaquina or Decimal("0")
             # /2: la tancada es ida y vuelta (dato doblado).
             valor_jornal  = (hsjornal / 2 * valor_hs_pulv) if valor_hs_pulv is not None else None
             valor_tancada = tancadas / 2 * precio
@@ -964,8 +977,8 @@ class PreliquidacionService:
             if valor_jornal is not None and valor_jornal != 0:
                 diff = round(float((valor_tancada - valor_jornal) / valor_jornal), 4)
             filas.append({
-                "nombre_cliente": g["nombre_cliente"], "nombre_finca": g["nombre_finca"],
-                "nombre_tarea": g["nombre_tarea"],
+                "nombre_cliente": cliente, "nombre_finca": finca,
+                "nombre_tarea": tarea,
                 "tancadas": round(float(tancadas), 2),
                 "hsjornal": round(float(hsjornal), 2),
                 "hsmaquina": round(float(hsmaquina), 2),
