@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, func, text as sql_text
+from sqlalchemy import and_, or_, func, case, text as sql_text
 
 from app.models.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional,
@@ -1140,25 +1140,109 @@ class PreliquidacionService:
     # ─── Estadísticas ────────────────────────────────────────────────────────
 
     def estadisticas(self, preliq_id: int) -> dict:
-        lineas = self.db.query(PreliquidacionLinea).filter(
-            PreliquidacionLinea.preliquidacion_id == preliq_id
-        ).all()
+        """Conteos agregados en SQL (antes: traía todas las líneas a RAM y
+        contaba en Python). Devuelve exactamente las mismas claves de siempre."""
+        fila = self.db.query(
+            func.count(PreliquidacionLinea.id),
+            func.sum(case(
+                (or_(
+                    PreliquidacionLinea.es_duplicado.is_(True),
+                    PreliquidacionLinea.alerta_legajo.is_(True),
+                    PreliquidacionLinea.linea_incompleta.is_(True),
+                ), 1), else_=0,
+            )),
+            func.sum(case((PreliquidacionLinea.linea_incompleta.is_(True), 1), else_=0)),
+            func.sum(case((PreliquidacionLinea.es_duplicado.is_(True), 1), else_=0)),
+            func.sum(case((PreliquidacionLinea.alerta_legajo.is_(True), 1), else_=0)),
+        ).filter(PreliquidacionLinea.preliquidacion_id == preliq_id).one()
+
+        total, con_alerta, incompletas, duplicados, alerta_legajo = fila
+
         return {
-            "total_lineas": len(lineas),
-            "lineas_con_alerta": sum(1 for l in lineas if l.es_duplicado or l.alerta_legajo or l.linea_incompleta),
-            "incompletas": sum(1 for l in lineas if l.linea_incompleta),
-            "duplicados": sum(1 for l in lineas if l.es_duplicado),
-            "alerta_legajo": sum(1 for l in lineas if l.alerta_legajo),
-            "por_empresa": self._agrupar_por_empresa(lineas),
+            "total_lineas": total or 0,
+            "lineas_con_alerta": int(con_alerta or 0),
+            "incompletas": int(incompletas or 0),
+            "duplicados": int(duplicados or 0),
+            "alerta_legajo": int(alerta_legajo or 0),
+            "por_empresa": self._agrupar_por_empresa_sql(preliq_id),
         }
 
-    def _agrupar_por_empresa(self, lineas: list) -> dict:
-        resultado = {}
-        for linea in lineas:
-            emp = linea.empresa_asignada or "SIN EMPRESA"
-            if emp not in resultado:
-                resultado[emp] = {"total": 0}
-            resultado[emp]["total"] += 1
+    def _agrupar_por_empresa_sql(self, preliq_id: int) -> dict:
+        filas = self.db.query(
+            PreliquidacionLinea.empresa_asignada,
+            func.count(PreliquidacionLinea.id),
+        ).filter(
+            PreliquidacionLinea.preliquidacion_id == preliq_id
+        ).group_by(PreliquidacionLinea.empresa_asignada).all()
+
+        resultado: dict = {}
+        for emp, total in filas:
+            clave = emp or "SIN EMPRESA"
+            if clave not in resultado:
+                resultado[clave] = {"total": 0}
+            resultado[clave]["total"] += total
+        return resultado
+
+    def estadisticas_batch(self, preliq_ids: list[int]) -> dict[int, dict]:
+        """Igual que `estadisticas()` pero para varias preliquidaciones en dos
+        queries (una para los conteos, otra para el agrupado por empresa) en
+        vez de N llamadas independientes. Devuelve {preliq_id: dict-con-las-
+        mismas-claves-que-estadisticas()}."""
+        resultado: dict[int, dict] = {
+            pid: {
+                "total_lineas": 0,
+                "lineas_con_alerta": 0,
+                "incompletas": 0,
+                "duplicados": 0,
+                "alerta_legajo": 0,
+                "por_empresa": {},
+            }
+            for pid in preliq_ids
+        }
+        if not preliq_ids:
+            return resultado
+
+        filas = self.db.query(
+            PreliquidacionLinea.preliquidacion_id,
+            func.count(PreliquidacionLinea.id),
+            func.sum(case(
+                (or_(
+                    PreliquidacionLinea.es_duplicado.is_(True),
+                    PreliquidacionLinea.alerta_legajo.is_(True),
+                    PreliquidacionLinea.linea_incompleta.is_(True),
+                ), 1), else_=0,
+            )),
+            func.sum(case((PreliquidacionLinea.linea_incompleta.is_(True), 1), else_=0)),
+            func.sum(case((PreliquidacionLinea.es_duplicado.is_(True), 1), else_=0)),
+            func.sum(case((PreliquidacionLinea.alerta_legajo.is_(True), 1), else_=0)),
+        ).filter(
+            PreliquidacionLinea.preliquidacion_id.in_(preliq_ids)
+        ).group_by(PreliquidacionLinea.preliquidacion_id).all()
+
+        for pid, total, con_alerta, incompletas, duplicados, alerta_legajo in filas:
+            resultado[pid]["total_lineas"] = total or 0
+            resultado[pid]["lineas_con_alerta"] = int(con_alerta or 0)
+            resultado[pid]["incompletas"] = int(incompletas or 0)
+            resultado[pid]["duplicados"] = int(duplicados or 0)
+            resultado[pid]["alerta_legajo"] = int(alerta_legajo or 0)
+
+        empresa_filas = self.db.query(
+            PreliquidacionLinea.preliquidacion_id,
+            PreliquidacionLinea.empresa_asignada,
+            func.count(PreliquidacionLinea.id),
+        ).filter(
+            PreliquidacionLinea.preliquidacion_id.in_(preliq_ids)
+        ).group_by(
+            PreliquidacionLinea.preliquidacion_id, PreliquidacionLinea.empresa_asignada
+        ).all()
+
+        for pid, emp, total in empresa_filas:
+            clave = emp or "SIN EMPRESA"
+            por_empresa = resultado[pid]["por_empresa"]
+            if clave not in por_empresa:
+                por_empresa[clave] = {"total": 0}
+            por_empresa[clave]["total"] += total
+
         return resultado
 
     # ─── Operaciones masivas ──────────────────────────────────────────────────
