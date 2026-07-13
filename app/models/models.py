@@ -84,6 +84,12 @@ class ConceptoLiquidacion(Base):
     # aplica a líneas de personas cuya categoría (tabla categoria_operario,
     # por quincena) coincida exactamente.
     categoria      = Column(Integer, nullable=True)
+    # WS11: tilde opcional, solo tiene sentido en un concepto ESPECÍFICO
+    # (cliente_nombre NOT NULL). Si una línea matchea un específico con
+    # reemplaza_comun=True, se descartan los comunes de esa tarea para esa
+    # línea (paga solo el/los específico/s). Default False: comportamiento
+    # actual intacto (comunes y específicos suman).
+    reemplaza_comun = Column(Boolean, default=False, nullable=False)
     creado_en      = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (

@@ -33,7 +33,11 @@ _Avoid_: precio maestro, precio común (nombres del modelo viejo, eliminado)
 Concepto sin cliente (`cliente_nombre IS NULL`): aplica a cualquier línea con esa tarea, sin importar cliente/finca.
 
 **Concepto específico**:
-Concepto con cliente (± finca) cargado: aplica solo a las líneas de ese cliente (y esa finca si está cargada). Comunes y específicos **suman**; nunca se reemplazan.
+Concepto con cliente (± finca) cargado: aplica solo a las líneas de ese cliente (y esa finca si está cargada). Comunes y específicos **suman** por defecto — **salvo** que el específico tenga la marca **Reemplaza al común**, en cuyo caso esa línea paga solo lo específico (ver Reemplaza al común).
+
+**Reemplaza al común**:
+Marca (`reemplaza_comun`, ADR-0009) que se pone en un Concepto **específico**. Cuando una línea matchea un específico marcado así, **no se le aplican los conceptos comunes de esa tarea** (paga solo lo específico), en vez de sumar común + específico. Existe porque a veces el específico es el precio *total* de esa finca (reemplaza), no un plus que se suma. Default apagado ⇒ la regla histórica de "comunes y específicos suman" sigue valiendo salvo donde se marque.
+_Avoid_: usarla en un común (no tiene sentido; la marca es del específico).
 
 **Matching**:
 Regla por la que un concepto aplica a una línea: por **tarea + cliente + finca** exactos (los específicos) más la tarea sola (los comunes). El grupo de pago no participa.

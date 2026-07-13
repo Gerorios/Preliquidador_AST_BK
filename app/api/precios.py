@@ -144,6 +144,7 @@ def panel_conceptos(
             tipo=c.tipo,
             precio=c.precio,
             heredado=c.heredado,
+            reemplaza_comun=c.reemplaza_comun,
             precio_anterior=precio_anterior_por_clave.get(_clave(c)),
         ))
     return resultado
@@ -211,6 +212,7 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
         precio=datos.precio,
         tipo=datos.tipo,
         categoria=datos.categoria,
+        reemplaza_comun=datos.reemplaza_comun,
     )
     db.add(nuevo)
     try:
@@ -312,6 +314,7 @@ def copiar_quincena(
             precio=c.precio,
             tipo=c.tipo,
             categoria=c.categoria,
+            reemplaza_comun=c.reemplaza_comun,
             heredado=True,
         ))
         copiados += 1
