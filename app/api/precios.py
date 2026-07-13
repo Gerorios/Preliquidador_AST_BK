@@ -10,7 +10,8 @@ from app.services.consulta_externa import ConsultaExternaService
 from app.services.preliquidacion_service import PreliquidacionService
 from app.schemas.schemas import (
     ConceptoUnifRequest, ConceptoUnifResponse, ConceptoUnifUpdateRequest,
-    MensajeResponse,
+    MensajeResponse, ConceptoPanelResponse, ConceptoPrecioMasivoRequest,
+    ConceptoPrecioMasivoResponse,
 )
 
 
@@ -92,6 +93,110 @@ def listar_conceptos(
         ConceptoLiquidacion.finca_nombre,
         ConceptoLiquidacion.codigo,
     ).all()
+
+
+@router.get("/conceptos/panel", response_model=list[ConceptoPanelResponse])
+def panel_conceptos(
+    quincena: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Todos los conceptos (comunes Y específicos) de una quincena, planos, con
+    el precio que tenían en la quincena inmediatamente anterior que tuviera
+    conceptos cargados — para comparar de un vistazo. `precio_anterior` es
+    None si no hay una quincena anterior con conceptos o si esa clave no
+    existía en ella.
+    """
+    conceptos = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.quincena == quincena
+    ).order_by(
+        ConceptoLiquidacion.tarea_nombre,
+        ConceptoLiquidacion.cliente_nombre,
+        ConceptoLiquidacion.finca_nombre,
+        ConceptoLiquidacion.codigo,
+    ).all()
+
+    def _clave(c):
+        return (c.tarea_nombre, c.codigo, c.cliente_nombre, c.finca_nombre, c.categoria)
+
+    precio_anterior_por_clave = {}
+    if conceptos:
+        fila_anterior = db.query(ConceptoLiquidacion.quincena).filter(
+            ConceptoLiquidacion.quincena < quincena
+        ).order_by(ConceptoLiquidacion.quincena.desc()).first()
+        if fila_anterior:
+            quincena_anterior = fila_anterior[0]
+            anteriores = db.query(ConceptoLiquidacion).filter(
+                ConceptoLiquidacion.quincena == quincena_anterior
+            ).all()
+            precio_anterior_por_clave = {_clave(c): c.precio for c in anteriores}
+
+    resultado = []
+    for c in conceptos:
+        resultado.append(ConceptoPanelResponse(
+            id=c.id,
+            tarea_nombre=c.tarea_nombre,
+            codigo=c.codigo,
+            cliente_nombre=c.cliente_nombre,
+            finca_nombre=c.finca_nombre,
+            categoria=c.categoria,
+            unidad_base=c.unidad_base,
+            tipo=c.tipo,
+            precio=c.precio,
+            heredado=c.heredado,
+            precio_anterior=precio_anterior_por_clave.get(_clave(c)),
+        ))
+    return resultado
+
+
+@router.patch("/conceptos/precio-masivo", response_model=ConceptoPrecioMasivoResponse)
+def precio_masivo(
+    datos: ConceptoPrecioMasivoRequest,
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Setea el mismo precio a varios conceptos de una (o más) quincenas, saca
+    la marca `heredado` (confirma el precio, ADR-0004) y dispara UN
+    recálculo reactivo batcheado de todas las líneas afectadas — no un
+    recalcular_por_concepto por cada id.
+    """
+    conceptos = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.id.in_(datos.ids)
+    ).all()
+    if not conceptos:
+        raise HTTPException(status_code=404, detail="No se encontraron conceptos con esos ids")
+
+    for c in conceptos:
+        c.precio = datos.precio
+        c.heredado = False
+    db.commit()
+
+    service = PreliquidacionService(db)
+    por_quincena: dict = {}
+    for c in conceptos:
+        por_quincena.setdefault(c.quincena, []).append(c)
+
+    lineas_afectadas = 0
+    for quincena, confs in por_quincena.items():
+        preliq = db.query(Preliquidacion).filter(
+            Preliquidacion.quincena == quincena
+        ).first()
+        if not preliq:
+            continue
+        vistas = {}
+        for c in confs:
+            for linea in service._lineas_por_match(
+                preliq.id, c.tarea_nombre, c.cliente_nombre, c.finca_nombre
+            ):
+                vistas[linea.id] = linea
+        lineas = list(vistas.values())
+        if lineas:
+            service._aplicar_conceptos_a_lineas(quincena, lineas)
+        lineas_afectadas += len(lineas)
+
+    return ConceptoPrecioMasivoResponse(
+        actualizados=len(conceptos), lineas_afectadas=lineas_afectadas,
+    )
 
 
 @router.post("/conceptos", response_model=ConceptoUnifResponse)

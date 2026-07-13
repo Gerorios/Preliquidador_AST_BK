@@ -860,6 +860,27 @@ class PreliquidacionService:
             .all()
         )
 
+    def _precio_comun_especial(self, precio_esp: dict, precio_com: dict, tarea, cliente, finca):
+        """Separa el precio del maestro para (tarea,cliente,finca) en común
+        (tarea, cliente_nombre IS NULL) y especial (cliente+finca exactos),
+        cada uno como Decimal promedio o None si no hay ninguno cargado.
+        Reusa los mismos caches (precio_esp/precio_com) que ya arma
+        precio_planta / precio_tancada, solo expone los dos valores por
+        separado en vez de "especial si hay, si no común"."""
+        t  = (tarea or "").strip().upper()
+        cl = (cliente or "").strip().upper()
+        fn = (finca or "").strip().upper()
+        precios_com = precio_com.get(t)
+        precios_esp = precio_esp.get((t, cl, fn))
+        comun    = (sum(precios_com) / len(precios_com)) if precios_com else None
+        especial = (sum(precios_esp) / len(precios_esp)) if precios_esp else None
+        return comun, especial
+
+    def _var_pct(self, comun, especial) -> Optional[float]:
+        if comun is None or especial is None or comun == 0:
+            return None
+        return round(float((especial - comun) / comun), 4)
+
     def control_plantas_jornal(self, preliq_id: int) -> dict:
         preliq = self.db.query(Preliquidacion).filter(
             Preliquidacion.id == preliq_id
@@ -901,15 +922,29 @@ class PreliquidacionService:
         filas = []
         for cliente, finca, tarea, suma_unidades, suma_hs in agregados:
             precio = precio_planta(tarea, cliente, finca)
+            precio_comun, precio_especial = self._precio_comun_especial(
+                precio_esp, precio_com, tarea, cliente, finca
+            )
             pp = float(precio)
             u  = float(suma_unidades or 0); h = float(suma_hs or 0)
             phsm = (u / h) if h else 0
+            prom_jornal_comun = (
+                round(phsm * 8 * float(precio_comun), 2) if precio_comun is not None else None
+            )
+            prom_jornal_especial = (
+                round(phsm * 8 * float(precio_especial), 2) if precio_especial is not None else None
+            )
             filas.append({
                 "nombre_cliente": cliente, "nombre_finca": finca,
                 "nombre_tarea": tarea, "precio_promedio": round(pp, 2),
                 "unidades": round(u, 2), "hs": round(h, 2),
                 "plantas_por_hsm": round(phsm, 2), "plantas_por_hsm_x8": round(phsm * 8, 2),
                 "prom_jornal": round(phsm * 8 * pp, 2),
+                "precio_comun": round(float(precio_comun), 2) if precio_comun is not None else None,
+                "precio_especial": round(float(precio_especial), 2) if precio_especial is not None else None,
+                "prom_jornal_comun": prom_jornal_comun,
+                "prom_jornal_especial": prom_jornal_especial,
+                "var_pct": self._var_pct(precio_comun, precio_especial),
             })
         filas.sort(key=lambda f: (f["nombre_cliente"] or "", f["nombre_finca"] or "", f["nombre_tarea"] or ""))
 
@@ -976,12 +1011,21 @@ class PreliquidacionService:
         filas = []
         for cliente, finca, tarea, suma_tancadas, suma_hsjornal, suma_hsmaquina in agregados:
             precio    = precio_tancada(tarea, cliente, finca)
+            precio_comun, precio_especial = self._precio_comun_especial(
+                precio_esp, precio_com, tarea, cliente, finca
+            )
             tancadas  = suma_tancadas or Decimal("0")
             hsjornal  = suma_hsjornal or Decimal("0")
             hsmaquina = suma_hsmaquina or Decimal("0")
             # /2: la tancada es ida y vuelta (dato doblado).
             valor_jornal  = (hsjornal / 2 * valor_hs_pulv) if valor_hs_pulv is not None else None
             valor_tancada = tancadas / 2 * precio
+            valor_tancada_comun = (
+                (tancadas / 2 * precio_comun) if precio_comun is not None else None
+            )
+            valor_tancada_especial = (
+                (tancadas / 2 * precio_especial) if precio_especial is not None else None
+            )
             # DIFF = (tancada - jornal) / jornal. null si no hay jornal contra
             # qué comparar (valor hora sin cargar, o jornal = 0 por hsjornal 0).
             diff = None
@@ -997,6 +1041,15 @@ class PreliquidacionService:
                 "precio": round(float(precio), 2),
                 "valor_tancada": round(float(valor_tancada), 2),
                 "diff": diff,
+                "precio_comun": round(float(precio_comun), 2) if precio_comun is not None else None,
+                "precio_especial": round(float(precio_especial), 2) if precio_especial is not None else None,
+                "valor_tancada_comun": (
+                    round(float(valor_tancada_comun), 2) if valor_tancada_comun is not None else None
+                ),
+                "valor_tancada_especial": (
+                    round(float(valor_tancada_especial), 2) if valor_tancada_especial is not None else None
+                ),
+                "var_pct": self._var_pct(precio_comun, precio_especial),
             })
         filas.sort(key=lambda f: (f["nombre_cliente"] or "", f["nombre_finca"] or "", f["nombre_tarea"] or ""))
 

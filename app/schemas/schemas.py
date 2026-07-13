@@ -143,6 +143,35 @@ class ConceptoPorCodigoRequest(BaseModel):
     codigo: int
 
 
+class ConceptoPanelResponse(BaseModel):
+    """Fila del panel de precios: conceptos comunes y específicos de una
+    quincena, planos, con el precio de la quincena anterior para comparar."""
+    id: int
+    tarea_nombre: str
+    codigo: Optional[int] = None
+    cliente_nombre: Optional[str] = None
+    finca_nombre: Optional[str] = None
+    categoria: Optional[int] = None
+    unidad_base: UnidadBaseConcepto
+    tipo: TipoConcepto
+    precio: Optional[Decimal] = None
+    heredado: bool = False
+    precio_anterior: Optional[Decimal] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ConceptoPrecioMasivoRequest(BaseModel):
+    ids: list[int]
+    precio: Decimal
+
+
+class ConceptoPrecioMasivoResponse(BaseModel):
+    actualizados: int
+    lineas_afectadas: int
+
+
 # ─── Categoría de operario (Mantenimiento mecánico, ADR-0008) ────────────────
 
 class CategoriaOperarioRequest(BaseModel):
