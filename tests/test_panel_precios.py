@@ -191,6 +191,7 @@ def test_control_plantas_separa_precio_comun_y_especial(db):
     linea = _linea(db, preliq, "PLANTACION", "CLIENTE A", "FINCA 1")
     linea.unidades = Decimal("800")
     linea.hsmaquina = Decimal("8")
+    linea.grupo_pago_aplicado = "PLANTA"
     db.commit()
     _aplicar_concepto(db, linea, "unidades", precio=Decimal("2"))
 
@@ -216,6 +217,7 @@ def test_control_plantas_precio_especial_null_si_no_hay_especifico(db):
     linea = _linea(db, preliq, "PLANTACION", "CLIENTE A", "FINCA 1")
     linea.unidades = Decimal("800")
     linea.hsmaquina = Decimal("8")
+    linea.grupo_pago_aplicado = "PLANTA"
     db.commit()
     _aplicar_concepto(db, linea, "unidades", precio=Decimal("2"))
 

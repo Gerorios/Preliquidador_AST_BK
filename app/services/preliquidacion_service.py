@@ -824,24 +824,35 @@ class PreliquidacionService:
 
     # ─── Controles de razonabilidad (Plantas / Tancadas vs Jornal) ────────────
 
-    def _sumar_por_unidad_base(self, preliq_id: int, unidad_base: str, columnas: list) -> list:
+    def _sumar_por_unidad_base(self, preliq_id: int, unidad_base: str, columnas: list,
+                               grupo_pago: str = None) -> list:
         """Agregado en SQL (GROUP BY) de las líneas que tienen al menos un
-        concepto aplicado con esa unidad base (ej. "unidades", "tancadas") —
-        criterio correcto de "cómo se paga de verdad": la Unidad base del
-        concepto, no el grupo de pago (que es informativo; ver glosario).
+        concepto aplicado con esa unidad base (ej. "unidades", "tancadas").
+
+        `grupo_pago` (opcional) acota además por grupo de pago de la línea.
+        Es necesario para PLANTAS: la unidad base "unidades" la comparten las
+        plantas y la carga de fruta por bins, así que filtrar solo por unidad
+        base metía los bins en la tabla Plantas vs Jornal. El grupo de pago
+        "PLANTA" es el que distingue el trabajo de planta real (mismo marcador
+        que usa el exceso de plantas del dashboard).
 
         Antes traía las líneas completas a Python y sumaba ahí; ahora suma
         directo en SQL por (cliente, finca, tarea). Devuelve tuplas
         (nombre_cliente, nombre_finca, nombre_tarea, suma_col1, suma_col2, ...)
         en el orden de `columnas`.
         """
+        filtros = [
+            PreliquidacionLinea.preliquidacion_id == preliq_id,
+            ConceptoAdicional.unidad_base == unidad_base,
+        ]
+        if grupo_pago is not None:
+            filtros.append(
+                func.upper(func.trim(PreliquidacionLinea.grupo_pago_aplicado)) == grupo_pago.strip().upper()
+            )
         ids_subq = (
             self.db.query(PreliquidacionLinea.id)
             .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
-            .filter(
-                PreliquidacionLinea.preliquidacion_id == preliq_id,
-                ConceptoAdicional.unidad_base == unidad_base,
-            )
+            .filter(*filtros)
         )
         sumas = [func.sum(getattr(PreliquidacionLinea, col)) for col in columnas]
         return (
@@ -888,11 +899,13 @@ class PreliquidacionService:
         if not preliq:
             raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
 
-        # Las líneas que este control mide son las que se pagan por planta = las
-        # que tienen un concepto aplicado con unidad_base = "unidades". Antes se
-        # filtraba por grupo_pago_aplicado == "PLANTA", pero el grupo de pago es
-        # informativo y no decide cómo se paga; se alineó con Tancadas vs Jornal.
-        agregados = self._sumar_por_unidad_base(preliq_id, "unidades", ["unidades", "hsmaquina"])
+        # Las líneas de este control son las de trabajo de PLANTA: concepto
+        # aplicado con unidad_base = "unidades" Y grupo de pago "PLANTA". La
+        # unidad "unidades" sola no alcanza porque la carga de fruta por bins
+        # también se paga por unidades y se colaba en esta tabla; el grupo de
+        # pago "PLANTA" es el que distingue la planta real (excluye los bins).
+        agregados = self._sumar_por_unidad_base(preliq_id, "unidades", ["unidades", "hsmaquina"],
+                                                grupo_pago="PLANTA")
 
         # Precio por planta: sale del maestro (concepto con unidad_base = unidades),
         # no del difunto precio_a. Cache específicos + comunes de la quincena.
