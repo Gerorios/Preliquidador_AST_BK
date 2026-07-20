@@ -33,10 +33,10 @@ _Avoid_: precio maestro, precio común (nombres del modelo viejo, eliminado)
 Concepto sin cliente (`cliente_nombre IS NULL`): aplica a cualquier línea con esa tarea, sin importar cliente/finca.
 
 **Concepto específico**:
-Concepto con cliente (± finca) cargado: aplica solo a las líneas de ese cliente (y esa finca si está cargada). Comunes y específicos **suman** por defecto — **salvo** que el específico tenga la marca **Reemplaza al común**, en cuyo caso esa línea paga solo lo específico (ver Reemplaza al común).
+Concepto con cliente (± finca) cargado: aplica solo a las líneas de ese cliente (y esa finca si está cargada). Por defecto un específico **Reemplaza al común** (paga solo lo específico); se puede destildar para que sume común + específico (ver Reemplaza al común).
 
 **Reemplaza al común**:
-Marca (`reemplaza_comun`, ADR-0009) que se pone en un Concepto **específico**. Cuando una línea matchea un específico marcado así, **no se le aplican los conceptos comunes de esa tarea** (paga solo lo específico), en vez de sumar común + específico. Existe porque a veces el específico es el precio *total* de esa finca (reemplaza), no un plus que se suma. Default apagado ⇒ la regla histórica de "comunes y específicos suman" sigue valiendo salvo donde se marque.
+Marca (`reemplaza_comun`, ADR-0009) del Concepto **específico**. Cuando una línea matchea un específico marcado así, **no se le aplican los conceptos comunes de esa tarea** (paga solo lo específico), en vez de sumar común + específico. Existe porque casi siempre el específico es el precio *total* de esa finca (reemplaza), no un plus que se suma. **Al crear un específico nace prendida** (opt-out): el liquidador la destilda solo en el caso raro de "común base + específico plus" que sí debe sumar. Los específicos ya existentes conservan su valor (el cambio de default no los toca). Los comunes van siempre en False (no aplica).
 _Avoid_: usarla en un común (no tiene sentido; la marca es del específico).
 
 **Matching**:

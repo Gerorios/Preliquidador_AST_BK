@@ -202,17 +202,26 @@ def precio_masivo(
 
 @router.post("/conceptos", response_model=ConceptoUnifResponse)
 def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_propia)):
+    cliente_nombre = datos.cliente_nombre.strip() if datos.cliente_nombre else None
+    if datos.reemplaza_comun is not None:
+        # El liquidador lo mandó explícito (True o False): se respeta tal cual.
+        reemplaza_comun = datos.reemplaza_comun
+    else:
+        # No lo mandó: default nace en True para específicos (opt-out) y
+        # False para comunes (sin cambios respecto de antes).
+        reemplaza_comun = cliente_nombre is not None
+
     nuevo = ConceptoLiquidacion(
         quincena=datos.quincena,
         tarea_nombre=datos.tarea_nombre.strip(),
-        cliente_nombre=datos.cliente_nombre.strip() if datos.cliente_nombre else None,
+        cliente_nombre=cliente_nombre,
         finca_nombre=datos.finca_nombre.strip() if datos.finca_nombre else None,
         codigo=datos.codigo,
         unidad_base=datos.unidad_base,
         precio=datos.precio,
         tipo=datos.tipo,
         categoria=datos.categoria,
-        reemplaza_comun=datos.reemplaza_comun,
+        reemplaza_comun=reemplaza_comun,
     )
     db.add(nuevo)
     try:

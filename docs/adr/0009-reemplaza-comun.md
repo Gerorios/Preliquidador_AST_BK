@@ -15,3 +15,12 @@ No se puede inferir del dato si un específico "reemplaza" o "suma": común y es
 - Otras fincas de la misma tarea, sin específico, siguen cobrando el común normal — la marca solo afecta a las líneas que matchean ese específico.
 - Es un cambio **sensible al pago**: cubierto con tests (suma sin marca / solo específico con marca / otras fincas intactas / vía recálculo reactivo).
 - Revierte parcialmente la redacción del glosario (`Concepto específico`), ahora condicionada a esta marca.
+
+## Actualización (2026-07-14): la marca nace prendida (opt-out)
+
+Al usarlo en la práctica, el caso "el específico es el precio total de la finca" (reemplaza) resultó ser el **normal**, y el "común base + específico plus que suma" el **raro**. Por eso el default se invirtió: al **crear** un concepto específico, `reemplaza_comun` nace en **True** (el liquidador lo destilda solo en el caso raro), en vez de nacer apagado. El motor de matching **no cambió** — sigue siendo la misma regla, solo cambió el valor por defecto al crear.
+
+Alcance del cambio de default:
+- Aplica **solo a específicos nuevos**. Los específicos **ya existentes conservan su valor** (no se flipean para no alterar pagos de quincenas ya definidas).
+- El default se resuelve al crear: si el request no manda `reemplaza_comun`, se pone True para específicos (cliente/finca) y False para comunes; si lo manda explícito, se respeta.
+- `copiar_quincena` sigue copiando el valor tal cual (no fuerza el nuevo default sobre lo copiado).

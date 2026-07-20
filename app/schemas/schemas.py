@@ -134,7 +134,10 @@ class ConceptoUnifRequest(BaseModel):
     precio: Optional[Decimal] = None
     tipo: TipoConcepto = TipoConcepto.OTRO
     categoria: Optional[int] = None
-    reemplaza_comun: bool = False
+    # None = no lo mandaron: crear_concepto decide el default (True si es
+    # específico, False si es común). Si viene explícito (True/False) se
+    # respeta tal cual.
+    reemplaza_comun: Optional[bool] = None
 
 
 class ConceptoUnifUpdateRequest(BaseModel):
