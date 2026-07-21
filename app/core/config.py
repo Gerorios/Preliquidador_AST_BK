@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # CORS
     frontend_url: str = "http://localhost:5173"
 
+    # Asistente de ayuda de uso (OpenAI). Vacío = asistente deshabilitado
+    # (el endpoint responde 503 en vez de romper el arranque de la app).
+    openai_api_key: str = ""
+    asistente_modelo: str = "gpt-4o-mini"
+
     @property
     def url_sueldos(self) -> str:
         password = quote_plus(self.db_sueldos_password)
