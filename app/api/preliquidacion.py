@@ -232,6 +232,19 @@ def actualizar_linea(linea_id: int, datos: LineaUpdateRequest, usuario=Depends(g
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/linea/{linea_id}/legajos-disponibles")
+def legajos_disponibles_de_linea(linea_id: int, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+    """
+    Pares (empresa, legajo) reales de la persona de esta línea, para el
+    desplegable 'EMPRESA — legajo' del panel individual. Lista vacía si la
+    línea no tiene CUIL (el front cae al campo manual en ese caso).
+    """
+    try:
+        return service.legajos_disponibles_de_linea(linea_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/linea/{linea_id}/concepto", response_model=ConceptoAdicionalResponse)
 def agregar_concepto(linea_id: int, datos: ConceptoAdicionalRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
     try:

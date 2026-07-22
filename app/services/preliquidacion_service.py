@@ -1454,6 +1454,34 @@ class PreliquidacionService:
 
         return {"grupos": list(grupos.values()), "sin_cuil": sin_cuil}
 
+    def legajos_disponibles_de_linea(self, linea_id: int) -> dict:
+        """
+        Pares (empresa, legajo) reales de la persona de UNA línea (por su
+        CUIL), para el desplegable del panel individual. Devuelve lista vacía
+        si la línea no tiene CUIL o el maestro de sueldos no está disponible
+        — en ese caso el front cae al campo de legajo manual.
+        """
+        linea = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.id == linea_id
+        ).first()
+        if not linea:
+            raise ValueError(f"Línea {linea_id} no encontrada")
+
+        cuil = (linea.cuit or "").strip()
+        disponibles = []
+        if cuil and self.sueldos:
+            disponibles = [
+                {"empresa": r["empresa"], "legajo": r["legajo"]}
+                for r in self.sueldos.legajos_por_cuil(cuil)
+            ]
+
+        return {
+            "cuil": cuil or None,
+            "empresa_asignada": linea.empresa_asignada,
+            "legajo_asignado": linea.legajo_asignado,
+            "legajos_disponibles": disponibles,
+        }
+
     def reasignar_empresa_masivo(
         self, linea_ids: list[int], empresa: str, usuario_id: int, motivo: str = None
     ) -> dict:
