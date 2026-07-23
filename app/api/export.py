@@ -3,10 +3,17 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia
+from app.api.auth import get_usuario_actual
 from app.models.models import Preliquidacion
 from app.services.export_service import generar_export_excel
 
-router = APIRouter(prefix="/api/preliquidacion", tags=["Export"])
+# dependencies: la descarga exige sesión válida (el front la pide vía axios
+# con header Authorization, no con un link directo — no rompe nada).
+router = APIRouter(
+    prefix="/api/preliquidacion",
+    tags=["Export"],
+    dependencies=[Depends(get_usuario_actual)],
+)
 
 
 @router.get("/{preliq_id}/export-excel")

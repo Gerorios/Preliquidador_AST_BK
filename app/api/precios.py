@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
+from app.api.auth import get_usuario_actual
 from app.models.models import ConceptoLiquidacion, Preliquidacion
 from app.services.consulta_externa import ConsultaExternaService
 from app.services.preliquidacion_service import PreliquidacionService
@@ -22,7 +23,12 @@ def _match(concepto: ConceptoLiquidacion) -> dict:
         "finca_nombre": concepto.finca_nombre,
     }
 
-router = APIRouter(prefix="/api/precios", tags=["Precios"])
+# dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
+router = APIRouter(
+    prefix="/api/precios",
+    tags=["Precios"],
+    dependencies=[Depends(get_usuario_actual)],
+)
 
 
 # ─── Catálogos externos ───────────────────────────────────────────────────────
@@ -121,15 +127,16 @@ def panel_conceptos(
 
     precio_anterior_por_clave = {}
     if conceptos:
-        fila_anterior = db.query(ConceptoLiquidacion.quincena).filter(
-            ConceptoLiquidacion.quincena < quincena
-        ).order_by(ConceptoLiquidacion.quincena.desc()).first()
-        if fila_anterior:
-            quincena_anterior = fila_anterior[0]
-            anteriores = db.query(ConceptoLiquidacion).filter(
-                ConceptoLiquidacion.quincena == quincena_anterior
-            ).all()
-            precio_anterior_por_clave = {_clave(c): c.precio for c in anteriores}
+        # Un solo round-trip: la quincena anterior se resuelve como subquery
+        # (antes eran dos queries secuenciales contra la base remota).
+        from sqlalchemy import func
+        subq_quincena_anterior = db.query(
+            func.max(ConceptoLiquidacion.quincena)
+        ).filter(ConceptoLiquidacion.quincena < quincena).scalar_subquery()
+        anteriores = db.query(ConceptoLiquidacion).filter(
+            ConceptoLiquidacion.quincena == subq_quincena_anterior
+        ).all()
+        precio_anterior_por_clave = {_clave(c): c.precio for c in anteriores}
 
     resultado = []
     for c in conceptos:

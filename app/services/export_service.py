@@ -6,7 +6,7 @@ from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import Preliquidacion, PreliquidacionLinea
+from app.models.models import PreliquidacionLinea
 
 
 # ─── Export a Excel de una quincena ───────────────────────────────────────────
@@ -36,17 +36,17 @@ def generar_export_excel(db: Session, preliq_id: int) -> io.BytesIO:
     """Arma el Excel de exportación de una preliquidación (quincena).
 
     Devuelve un io.BytesIO ya posicionado al inicio (buffer.seek(0)), listo
-    para ser devuelto en una StreamingResponse. Lanza ValueError si la
-    preliquidación no existe.
+    para ser devuelto en una StreamingResponse. Asume que el caller ya
+    validó que la preliquidación existe.
     """
-    preliquidacion = db.query(Preliquidacion).filter(
-        Preliquidacion.id == preliq_id
-    ).first()
-    if not preliquidacion:
-        raise ValueError(f"Preliquidación {preliq_id} no encontrada")
-
+    # El router ya validó que la preliquidación existe (necesita la quincena
+    # para el nombre del archivo) — acá no se re-consulta.
     lineas = (
         db.query(PreliquidacionLinea)
+        # joinedload a propósito: se probó selectinload (2 queries planas) y
+        # fue ~2× MÁS LENTO acá (mediana 2.5s → 5s medido contra la base
+        # remota) — el IN batcheado sobre concepto_adicional pierde contra el
+        # join único. No "optimizar" esto sin volver a medir.
         .options(joinedload(PreliquidacionLinea.conceptos))
         .filter(PreliquidacionLinea.preliquidacion_id == preliq_id)
         .order_by(

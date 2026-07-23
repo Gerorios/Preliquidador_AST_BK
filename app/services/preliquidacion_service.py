@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import and_, or_, func, case, text as sql_text
 
 from app.models.models import (
@@ -768,6 +768,11 @@ class PreliquidacionService:
             PreliquidacionLinea.preliquidacion_id == preliq_id
         ).all()
 
+        # El caller ya no hace el obtener() previo (costaba un round-trip por
+        # carga); solo se verifica existencia si la quincena vino vacía.
+        if not lineas and not self.obtener(preliq_id):
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+
         por_empleado_fecha = {}
         for linea in lineas:
             legajo = linea.legajo_asignado or linea.legajo_campo or ""
@@ -1129,9 +1134,12 @@ class PreliquidacionService:
         return self.db.query(Preliquidacion).filter(Preliquidacion.id == preliq_id).first()
 
     def listar_lineas(self, preliq_id: int, empresa=None, solo_alertas=None, nombre_empleado=None):
+        # selectinload (no joinedload): con uno-a-muchos el join multiplica
+        # filas (línea × conceptos) sobre la BD remota; selectinload trae
+        # líneas y conceptos en 2 queries planas — menos bytes por el WAN.
         q = (
             self.db.query(PreliquidacionLinea)
-            .options(joinedload(PreliquidacionLinea.conceptos))
+            .options(selectinload(PreliquidacionLinea.conceptos))
             .filter(PreliquidacionLinea.preliquidacion_id == preliq_id)
         )
         if empresa:
@@ -1203,7 +1211,12 @@ class PreliquidacionService:
         )
         self.db.add(concepto)
         self.db.flush()
-        self._recalcular_importe(linea)
+        # linea.conceptos se cargó ANTES del insert (el concepto nuevo no está
+        # en la colección): _recalcular_importe lo dejaba afuera y el total
+        # quedaba sin el importe recién agregado. Mismo patrón que el masivo.
+        linea.importe_base = Decimal("0")
+        suma_existente = sum(c.importe for c in linea.conceptos if c.importe)
+        linea.importe_total = suma_existente + (concepto.importe or Decimal("0"))
         self.db.commit()
         self.db.refresh(concepto)
         return concepto
@@ -1239,7 +1252,11 @@ class PreliquidacionService:
         concepto.descripcion = f"Concepto {regla.codigo} (agregado manual)"
         self.db.add(concepto)
         self.db.flush()
-        self._recalcular_importe(linea)
+        # Igual que en agregar_concepto: el concepto nuevo no está en la
+        # colección ya cargada — se suma a mano para no perderlo del total.
+        linea.importe_base = Decimal("0")
+        suma_existente = sum(c.importe for c in linea.conceptos if c.importe)
+        linea.importe_total = suma_existente + (concepto.importe or Decimal("0"))
         self.db.commit()
         self.db.refresh(concepto)
         return concepto

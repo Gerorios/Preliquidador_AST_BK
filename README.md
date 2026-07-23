@@ -185,7 +185,6 @@ Lista completa e interactiva en `/docs`. Resumen:
 | POST | `/refrescar-sueldos` | Fuerza recarga del cache de sueldos |
 | GET | `/{id}/lineas` | Líneas con filtros (empresa, solo alertas, empleado) |
 | GET | `/{id}/estadisticas` | Totales, alertas, incompletas, duplicados |
-| GET | `/{id}/filtros` | Valores únicos para los filtros |
 | GET | `/{id}/dashboard-verificacion` | Excesos + resumen por empleado |
 | GET | `/{id}/control-plantas-jornal` | Control Plantas vs Jornal |
 | GET | `/{id}/control-tancadas-jornal` | Control Tancadas vs Jornal |
