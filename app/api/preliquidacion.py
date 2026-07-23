@@ -15,7 +15,16 @@ from app.schemas.schemas import (
     CategoriaOperarioRequest, OperarioMantenimientoResponse,
 )
 
-router = APIRouter(prefix="/api/preliquidacion", tags=["Preliquidación"])
+# dependencies: TODOS los endpoints del router exigen sesión válida — antes
+# los GET (líneas, dashboard, estadísticas, etc.) eran públicos y exponían
+# datos de liquidación sin token. El costo por request es ~0: get_usuario_actual
+# cachea el usuario 60s y FastAPI deduplica la dependencia si el endpoint
+# también la declara como parámetro.
+router = APIRouter(
+    prefix="/api/preliquidacion",
+    tags=["Preliquidación"],
+    dependencies=[Depends(get_usuario_actual)],
+)
 
 
 def get_service(
@@ -58,18 +67,37 @@ def refrescar_sueldos(_=Depends(get_usuario_actual)):
     próximo uso. Útil cuando cambió nuempleados y no se quiere esperar al TTL."""
     from app.services.sueldos_service import refrescar_cache_sueldos
     refrescar_cache_sueldos()
+    invalidar_cache_empresas()
     return MensajeResponse(mensaje="Maestro de sueldos marcado para refrescar")
+
+
+# Cache de proceso de la lista de empresas: es un DISTINCT sobre nuempleados
+# (15-19k filas) en la base remota de sueldos (~1.5s por llamada) y el listado
+# cambia casi nunca. TTL 10 min; "refrescar sueldos" también lo limpia.
+_EMPRESAS_CACHE: dict = {"datos": None, "expira": 0.0}
+_EMPRESAS_CACHE_TTL = 600  # segundos
+
+
+def invalidar_cache_empresas():
+    _EMPRESAS_CACHE["datos"] = None
+    _EMPRESAS_CACHE["expira"] = 0.0
 
 
 @router.get("/empresas")
 def listar_empresas(db_sueldos: Session = Depends(get_db_sueldos)):
+    import time
     from sqlalchemy import text
+    if _EMPRESAS_CACHE["datos"] is not None and _EMPRESAS_CACHE["expira"] > time.monotonic():
+        return _EMPRESAS_CACHE["datos"]
     resultado = db_sueldos.execute(text(
         "SELECT DISTINCT empresa FROM nuempleados "
         "WHERE borrado IS NULL OR borrado <> 'S' "
         "ORDER BY empresa"
     )).fetchall()
-    return [r[0].strip() for r in resultado if r[0]]
+    empresas = [r[0].strip() for r in resultado if r[0]]
+    _EMPRESAS_CACHE["datos"] = empresas
+    _EMPRESAS_CACHE["expira"] = time.monotonic() + _EMPRESAS_CACHE_TTL
+    return empresas
 
 
 @router.get("/", response_model=list[PreliquidacionResponse])
@@ -96,35 +124,36 @@ def backfill_conceptos(preliq_id: int, service: PreliquidacionService = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Estos endpoints ya no hacen el obtener() previo: el servicio detecta la
+# preliquidación inexistente (ValueError → 404). Con la base remota, ese
+# precheck costaba un round-trip entero (~200ms) en cada carga de pantalla.
+
 @router.get("/{preliq_id}/dashboard-verificacion")
 def dashboard_verificacion(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
-    preliq = service.obtener(preliq_id)
-    if not preliq:
-        raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
     try:
         return service.dashboard_verificacion(preliq_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{preliq_id}/control-plantas-jornal")
 def control_plantas_jornal(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
-    preliq = service.obtener(preliq_id)
-    if not preliq:
-        raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
     try:
         return service.control_plantas_jornal(preliq_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{preliq_id}/control-tancadas-jornal")
 def control_tancadas_jornal(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
-    preliq = service.obtener(preliq_id)
-    if not preliq:
-        raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
     try:
         return service.control_tancadas_jornal(preliq_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -201,10 +230,12 @@ def obtener_filtros(preliq_id: int, service: PreliquidacionService = Depends(get
 
 @router.get("/{preliq_id}/estadisticas")
 def estadisticas(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
-    preliq = service.obtener(preliq_id)
-    if not preliq:
+    stats = service.estadisticas(preliq_id)
+    # Solo si la quincena vino vacía vale la pena pagar el round-trip extra
+    # para distinguir "preliquidación sin líneas" de "no existe" (404).
+    if stats["total_lineas"] == 0 and not service.obtener(preliq_id):
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
-    return service.estadisticas(preliq_id)
+    return stats
 
 
 @router.get("/{preliq_id}/lineas", response_model=list[LineaResponse])
@@ -215,11 +246,13 @@ def listar_lineas(
     nombre_empleado: Optional[str] = Query(None),
     service: PreliquidacionService = Depends(get_service),
 ):
-    preliq = service.obtener(preliq_id)
-    if not preliq:
+    lineas = service.listar_lineas(preliq_id=preliq_id, empresa=empresa,
+                                   solo_alertas=solo_alertas, nombre_empleado=nombre_empleado)
+    # Round-trip de existencia solo en el caso raro de respuesta vacía, para
+    # mantener el 404 de siempre cuando el id no existe.
+    if not lineas and not service.obtener(preliq_id):
         raise HTTPException(status_code=404, detail="Preliquidación no encontrada")
-    return service.listar_lineas(preliq_id=preliq_id, empresa=empresa,
-                                  solo_alertas=solo_alertas, nombre_empleado=nombre_empleado)
+    return lineas
 
 
 @router.patch("/linea/{linea_id}", response_model=LineaResponse)

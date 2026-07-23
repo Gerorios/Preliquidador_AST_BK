@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -52,6 +53,19 @@ def crear_token(data: dict) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
+# Cache de proceso del usuario autenticado: la base está remota (~200ms por
+# query) y cada request autenticado pagaba un SELECT de usuarios. Con TTL
+# corto: desactivar un usuario tarda hasta _USUARIO_CACHE_TTL segundos en
+# cortar sus requests (el token JWT ya duraba horas, así que la ventana real
+# de revocación no empeora en la práctica).
+_USUARIO_CACHE: dict[int, tuple[Usuario, float]] = {}
+_USUARIO_CACHE_TTL = 60  # segundos
+
+
+def invalidar_cache_usuarios():
+    _USUARIO_CACHE.clear()
+
+
 def get_usuario_actual(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db_propia),
@@ -70,13 +84,23 @@ def get_usuario_actual(
     except (JWTError, ValueError):
         raise credenciales_exc
 
+    en_cache = _USUARIO_CACHE.get(user_id)
+    if en_cache and en_cache[1] > time.monotonic():
+        return en_cache[0]
+
     usuario = db.query(Usuario).filter(
         Usuario.id == user_id,
         Usuario.activo == True,
     ).first()
 
     if not usuario:
+        _USUARIO_CACHE.pop(user_id, None)
         raise credenciales_exc
+
+    # Se desliga de la sesión para que sobreviva al cierre de esta request
+    # (los atributos ya están cargados; solo se leen id/nombre/email/rol).
+    db.expunge(usuario)
+    _USUARIO_CACHE[user_id] = (usuario, time.monotonic() + _USUARIO_CACHE_TTL)
     return usuario
 
 
