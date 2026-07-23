@@ -25,6 +25,13 @@ Usuario (Argentina) ──HTTPS, 1 dominio──► VPS São Paulo
 
 ## Pasos
 
+> **Atajo:** los pasos 1-6 están automatizados en [`deploy/provision.sh`](../deploy/provision.sh)
+> (usa [`deploy/preliquidacion.service`](../deploy/preliquidacion.service) y
+> [`deploy/nginx-preliquidacion.conf`](../deploy/nginx-preliquidacion.conf)). En el VPS nuevo, como root:
+> `DOMAIN=preliquidacion.tudominio.com bash provision.sh` — y quedan solo los pendientes
+> manuales que imprime al final (.env, rsync del front, certbot). Los pasos de abajo
+> siguen valiendo como referencia/explicación.
+
 ### 1. Base del VPS
 ```bash
 # como root
