@@ -16,6 +16,9 @@ apt install -y python3-venv python3-pip nginx git ufw
 
 id -u deploy &>/dev/null || adduser --disabled-password --gecos "" deploy
 usermod -aG sudo deploy
+# Ubuntu 24.04 crea /home/deploy con 750 y nginx (www-data) no puede leer
+# el frontend adentro — sin esto, el sitio devuelve 500.
+chmod 755 /home/deploy
 
 ufw allow OpenSSH && ufw allow 80 && ufw allow 443
 ufw --force enable
