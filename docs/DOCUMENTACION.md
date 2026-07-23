@@ -18,7 +18,7 @@ El sistema son **dos repos hermanos**, bajo `.../Sistema_Preliquidacion/`:
 - **Frontend:** `npm install` + `npm run dev` → `http://localhost:5173` (Vite; proxea la API al backend).
 
 ### Producción (deploy)
-"Producción" = **colgar la app en un servicio de hosting** (pendiente al momento de escribir esto). **No implica cambiar de base de datos**: la base que usa hoy la app (`testing`, ver §3) YA es la base productiva. Para el deploy hace falta: buildear el frontend (`npm run build` → `dist/`) y servirlo, y correr el backend (uvicorn/gunicorn) con su `.env` apuntando a las mismas bases.
+"Producción" = **colgar la app en un servicio de hosting** (pendiente al momento de escribir esto). **No implica cambiar de base de datos**: la base que usa hoy la app (`preliquidacion`, ver §3) es la misma que usará producción. Para el deploy hace falta: buildear el frontend (`npm run build` → `dist/`) y servirlo, y correr el backend (uvicorn/gunicorn) con su `.env` apuntando a las mismas bases.
 
 ---
 
@@ -54,11 +54,11 @@ El backend usa **tres bases MySQL** (definidas en `.env`, leídas por `app/core/
 
 | Base | Rol | Acceso | Contenido |
 |---|---|---|---|
-| **`db_propia`** (nombre real: **`testing`**) | Del preliquidador | **Lectura/escritura** | Las 7 tablas propias (abajo) |
+| **`db_propia`** (nombre real: **`preliquidacion`**) | Del preliquidador | **Lectura/escritura** | Las 7 tablas propias (abajo) |
 | **`db_sueldos`** | Sistema de sueldos | **Solo lectura** | `nuempleados` (~15–19k empleados) |
 | **`db_externa`** | Sistema de carga de campo | **Solo lectura** | `laa_*` / `ast_*` (tareas cargadas) |
 
-> ⚠️ **`testing` ES la base de producción.** No hay una base de prod separada. Toda migración corrida contra `testing` ya está en producción. Además, `db_propia` es **compartida por 4+ sistemas** — solo las 7 tablas de abajo son del preliquidador; el resto NO se toca.
+> ℹ️ Históricamente `db_propia` fue la base compartida `testing`; hoy es **`preliquidacion`**, una base dedicada del preliquidador. No hay una base de prod separada: toda migración corrida contra `preliquidacion` aplica al dato real.
 
 ### Tablas propias (las únicas que el preliquidador crea/modifica)
 - `usuarios` — login del sistema (no empleados de campo).
@@ -70,7 +70,7 @@ El backend usa **tres bases MySQL** (definidas en `.env`, leídas por `app/core/
 - `categoria_operario` — categoría (1–7) por (quincena, CUIL) para mantenimiento.
 
 ### Migraciones (`migrations/*.sql`)
-SQL manual, versionado `wsN`. **Todas ya aplicadas en `testing` (= producción).** Estado actual: `ws1`, `ws2`, `ws3`, `ws5`, `ws7`, `ws8`, `ws9`, `ws10` + `fix_trazabilidad_concepto_adicional`. Al montar el sistema en una base **nueva desde cero**, hay que correrlas en orden (las que crean columnas/tablas no son diferibles; `ws9`/`ws10` son índices, diferibles).
+SQL manual, versionado `wsN`. **Todas ya aplicadas en `preliquidacion`.** Estado actual: `ws1`, `ws2`, `ws3`, `ws5`, `ws7`, `ws8`, `ws9`, `ws10` + `fix_trazabilidad_concepto_adicional`. Al montar el sistema en una base **nueva desde cero**, hay que correrlas en orden (las que crean columnas/tablas no son diferibles; `ws9`/`ws10` son índices, diferibles).
 
 ### Identidad de una persona
 No hay tabla de empleados propia. Una persona se identifica por **CUIL** (identidad física) y su registro laboral por el par **(legajo, empresa)**. La línea guarda `cuit`, `legajo_campo`/`legajo_asignado`, `nombre_empleado`, `empresa_asignada` desnormalizados.
