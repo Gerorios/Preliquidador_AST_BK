@@ -2,6 +2,7 @@ import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 # En Windows, sin PYTHONIOENCODING/PYTHONUTF8, stdout/stderr usan el codepage
 # de la consola (p. ej. cp1252), que no soporta los caracteres Unicode que
@@ -47,6 +48,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Comprime respuestas grandes (ej. /lineas de una quincena: ~1.3 MB de JSON
+# que gzip baja a ~150 KB). Las chicas (<1 KB) no pagan el overhead.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.add_middleware(
     CORSMiddleware,
