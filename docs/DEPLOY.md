@@ -2,6 +2,34 @@
 
 Cómo poner el sistema en producción (hosting). Decidido en sesión de asesoría; ver también [`DOCUMENTACION.md`](DOCUMENTACION.md).
 
+## ⚡ ESTADO ACTUAL: EN PRODUCCIÓN (desde 2026-07-23)
+
+- **URL**: `http://179.197.237.196` (VPS Hostinger KVM 1, São Paulo — mismo datacenter que la base; ping backend↔base ~7ms).
+- **Layout en el VPS**: backend en `/home/deploy/backend` (servicio systemd `preliquidacion`, uvicorn en 127.0.0.1:8000), frontend estático en `/home/deploy/frontend`, nginx adelante. `.env` de producción en `/home/deploy/backend/.env` (SECRET_KEY propio, distinto al de desarrollo).
+- **Pendiente**: subdominio de la empresa (lo gestiona un tercero) + HTTPS con certbot + actualizar `FRONTEND_URL`; confirmar backups de la base en Hostinger.
+
+### Regla de trabajo: el deploy SIEMPRE se autoriza explícitamente
+
+Pushear a GitHub **no** toca producción. Producción solo cambia cuando alguien ejecuta el deploy en el VPS. La regla acordada:
+
+> **Nadie (incluido el asistente) impacta cambios en producción sin la autorización explícita del responsable del sistema.** El flujo es: desarrollar y probar en local → commit/push a GitHub → **pedir OK para deployar** → recién ahí ejecutar el deploy en el VPS.
+
+**Ojo con el dato**: la base de datos es una sola (desarrollo y producción comparten `preliquidacion`). Los cambios de **datos** hechos desde el entorno local (generar quincenas, precios, usuarios) impactan al instante en lo que ven los usuarios — esta regla de autorización aplica al **código**.
+
+### Cómo se ejecuta el deploy (una vez autorizado)
+
+```bash
+# Backend (corte de ~10s):
+ssh root@179.197.237.196 "cd /home/deploy/backend && sudo -u deploy git pull && sudo -u deploy .venv/bin/pip install -q -r requirements.txt && systemctl restart preliquidacion && sleep 5 && curl -s http://127.0.0.1:8000/health"
+
+# Frontend (sin corte) — desde la máquina de desarrollo:
+cd frontend_preliquidacion && npm run build
+scp -r dist/* root@179.197.237.196:/home/deploy/frontend/
+
+# Migraciones nuevas (migrations/wsN.sql): correrlas contra la base ANTES o junto
+# con el deploy del código que las necesita.
+```
+
 ## Arquitectura
 
 **Un solo VPS** en **Hostinger, región São Paulo (Brasil)** — la misma red donde vive la base MySQL (`191.101.235.7`). El factor #1 de latencia es la distancia backend↔base (el sistema hace muchas queries por acción); por eso el backend va **pegado a la base**, no cerca de los usuarios. El frontend es estático y chico → se sirve del mismo VPS.
