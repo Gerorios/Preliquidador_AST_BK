@@ -210,24 +210,6 @@ def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Dep
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{preliq_id}/filtros")
-def obtener_filtros(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
-    from sqlalchemy import text as sql_text
-    db = service.db
-    def unicos(campo):
-        rows = db.execute(sql_text(
-            f"SELECT DISTINCT {campo} FROM preliquidacion_linea "
-            f"WHERE preliquidacion_id = :pid AND {campo} IS NOT NULL AND {campo} <> '' "
-            f"ORDER BY {campo}"
-        ), {"pid": preliq_id}).fetchall()
-        return [r[0] for r in rows if r[0]]
-    return {
-        "clientes": unicos("nombre_cliente"), "fincas": unicos("nombre_finca"),
-        "tareas": unicos("nombre_tarea"), "empresas": unicos("empresa_asignada"),
-        "grupos_pago": unicos("grupo_pago_aplicado"), "supervisores": unicos("nombre_supervisor"),
-    }
-
-
 @router.get("/{preliq_id}/estadisticas")
 def estadisticas(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     stats = service.estadisticas(preliq_id)
