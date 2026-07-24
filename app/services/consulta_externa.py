@@ -222,6 +222,7 @@ QUERY_FINCAS_POR_CLIENTE = text("""
     FROM laa_fincas fincas
     LEFT JOIN laa_clientes cl ON cl.id = fincas.idcliente
     WHERE cl.estado <> 9
+    AND fincas.estado <> 9
     AND cl.nombre = :cliente_nombre
     ORDER BY fincas.nombre
 """)
