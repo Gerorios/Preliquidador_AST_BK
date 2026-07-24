@@ -78,5 +78,23 @@ Un Concepto adicional que el liquidador escribió a mano (descripción + importe
 Nivel (**1 a 7**) que el liquidador le asigna **por quincena** a un operario de taller, y del que depende cuánto cobra la tarea de mantenimiento mecánico. No viene del sistema de campo —que carga todo como una sola tarea "MANTENIMIENTO MECANICO (TALLERES)", sin diferenciar categoría— ni de la categoría de convenio del sistema de sueldos: es un dato **propio** del preliquidador, editable por quincena. Se cruza con la persona por su **CUIL** (no por legajo), y se hereda de la quincena anterior al abrir una nueva.
 _Avoid_: confundir con la categoría de convenio de `nuempleados` (otra cosa, de solo lectura, no manipulable).
 
+**Rol**:
+Nivel de acceso de un usuario del sistema: `admin` y `jefe` operan la preliquidación completa (y también ven la Vista gerencial); `gerente` solo accede a la Vista gerencial y al maestro de Conceptos en modo lectura. La restricción se aplica en el backend, no solo en pantalla.
+
+**Vista gerencial**:
+Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).
+
+**Mano de obra gastada**:
+Costo total de la preliquidación de un período: la suma de **todos** los Conceptos adicionales de sus líneas, manuales incluidos (es lo que efectivamente se paga). Consolidada entre empresas por defecto, filtrable por empresa.
+_Avoid_: excluir los conceptos manuales (haría mentir al indicador)
+
+**Grupo de tareas**:
+Agrupador funcional (`grupo_tarea`) que el catálogo de tareas del sistema de campo trae en la descripción (primera parte separada por `;`). Es la dimensión gerencial de "¿en qué se va la plata?"; se resuelve por nombre de tarea contra el catálogo, no se persiste en la línea.
+_Avoid_: confundir con Grupo de pago (control operativo, segunda parte de la misma descripción)
+
+**Desvío por persona**:
+Cuánto por encima (%) de su **propia media histórica** está cobrando una persona en el período: se compara contra sus últimas 6 quincenas con actividad, exigiendo al menos 3 para que la comparación exista (si no, la persona se lista como "sin historial comparable"). El umbral desde el que se resalta es configurable (default +30%). Se compara a cada persona contra sí misma —no contra otras— porque tareas distintas pagan distinto.
+_Avoid_: media global entre personas (mezcla poblaciones que cobran naturalmente distinto)
+
 **Precio por categoría**:
 Modo de pago en el que el precio de un Concepto depende de la Categoría de operario de la persona, en vez de ser único por tarea/cliente/finca. En el maestro se cargan varias filas del mismo Concepto (una por categoría, mismo código, distinto precio); a cada línea se le aplica la fila cuya categoría coincide con la de la persona. Los Conceptos **sin** categoría se comportan igual que siempre y **suman** con el de categoría; no se reemplazan. Si la persona no tiene categoría asignada, o su categoría no tiene precio cargado, la línea queda **incompleta** (ver Línea incompleta).

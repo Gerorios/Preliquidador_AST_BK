@@ -104,6 +104,24 @@ def get_usuario_actual(
     return usuario
 
 
+def requiere_rol(*roles: str):
+    """Dependency de autorización: exige que el usuario autenticado tenga
+    alguno de los roles dados. La restricción vive acá (backend), no en el
+    front — un gerente con token válido recibe 403 en lo operativo."""
+    def dependencia(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+        if usuario.rol not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tenés permiso para esta operación",
+            )
+        return usuario
+    return dependencia
+
+
+# Roles que operan la preliquidación (todo menos la vista gerencial de solo lectura)
+requiere_operativo = requiere_rol("admin", "jefe")
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=TokenResponse)
