@@ -37,6 +37,12 @@ def quincenas_disponibles(service: GerencialService = Depends(get_service)):
     return [str(q) for q in service.quincenas_disponibles()]
 
 
+@router.get("/empresas")
+def empresas_disponibles(service: GerencialService = Depends(get_service)):
+    """Empresas con líneas preliquidadas, para el filtro."""
+    return service.empresas_disponibles()
+
+
 @router.get("/resumen")
 def resumen(
     quincena: Optional[date] = Query(None),

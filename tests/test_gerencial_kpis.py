@@ -48,6 +48,15 @@ Q_JUN_1 = date(2026, 6, 1)
 Q_JUN_2 = date(2026, 6, 16)
 
 
+def test_empresas_disponibles(db):
+    p = _preliq(db, Q_MAY_1)
+    _linea(db, p, 100, empresa="PAMPLONA")
+    _linea(db, p, 100, empresa="LA ASTURIANA", cuil="20-2")
+    _linea(db, p, 100, empresa=None, cuil="20-3")
+
+    assert GerencialService(db).empresas_disponibles() == ["LA ASTURIANA", "PAMPLONA"]
+
+
 def test_periodo_exige_quincena_o_mes(db):
     svc = GerencialService(db)
     with pytest.raises(PeriodoInvalidoError):

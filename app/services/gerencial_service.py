@@ -47,6 +47,18 @@ class GerencialService:
         ).all()
         return [q for (q,) in filas]
 
+    def empresas_disponibles(self) -> list[str]:
+        """Empresas con líneas preliquidadas (para el filtro del dashboard).
+        No usa el maestro de sueldos: el gerente no accede a él."""
+        filas = (
+            self.db.query(PreliquidacionLinea.empresa_asignada)
+            .filter(PreliquidacionLinea.empresa_asignada.isnot(None))
+            .distinct()
+            .order_by(PreliquidacionLinea.empresa_asignada)
+            .all()
+        )
+        return [e for (e,) in filas]
+
     def _quincenas_del_mes(self, mes: str) -> list[date]:
         try:
             anio, nro_mes = (int(p) for p in mes.split("-"))
