@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
-from app.api.auth import get_usuario_actual, requiere_operativo
+from app.api.auth import get_usuario_actual, requiere_conceptos
 from app.models.models import ConceptoLiquidacion, Preliquidacion
 from app.services.consulta_externa import ConsultaExternaService
 from app.services.preliquidacion_service import PreliquidacionService
@@ -24,8 +24,9 @@ def _match(concepto: ConceptoLiquidacion) -> dict:
     }
 
 # dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
-# Los GET quedan accesibles a todo rol (el gerente ve el maestro en lectura);
-# las mutaciones agregan requiere_operativo endpoint por endpoint.
+# Los GET quedan accesibles a todo rol (todos ven el maestro); las mutaciones
+# agregan requiere_conceptos endpoint por endpoint — admin/jefe/gerente, ya
+# que el gerente opera el maestro de Conceptos completo (decide precios).
 router = APIRouter(
     prefix="/api/precios",
     tags=["Precios"],
@@ -160,7 +161,7 @@ def panel_conceptos(
 
 
 @router.patch("/conceptos/precio-masivo", response_model=ConceptoPrecioMasivoResponse,
-              dependencies=[Depends(requiere_operativo)])
+              dependencies=[Depends(requiere_conceptos)])
 def precio_masivo(
     datos: ConceptoPrecioMasivoRequest,
     db: Session = Depends(get_db_propia),
@@ -211,7 +212,7 @@ def precio_masivo(
 
 
 @router.post("/conceptos", response_model=ConceptoUnifResponse,
-             dependencies=[Depends(requiere_operativo)])
+             dependencies=[Depends(requiere_conceptos)])
 def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_propia)):
     cliente_nombre = datos.cliente_nombre.strip() if datos.cliente_nombre else None
     if datos.reemplaza_comun is not None:
@@ -247,7 +248,7 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
 
 
 @router.patch("/conceptos/{concepto_id}", response_model=ConceptoUnifResponse,
-              dependencies=[Depends(requiere_operativo)])
+              dependencies=[Depends(requiere_conceptos)])
 def actualizar_concepto(
     concepto_id: int,
     datos: ConceptoUnifUpdateRequest,
@@ -275,7 +276,7 @@ def actualizar_concepto(
 
 
 @router.delete("/conceptos/{concepto_id}", response_model=MensajeResponse,
-               dependencies=[Depends(requiere_operativo)])
+               dependencies=[Depends(requiere_conceptos)])
 def eliminar_concepto(concepto_id: int, db: Session = Depends(get_db_propia)):
     concepto = db.query(ConceptoLiquidacion).filter(
         ConceptoLiquidacion.id == concepto_id
@@ -292,7 +293,7 @@ def eliminar_concepto(concepto_id: int, db: Session = Depends(get_db_propia)):
 
 
 @router.post("/conceptos/copiar", response_model=MensajeResponse,
-             dependencies=[Depends(requiere_operativo)])
+             dependencies=[Depends(requiere_conceptos)])
 def copiar_quincena(
     quincena_origen: date = Query(...),
     quincena_destino: date = Query(...),

@@ -79,7 +79,7 @@ Nivel (**1 a 7**) que el liquidador le asigna **por quincena** a un operario de 
 _Avoid_: confundir con la categoría de convenio de `nuempleados` (otra cosa, de solo lectura, no manipulable).
 
 **Rol**:
-Nivel de acceso de un usuario del sistema: `admin` y `jefe` operan la preliquidación completa (y también ven la Vista gerencial); `gerente` solo accede a la Vista gerencial y al maestro de Conceptos en modo lectura. La restricción se aplica en el backend, no solo en pantalla.
+Nivel de acceso de un usuario del sistema: `admin` y `jefe` operan la preliquidación completa (y también ven la Vista gerencial); `gerente` accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear/editar/eliminar reglas, precios, precio masivo, copiar quincena — igual que admin/jefe), porque el gerente es quien muchas veces decide un cambio de precios. El resto de la preliquidación (Revisión, Verificación, Dashboard, Mantenimiento) le sigue vedado. La restricción se aplica en el backend, no solo en pantalla.
 
 **Vista gerencial**:
 Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).

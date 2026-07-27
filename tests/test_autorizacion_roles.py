@@ -1,6 +1,8 @@
-# Autorización por rol: el gerente solo llega a /api/gerencial y a los GET
-# del maestro de precios; todo lo operativo le devuelve 403. La restricción
-# vive en el backend (requiere_rol / requiere_operativo), no en el front.
+# Autorización por rol: el gerente llega a /api/gerencial y opera el maestro
+# de Conceptos completo (/api/precios/conceptos...), porque es quien decide
+# los cambios de precios; el resto de lo operativo (preliquidación, export)
+# le sigue devolviendo 403. La restricción vive en el backend
+# (requiere_rol / requiere_operativo / requiere_conceptos), no en el front.
 
 from datetime import date
 from types import SimpleNamespace
@@ -60,13 +62,16 @@ def test_gerente_no_exporta_excel(db):
     assert r.status_code == 403
 
 
-def test_gerente_no_muta_el_maestro(db):
+def test_gerente_muta_el_maestro_de_conceptos(db):
+    # El gerente decide cambios de precios: opera el maestro de Conceptos
+    # completo, igual que admin/jefe. Ninguna de estas debe dar 403 — el
+    # status varía según validación de payload/existencia del recurso.
     cliente = _cliente_con_rol(db, "gerente")
-    assert cliente.post("/api/precios/conceptos", json={}).status_code == 403
-    assert cliente.patch("/api/precios/conceptos/1", json={}).status_code == 403
-    assert cliente.delete("/api/precios/conceptos/1").status_code == 403
-    assert cliente.post("/api/precios/conceptos/copiar", json={}).status_code == 403
-    assert cliente.patch("/api/precios/conceptos/precio-masivo", json={}).status_code == 403
+    assert cliente.post("/api/precios/conceptos", json={}).status_code != 403
+    assert cliente.patch("/api/precios/conceptos/1", json={}).status_code != 403
+    assert cliente.delete("/api/precios/conceptos/1").status_code != 403
+    assert cliente.post("/api/precios/conceptos/copiar", json={}).status_code != 403
+    assert cliente.patch("/api/precios/conceptos/precio-masivo", json={}).status_code != 403
 
 
 def test_gerente_ve_el_maestro_en_lectura(db):

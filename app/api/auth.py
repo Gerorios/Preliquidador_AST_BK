@@ -121,6 +121,11 @@ def requiere_rol(*roles: str):
 # Roles que operan la preliquidación (todo menos la vista gerencial de solo lectura)
 requiere_operativo = requiere_rol("admin", "jefe")
 
+# El gerente opera el maestro de Conceptos completo (alta/baja/edición/precio
+# masivo/copiar) porque es quien muchas veces decide un cambio de precios —
+# ver CONTEXT.md, sección "Rol". El resto de lo operativo le sigue vedado.
+requiere_conceptos = requiere_rol("admin", "jefe", "gerente")
+
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
