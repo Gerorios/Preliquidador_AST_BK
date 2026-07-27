@@ -18,15 +18,15 @@ El sistema son **dos repos hermanos**, bajo `.../Sistema_Preliquidacion/`:
 - **Frontend:** `npm install` + `npm run dev` → `http://localhost:5173` (Vite; proxea la API al backend).
 
 ### Producción (deploy)
-"Producción" = **colgar la app en un servicio de hosting** (pendiente al momento de escribir esto). **No implica cambiar de base de datos**: la base que usa hoy la app (`preliquidacion`, ver §3) es la misma que usará producción. Para el deploy hace falta: buildear el frontend (`npm run build` → `dist/`) y servirlo, y correr el backend (uvicorn/gunicorn) con su `.env` apuntando a las mismas bases.
+**EN PRODUCCIÓN desde 2026-07-23** en un VPS (Hostinger São Paulo) — procedimiento, layout y regla de autorización explícita de deploys en [`DEPLOY.md`](DEPLOY.md). **No hay base de prod separada**: la base que usa la app (`preliquidacion`, ver §3) es única para desarrollo y producción.
 
 ---
 
 ## 2. El código
 
 ### Backend (`backend_preliquidacion/app/`)
-- `api/` — endpoints FastAPI: `preliquidacion.py` (generar/listar/líneas/controles/export/mantenimiento), `precios.py` (maestro de conceptos + panel de precios), `export.py` (Excel), `auth.py`.
-- `services/` — lógica de negocio: `preliquidacion_service.py` (el motor: matching de conceptos, recálculo reactivo, controles), `motor_reglas.py` (cálculo de cantidad por unidad, empresa/legajo, duplicados), `consulta_externa.py` (extracción de tareas de la base de campo), `sueldos_service.py` (resolución de empleados contra sueldos), `export_service.py`.
+- `api/` — endpoints FastAPI: `preliquidacion.py` (generar/listar/líneas/controles/export/mantenimiento), `precios.py` (maestro de conceptos + panel de precios), `gerencial.py` (KPIs de la vista gerencial), `export.py` (Excel), `auth.py` (login + autorización por rol: `requiere_operativo` = admin/jefe, `requiere_conceptos` = admin/jefe/gerente; ver CONTEXT.md, "Rol").
+- `services/` — lógica de negocio: `preliquidacion_service.py` (el motor: matching de conceptos, recálculo reactivo, controles), `motor_reglas.py` (cálculo de cantidad por unidad, empresa/legajo, duplicados), `gerencial_service.py` (KPIs de mano de obra: resumen/evolución/por cliente/por grupo de tareas/desvíos por persona), `consulta_externa.py` (extracción de tareas de la base de campo), `sueldos_service.py` (resolución de empleados contra sueldos), `export_service.py`.
 - `models/models.py` — modelos ORM (tablas propias, §3).
 - `schemas/schemas.py` — DTOs Pydantic.
 - `core/` — `config.py` (settings desde `.env`), `database.py` (los 3 engines).
@@ -34,7 +34,7 @@ El sistema son **dos repos hermanos**, bajo `.../Sistema_Preliquidacion/`:
 - `migrations/` — SQL manual (ver §3). `docs/adr/` — decisiones. `CONTEXT.md` — glosario.
 
 ### Frontend (`frontend_preliquidacion/src/`)
-- `pages/` — `Login`, `Dashboard`, `Conceptos` (maestro + **Panel de precios**), `Revision`, `Verificacion`, `CategoriasOperarios` (mantenimiento), `Historial`.
+- `pages/` — `Login`, `Dashboard`, `Conceptos` (maestro + **Panel de precios**), `Revision`, `Verificacion`, `CategoriasOperarios` (mantenimiento), `Gerencial` (tablero del rol gerente), `Historial`. Navegación y rutas filtradas por rol (`ProtectedRoute` + `Layout`); el gerente entra directo a `/gerencial` y solo ve Gerencial + Conceptos.
 - `services/preliquidacion.js` — cliente axios (base `/api`), todas las llamadas al backend.
 - `components/`, `App.jsx` (rutas con `React.lazy`), `main.jsx` (QueryClient).
 
@@ -61,7 +61,7 @@ El backend usa **tres bases MySQL** (definidas en `.env`, leídas por `app/core/
 > ℹ️ Históricamente `db_propia` fue la base compartida `testing`; hoy es **`preliquidacion`**, una base dedicada del preliquidador. No hay una base de prod separada: toda migración corrida contra `preliquidacion` aplica al dato real.
 
 ### Tablas propias (las únicas que el preliquidador crea/modifica)
-- `usuarios` — login del sistema (no empleados de campo).
+- `usuarios` — login del sistema (no empleados de campo). Rol `admin`/`jefe`/`gerente`; alta manual con `scripts/crear_usuario.py` (no hay ABM en la app).
 - `concepto_liquidacion` — **maestro** de precios/reglas por quincena.
 - `preliquidacion` — cabecera por quincena (incluye `valor_hora_pulv`).
 - `preliquidacion_linea` — una línea por tarea de campo (datos + resolución + flags).
