@@ -3,16 +3,17 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia
-from app.api.auth import get_usuario_actual
+from app.api.auth import requiere_operativo
 from app.models.models import Preliquidacion
 from app.services.export_service import generar_export_excel
 
 # dependencies: la descarga exige sesión válida (el front la pide vía axios
-# con header Authorization, no con un link directo — no rompe nada).
+# con header Authorization, no con un link directo — no rompe nada) y rol
+# operativo — el gerente no exporta la preliquidación.
 router = APIRouter(
     prefix="/api/preliquidacion",
     tags=["Export"],
-    dependencies=[Depends(get_usuario_actual)],
+    dependencies=[Depends(requiere_operativo)],
 )
 
 

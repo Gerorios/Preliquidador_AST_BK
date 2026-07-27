@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
-from app.api.auth import get_usuario_actual
+from app.api.auth import get_usuario_actual, requiere_operativo
 from app.services.preliquidacion_service import PreliquidacionService
 from app.schemas.schemas import (
     PreliquidacionGenerarRequest, PreliquidacionResponse,
@@ -20,10 +20,12 @@ from app.schemas.schemas import (
 # datos de liquidación sin token. El costo por request es ~0: get_usuario_actual
 # cachea el usuario 60s y FastAPI deduplica la dependencia si el endpoint
 # también la declara como parámetro.
+# Además exige rol operativo (admin/jefe): el gerente solo accede a
+# /api/gerencial y a los GET del maestro de conceptos.
 router = APIRouter(
     prefix="/api/preliquidacion",
     tags=["Preliquidación"],
-    dependencies=[Depends(get_usuario_actual)],
+    dependencies=[Depends(requiere_operativo)],
 )
 
 
