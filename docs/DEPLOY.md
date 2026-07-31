@@ -4,9 +4,10 @@ Cómo poner el sistema en producción (hosting). Decidido en sesión de asesorí
 
 ## ⚡ ESTADO ACTUAL: EN PRODUCCIÓN (desde 2026-07-23)
 
-- **URL**: `http://179.197.237.196` (VPS Hostinger KVM 1, São Paulo — mismo datacenter que la base; ping backend↔base ~7ms).
+- **URL**: `https://preliquidacion.laasturianasrl.com.ar` (VPS Hostinger KVM 1, São Paulo — mismo datacenter que la base; ping backend↔base ~7ms). HTTP redirige a HTTPS; el acceso por IP (`http://179.197.237.196`) sigue funcionando.
+- **HTTPS**: certificado Let's Encrypt emitido el 2026-07-31 (vence 2026-10-29, certbot renueva solo vía timer systemd). `server_name` de nginx apunta al subdominio y `FRONTEND_URL` del `.env` a la URL final.
 - **Layout en el VPS**: backend en `/home/deploy/backend` (servicio systemd `preliquidacion`, uvicorn en 127.0.0.1:8000), frontend estático en `/home/deploy/frontend`, nginx adelante. `.env` de producción en `/home/deploy/backend/.env` (SECRET_KEY propio, distinto al de desarrollo).
-- **Pendiente**: subdominio de la empresa (lo gestiona un tercero) + HTTPS con certbot + actualizar `FRONTEND_URL`; confirmar backups de la base en Hostinger.
+- **Pendiente**: confirmar backups de la base en Hostinger.
 
 ### Regla de trabajo: el deploy SIEMPRE se autoriza explícitamente
 
@@ -166,7 +167,7 @@ Como el front y el back quedan bajo el **mismo dominio** (nginx sirve los dos), 
 - [x] Backend pegado a la base (mismo VPS/red São Paulo) → latencia mínima.
 - [x] `systemd Restart=always` → si el backend crashea, vuelve solo; y arranca al bootear.
 - [x] nginx adelante → sirve estáticos rápido y aísla el uvicorn.
-- [x] HTTPS con renovación automática.
+- [x] HTTPS con renovación automática (Let's Encrypt, emitido 2026-07-31).
 - [ ] **Backups de la base** confirmados con el tercero (Hostinger automated backups).
 - [ ] (Opcional) Monitoreo de uptime externo (UptimeRobot, gratis) que te avise si el sitio se cae.
 - [ ] (Opcional) `logrotate` para los logs de uvicorn si crecen.
