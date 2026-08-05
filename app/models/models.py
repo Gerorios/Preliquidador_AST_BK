@@ -32,6 +32,7 @@ class UnidadBaseConcepto(str, enum.Enum):
     TANCADAS    = "tancadas"
     UNIDADES    = "unidades"
     JORNAL_TOPE1 = "jornal_tope1"
+    JORNAL_TOPE1_MAS_EXCEDENTE = "jornal_tope1_mas_excedente"
     FIJO        = "fijo"
 
 

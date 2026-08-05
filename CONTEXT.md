@@ -43,11 +43,15 @@ _Avoid_: usarla en un común (no tiene sentido; la marca es del específico).
 Regla por la que un concepto aplica a una línea: por **tarea + cliente + finca** exactos (los específicos) más la tarea sola (los comunes). El grupo de pago no participa.
 
 **Unidad base (UM)**:
-Unidad de medida sobre la que impacta un concepto y que determina cómo se calcula su importe: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1` o `fijo`. Es la decisión central del liquidador en el maestro concepto.
+Unidad de medida sobre la que impacta un concepto y que determina cómo se calcula su importe: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1`, `jornal_tope1_mas_excedente` o `fijo`. Es la decisión central del liquidador en el maestro concepto.
 _Avoid_: unidad, tipo de cálculo
 
 **Jornal tope 1**:
 Unidad base especial calculada sobre las horas de jornal: **5 horas o más → 1 jornal** (sin importar el excedente); más de 0 y menos de 5 → medio jornal (0,5); 0 horas → 0.
+
+**Jornal tope 1 + excedente**:
+Unidad base (`jornal_tope1_mas_excedente`) idéntica a Jornal tope 1 hasta las 10 horas, pero que **por encima de 10 horas paga proporcional**: horas / 10, redondeado a 2 decimales (11 hs → 1,1 jornales; 11,25 hs → 1,13). La escalera completa: 0 → 0; menos de 5 → 0,5; de 5 a 10 → 1; más de 10 → horas/10. Es continua en el 10 (no hay salto).
+_Avoid_: confundir con Jornal tope 1 (que ignora todo excedente) o con fijo (que ni mira las horas)
 
 **Tancada**:
 Unidad de trabajo de pulverización que se registra en la línea. Se cuenta **ida y vuelta**, por lo que el dato cargado viene doblado: los controles que la valorizan lo dividen `/2` para contar la pasada real. Puede ser Unidad base de un concepto (la tarea se paga por tancada).
