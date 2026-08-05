@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -68,6 +68,8 @@ class MotorReglas:
     ) -> Decimal:
         """
         jornal_tope1: >= 5hs → 1, > 0 < 5hs → 0.5, 0 → 0
+        jornal_tope1_mas_excedente: igual a jornal_tope1 hasta 10hs;
+            > 10hs → hsjornal/10 redondeado a 2 decimales (cantidad es Numeric(10,2))
         """
         hsjornal  = hsjornal  or Decimal("0")
         hsmaquina = hsmaquina or Decimal("0")
@@ -82,6 +84,12 @@ class MotorReglas:
             if hsjornal >= Decimal("5"):  return Decimal("1")
             elif hsjornal > Decimal("0"): return Decimal("0.5")
             else:                         return Decimal("0")
+        if unidad_base == "jornal_tope1_mas_excedente":
+            if hsjornal > Decimal("10"):
+                return (hsjornal / Decimal("10")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            elif hsjornal >= Decimal("5"): return Decimal("1")
+            elif hsjornal > Decimal("0"):  return Decimal("0.5")
+            else:                          return Decimal("0")
         if unidad_base == "fijo":        return Decimal("1")
         return Decimal("0")
 

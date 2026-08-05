@@ -53,6 +53,43 @@ def test_jornal_tope1_cero_horas_paga_cero():
     assert _cant("jornal_tope1", hsjornal=0) == Decimal("0")
 
 
+# ─── Jornal tope 1 + excedente: igual a jornal_tope1 hasta 10 hs, después /10 ──
+
+def test_tope1_mas_excedente_cero_horas_paga_cero():
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=0) == Decimal("0")
+
+
+def test_tope1_mas_excedente_menos_de_cinco_paga_medio():
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=0.5) == Decimal("0.5")
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=4.99) == Decimal("0.5")
+
+
+def test_tope1_mas_excedente_cinco_exactas_paga_uno():
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=5) == Decimal("1")
+
+
+def test_tope1_mas_excedente_entre_cinco_y_diez_paga_uno():
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=8) == Decimal("1")
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=10) == Decimal("1")
+
+
+def test_tope1_mas_excedente_mas_de_diez_divide_por_diez():
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=11) == Decimal("1.1")
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=12) == Decimal("1.2")
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=15.5) == Decimal("1.55")
+
+
+def test_tope1_mas_excedente_redondea_a_dos_decimales():
+    # 11,25 hs → 1,125 → redondeo comercial a 1,13 (cantidad es Numeric(10,2))
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=11.25) == Decimal("1.13")
+    assert _cant("jornal_tope1_mas_excedente", hsjornal=11.24) == Decimal("1.12")
+
+
+def test_tope1_mas_excedente_none_se_trata_como_cero():
+    m = _motor()
+    assert m.calcular_cantidad_concepto("jornal_tope1_mas_excedente", None, None, None, None) == Decimal("0")
+
+
 def test_none_se_trata_como_cero():
     m = _motor()
     assert m.calcular_cantidad_concepto("hsjornal", None, None, None, None) == Decimal("0")

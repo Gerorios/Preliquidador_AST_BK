@@ -42,7 +42,7 @@ El sistema son **dos repos hermanos**, bajo `.../Sistema_Preliquidacion/`:
 El **código** (`concepto_liquidacion.codigo`) es el código de liquidación con el que se paga un concepto. Un mismo código aparece en muchas filas del maestro (distinta tarea/cliente/finca/quincena). Conceptos:
 - **Común** (`cliente_nombre IS NULL`): aplica a cualquier línea de esa tarea.
 - **Específico / "especial"** (con cliente/finca): aplica solo a ese cliente/finca; puede pagar distinto que el común (el control Plantas/Tancadas vs Jornal compara la rentabilidad de uno vs otro).
-- **Unidad base** (`hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1`, `fijo`): define cómo se calcula el importe.
+- **Unidad base** (`hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1`, `jornal_tope1_mas_excedente`, `fijo`): define cómo se calcula el importe.
 - **Categoría** (1–7): solo mantenimiento mecánico; el precio depende de la categoría del operario (ADR-0008).
 - **Heredado**: precio copiado de otra quincena, sin confirmar (ADR-0004).
 

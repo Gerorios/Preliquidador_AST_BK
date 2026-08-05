@@ -69,7 +69,7 @@ app/
 ### Reglas de negocio clave
 
 - **Quincena**: 1ra = días 1-15, 2da = 16-fin de mes.
-- **Unidades base** de cálculo: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1` (≥5 hs = 1 jornal, >0 y <5 = ½, 0 = 0), `fijo`.
+- **Unidades base** de cálculo: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1` (≥5 hs = 1 jornal, >0 y <5 = ½, 0 = 0), `jornal_tope1_mas_excedente` (igual a jornal_tope1 hasta 10 hs; >10 hs = hs/10 redondeado a 2 decimales, ADR-0010), `fijo`.
 - **Matching de conceptos**: por tarea + cliente + finca. Un concepto **común** (sin cliente) aplica a toda la tarea; uno **específico** aplica a ese cliente/finca y por defecto **reemplaza al común** (ADR-0009).
 - **Modelo reactivo** (ADR-0002): no existe estado "revisado"; crear/editar/borrar un concepto del maestro o cambiar una categoría recalcula automáticamente solo las líneas afectadas, preservando conceptos manuales.
 - **Snapshot** (ADR-0006): cada `concepto_adicional` congela precio y cantidad; editar el maestro no reescribe pagos ya calculados (se recalculan explícitamente).
@@ -230,5 +230,5 @@ Lista completa e interactiva en `/docs`. Resumen:
 
 - **Tabla `usuarios`**: ya existe en la BD propia; el sistema no la crea ni la modifica.
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
-- **Migraciones**: SQL manual en `migrations/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles; el resto no.
+- **Migraciones**: SQL manual en `migrations/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible.
 - **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción).
