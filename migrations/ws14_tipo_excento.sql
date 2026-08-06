@@ -9,9 +9,10 @@
 --
 -- ⚠️  NO ES DIFERIBLE — sin este valor en el ENUM real, guardar un concepto
 -- con tipo EXCENTO falla con "Data truncated for column 'tipo'". Aplicar
--- ANTES o exactamente junto con el deploy de esta rama. Es un MODIFY que
--- solo AGREGA un valor al final: no reescribe la tabla ni toca los datos
--- existentes.
+-- ANTES o exactamente junto con el deploy de esta rama. EXCENTO va AL FINAL
+-- de la lista del ENUM a propósito: agregar al final es un cambio instantáneo
+-- de metadata (sin rebuild de tabla ni lock); insertarlo en el medio obligaría
+-- a MySQL a reconstruir la tabla. El orden del ENUM es invisible para la app.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE concepto_liquidacion
@@ -20,8 +21,8 @@ ALTER TABLE concepto_liquidacion
     'NO_REMUNERATIVO',
     'JORNAL',
     'BONO_BOLSON',
-    'EXCENTO',
-    'OTRO'
+    'OTRO',
+    'EXCENTO'
   ) NOT NULL DEFAULT 'OTRO';
 
 ALTER TABLE concepto_adicional
@@ -30,6 +31,6 @@ ALTER TABLE concepto_adicional
     'NO_REMUNERATIVO',
     'JORNAL',
     'BONO_BOLSON',
-    'EXCENTO',
-    'OTRO'
+    'OTRO',
+    'EXCENTO'
   ) DEFAULT 'OTRO';
