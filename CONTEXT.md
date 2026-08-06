@@ -61,7 +61,8 @@ _Avoid_: confundir la tancada (el hecho medible) con el grupo de pago TANCADA (a
 Costo de una hora de jornal de pulverización que el liquidador carga **por quincena**. Sirve para valorizar "a jornal" el trabajo de pulverización y compararlo contra lo que costó pagarlo "a tancada" (control Tancadas vs Jornal). Sobre este valor se aplica un recargo fijo de pulverización (×1,3) antes de comparar.
 
 **Tipo**:
-Clasificación/descripción del concepto (REMUNERATIVO, NO_REMUNERATIVO, JORNAL, BONO_BOLSON, OTRO). Etiqueta el concepto; no cambia el cálculo.
+Clasificación/descripción del concepto (REMUNERATIVO, NO_REMUNERATIVO, JORNAL, BONO_BOLSON, EXCENTO, OTRO). Etiqueta puramente informativa: ningún cálculo del sistema la distingue; la aprovechan el contador y los reportes. EXCENTO marca importes exentos de aportes/cargas sociales.
+_Avoid_: "exento" (la grafía correcta sería esa, pero se eligió EXCENTO deliberadamente — matchear ese valor exacto en base/reportes).
 
 **Línea incompleta**:
 Línea que no tiene ningún concepto aplicable con **código y precio > 0** a la vez. Es la única condición que el liquidador debe resolver; se muestra en la solapa "Sin concepto". Un concepto con código pero sin precio no completa la línea (no debe pagar 0 en silencio).
