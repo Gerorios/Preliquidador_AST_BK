@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.models.models import TipoConcepto, UnidadBaseConcepto
 
 
@@ -133,7 +133,7 @@ class ConceptoUnifRequest(BaseModel):
     unidad_base: UnidadBaseConcepto = UnidadBaseConcepto.FIJO
     precio: Optional[Decimal] = None
     tipo: TipoConcepto = TipoConcepto.OTRO
-    categoria: Optional[int] = None
+    categoria: Optional[int] = Field(default=None, ge=1, le=12)
     # None = no lo mandaron: crear_concepto decide el default (True si es
     # específico, False si es común). Si viene explícito (True/False) se
     # respeta tal cual.
@@ -145,7 +145,7 @@ class ConceptoUnifUpdateRequest(BaseModel):
     unidad_base: Optional[UnidadBaseConcepto] = None
     precio: Optional[Decimal] = None
     tipo: Optional[TipoConcepto] = None
-    categoria: Optional[int] = None
+    categoria: Optional[int] = Field(default=None, ge=1, le=12)
     reemplaza_comun: Optional[bool] = None
 
 
@@ -187,7 +187,7 @@ class ConceptoPrecioMasivoResponse(BaseModel):
 
 class CategoriaOperarioRequest(BaseModel):
     cuil: str
-    categoria: Optional[int] = None   # None = borra la asignación
+    categoria: Optional[int] = Field(default=None, ge=1, le=12)   # None = borra la asignación
 
 
 class OperarioMantenimientoResponse(BaseModel):

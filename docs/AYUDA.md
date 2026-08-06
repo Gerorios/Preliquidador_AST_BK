@@ -327,7 +327,7 @@ Sirve para asignarle a cada operario de mantenimiento su **categoría** en una q
 1. Elegí la quincena.
 2. (Opcional) Filtrá con **"Buscar por nombre, CUIL o legajo..."**.
 3. En la fila del operario, abrí el desplegable de la columna **CATEGORÍA** y elegí de
-   **Categoría 1** a **Categoría 7** (o **"— Sin categoría —"** para dejarlo sin asignar).
+   **Categoría 1** a **Categoría 12** (o **"— Sin categoría —"** para dejarlo sin asignar).
 4. **Se guarda solo al elegir** (no hay botón por fila). Aparece **"Categoría actualizada"**.
 
 Las filas de operarios **sin categoría** quedan resaltadas, para que se vean de un vistazo.
