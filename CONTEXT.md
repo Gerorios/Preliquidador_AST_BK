@@ -30,17 +30,23 @@ Regla del maestro (`concepto_liquidacion`) que el liquidador carga por quincena 
 _Avoid_: precio maestro, precio común (nombres del modelo viejo, eliminado)
 
 **Concepto común**:
-Concepto sin cliente (`cliente_nombre IS NULL`): aplica a cualquier línea con esa tarea, sin importar cliente/finca.
+Concepto sin cliente ni supervisor cargados: aplica a cualquier línea con esa tarea, sin importar cliente/finca/supervisor.
+
+**Concepto por cliente**:
+Concepto con cliente cargado y **sin finca**: aplica a las líneas de esa tarea y ese cliente en **cualquier finca**. Suma con los demás caminos; por defecto **Reemplaza al común** (ver Reemplaza al común).
 
 **Concepto específico**:
-Concepto con cliente (± finca) cargado: aplica solo a las líneas de ese cliente (y esa finca si está cargada). Por defecto un específico **Reemplaza al común** (paga solo lo específico); se puede destildar para que sume común + específico (ver Reemplaza al común).
+Concepto con cliente **y finca** cargados: aplica solo a las líneas de ese cliente y esa finca. Por defecto un específico **Reemplaza al común** (paga solo lo no-común); se puede destildar para que sume común + específico (ver Reemplaza al común).
+
+**Concepto por supervisor**:
+Concepto con supervisor cargado: aplica a las líneas de esa tarea cuyo supervisor coincida, sin importar cliente/finca. Es excluyente con el cliente (un concepto lleva cliente ± finca **o** supervisor, nunca ambos). Suma con los demás caminos; por defecto **Reemplaza al común**.
 
 **Reemplaza al común**:
-Marca (`reemplaza_comun`, ADR-0009) del Concepto **específico**. Cuando una línea matchea un específico marcado así, **no se le aplican los conceptos comunes de esa tarea** (paga solo lo específico), en vez de sumar común + específico. Existe porque casi siempre el específico es el precio *total* de esa finca (reemplaza), no un plus que se suma. **Al crear un específico nace prendida** (opt-out): el liquidador la destilda solo en el caso raro de "común base + específico plus" que sí debe sumar. Los específicos ya existentes conservan su valor (el cambio de default no los toca). Los comunes van siempre en False (no aplica).
-_Avoid_: usarla en un común (no tiene sentido; la marca es del específico).
+Marca (`reemplaza_comun`, ADR-0009/0011) de cualquier Concepto **no común** (específico, por cliente o por supervisor). Cuando una línea matchea alguna regla no-común marcada así, **no se le aplican los conceptos comunes de esa tarea** — pero los demás caminos no-comunes siguen sumando entre sí: el tilde solo apaga comunes, nunca apaga a otro no-común. Existe porque casi siempre la regla no-común es el precio *total* (reemplaza), no un plus que se suma. **Al crear un concepto no común nace prendida** (opt-out): el liquidador la destilda solo en el caso raro de "común base + plus" que sí debe sumar. Los conceptos ya existentes conservan su valor (los cambios de default no los tocan). Los comunes van siempre en False (no aplica).
+_Avoid_: usarla en un común (no tiene sentido; la marca es de los no-comunes).
 
 **Matching**:
-Regla por la que un concepto aplica a una línea: por **tarea + cliente + finca** exactos (los específicos) más la tarea sola (los comunes). El grupo de pago no participa.
+Regla por la que un concepto aplica a una línea. Cuatro caminos que **suman entre sí**: la tarea sola (comunes), tarea + cliente en cualquier finca (por cliente), tarea + cliente + finca exactos (específicos) y tarea + supervisor (por supervisor). El grupo de pago no participa.
 
 **Unidad base (UM)**:
 Unidad de medida sobre la que impacta un concepto y que determina cómo se calcula su importe: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1`, `jornal_tope1_mas_excedente` o `fijo`. Es la decisión central del liquidador en el maestro concepto.

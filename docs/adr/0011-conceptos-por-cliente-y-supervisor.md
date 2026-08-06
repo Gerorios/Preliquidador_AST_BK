@@ -1,0 +1,18 @@
+# Conceptos por cliente y por supervisor: cuatro caminos de matching que suman
+
+El maestro de conceptos tenía dos caminos: el **común** (tarea sola, aplica a todas las líneas de esa tarea) y el **específico** (tarea + cliente + finca exactos). En la práctica aparecieron dos necesidades reales que ninguno cubría bien: un precio acordado con un cliente **para todas sus fincas** (hoy obligaba a cargar un específico por finca, repetido) y un plus que depende de **quién supervisó** el trabajo (la cuadrilla de un supervisor cobra distinto la misma tarea, sin importar cliente ni finca). Se agregan dos caminos nuevos: **por cliente** (cliente cargado, finca vacía → aplica a esa tarea + cliente en cualquier finca) y **por supervisor** (columna nueva `supervisor_nombre` → aplica a las líneas de esa tarea cuyo supervisor coincida, comparación normalizada como cliente/finca). Los cuatro caminos **suman entre sí** (filosofía histórica, ADR-0009 intacta); la marca `reemplaza_comun` queda disponible en los tres caminos no-comunes y, cuando cualquiera de ellos la tiene, descarta **solo** los comunes — los no-comunes nunca se apagan entre sí. Un concepto lleva cliente (± finca) **o** supervisor, nunca ambos (se valida al crear/editar). El filtro por categoría (ADR-0008) aplica igual en todos los caminos.
+
+## Considered Options
+
+- **Cuatro caminos que suman, tilde solo apaga comunes (elegida).** Extiende la semántica existente sin cambiarla: quien ya usa comunes/específicos no ve diferencia (en la base real no existía ningún concepto con cliente y sin finca, así que el camino "por cliente" no reinterpreta ningún dato viejo). El supervisor es una columna nueva y excluyente con el cliente, así que ninguna regla queda ambigua.
+- **Supervisor sin tarea (rechazada en grilling).** Un plus "de supervisor" que aplicara a todas las tareas de su cuadrilla parecía más simple de cargar, pero rompe la unidad del maestro (todo concepto cuelga de una tarea, que define código y unidad base) y pagaría tareas que el acuerdo real no cubre. Si un supervisor cobra plus en varias tareas, se cargan varias reglas.
+- **Jerarquía "el más específico gana" (rechazada).** Que específico > por cliente > por supervisor > común, aplicando solo el nivel más fino, contradice la filosofía histórica de que los conceptos **suman** (un plus por cliente y un plus por supervisor legítimamente se cobran juntos) y obligaría a duplicar precios en cada nivel para no perder los de arriba. El caso "esto reemplaza" ya está resuelto por la marca `reemplaza_comun`, que es opt-out y explícita.
+
+## Consecuencias
+
+- **Comportamiento existente intacto.** Comunes y específicos matchean igual que antes; el cambio es aditivo y la migración (columna nueva nullable + índice único ampliado) no reinterpreta filas existentes.
+- El default de `reemplaza_comun` al crear pasa de "True si es específico" a "True si **no es común**" (cualquier camino nuevo también nace con la marca prendida, coherente con ADR-0009).
+- La exclusión cliente-XOR-supervisor se valida en el API (422): evita reglas con doble condición cuyo alcance nadie podría razonar.
+- El índice único `uq_concepto_unif` incorpora `supervisor_nombre`: dos supervisores distintos pueden tener cada uno su regla para la misma tarea/código sin pisarse.
+- Es un cambio **sensible al pago**: cubierto con tests (por cliente en varias fincas, por supervisor solo en su cuadrilla, los cuatro niveles sumando, el tilde apagando solo comunes, copia entre quincenas, validación XOR, filtro por categoría en el nivel supervisor).
+- La migración `ws15_conceptos_cliente_supervisor.sql` **no es diferible**: el ORM declara la columna nueva.
