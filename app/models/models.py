@@ -19,6 +19,7 @@ class TipoConcepto(str, enum.Enum):
     NO_REMUNERATIVO = "NO_REMUNERATIVO"
     JORNAL = "JORNAL"
     BONO_BOLSON = "BONO_BOLSON"
+    EXCENTO = "EXCENTO"
     OTRO = "OTRO"
 
 class RolUsuario(str, enum.Enum):
