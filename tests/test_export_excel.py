@@ -51,7 +51,7 @@ def _hoja(buffer):
 def test_header_con_columnas_de_linea():
     assert COLUMNAS == [
         "Empresa", "planilla", "fecha_tarea", "nombre_cliente", "nombre_finca",
-        "nombre_tarea", "nombre_tractor", "legajo", "nombre_empleado", "supervisor",
+        "nombre_tarea", "nombre_tractor", "legajo", "nombre_empleado", "cuil", "supervisor",
         "hsjornal", "hsmaquina", "unidades", "tancadas",
         "codigo", "cantidad", "precio", "importe", "grupo_pago", "duplicado",
     ]
@@ -61,7 +61,7 @@ def test_fila_emite_supervisor_y_cantidades(db):
     preliq = _preliq(db)
     linea = _linea(
         db, preliq,
-        nombre_empleado="PEREZ JUAN", nombre_supervisor="GOMEZ ANA",
+        nombre_empleado="PEREZ JUAN", cuit="20-11222333-4", nombre_supervisor="GOMEZ ANA",
         hsjornal=Decimal("7.5"), hsmaquina=Decimal("2"),
         unidades=Decimal("300"), tancadas=Decimal("4"),
     )
@@ -77,6 +77,7 @@ def test_fila_emite_supervisor_y_cantidades(db):
     assert list(header) == COLUMNAS
 
     valores = dict(zip(header, fila))
+    assert valores["cuil"] == "20-11222333-4"
     assert valores["supervisor"] == "GOMEZ ANA"
     assert valores["hsjornal"] == 7.5
     assert valores["hsmaquina"] == 2

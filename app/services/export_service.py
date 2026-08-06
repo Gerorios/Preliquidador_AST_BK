@@ -18,7 +18,7 @@ from app.models.models import PreliquidacionLinea
 
 COLUMNAS = [
     "Empresa", "planilla", "fecha_tarea", "nombre_cliente", "nombre_finca",
-    "nombre_tarea", "nombre_tractor", "legajo", "nombre_empleado", "supervisor",
+    "nombre_tarea", "nombre_tractor", "legajo", "nombre_empleado", "cuil", "supervisor",
     "hsjornal", "hsmaquina", "unidades", "tancadas",
     "codigo", "cantidad", "precio", "importe", "grupo_pago", "duplicado",
 ]
@@ -83,6 +83,7 @@ def generar_export_excel(db: Session, preliq_id: int) -> io.BytesIO:
             linea.nombre_tractor,
             linea.legajo_asignado,
             linea.nombre_empleado,
+            linea.cuit,
             linea.nombre_supervisor,
             _num(linea.hsjornal),
             _num(linea.hsmaquina),
