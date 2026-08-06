@@ -196,28 +196,22 @@ class PreliquidacionService:
         """
         Cache del maestro unificado para la quincena dada.
 
-        Matching solo por tarea + cliente + finca — sin grupo_pago.
-        - comunes:    clave = tarea.upper()
-        - específicos: clave = (tarea.upper(), cliente.upper(), finca.upper())
+        Cuatro caminos de matching (ADR-0011) — sin grupo_pago:
+        - comunes:        clave = tarea.upper()
+        - por_cliente:    clave = (tarea.upper(), cliente.upper())  [cliente sin finca]
+        - especificos:    clave = (tarea.upper(), cliente.upper(), finca.upper())
+        - por_supervisor: clave = (tarea.upper(), supervisor.upper())
 
-        El grupo_pago_aplicado de la línea viene del catálogo externo,
-        no del maestro de conceptos.
+        Una fila con supervisor va SOLO a por_supervisor (excluyente con
+        cliente/finca). El grupo_pago_aplicado de la línea viene del catálogo
+        externo, no del maestro de conceptos.
         """
         conceptos = self.db.query(ConceptoLiquidacion).filter(
             ConceptoLiquidacion.quincena == quincena
         ).all()
 
-        cache_comunes = {}      # tarea -> [ConceptoLiquidacion]
-        cache_especificos = {}  # (tarea, cliente, finca) -> [ConceptoLiquidacion]
-
-        for c in conceptos:
-            t = c.tarea_nombre.strip().upper()
-            if c.cliente_nombre is None:
-                cache_comunes.setdefault(t, []).append(c)
-            else:
-                cl = c.cliente_nombre.strip().upper()
-                fn = (c.finca_nombre or "").strip().upper()
-                cache_especificos.setdefault((t, cl, fn), []).append(c)
+        cache_comunes, cache_por_cliente, cache_especificos, cache_por_supervisor = \
+            self._clasificar_conceptos(conceptos)
 
         tareas = self.externa.obtener_tareas()
         cache_grupo_tarea = {
@@ -231,11 +225,45 @@ class PreliquidacionService:
 
         return {
             "comunes": cache_comunes,
+            "por_cliente": cache_por_cliente,
             "especificos": cache_especificos,
+            "por_supervisor": cache_por_supervisor,
             "grupo_tarea": cache_grupo_tarea,
             "grupo_pago_catalogo": cache_grupo_pago_catalogo,
             "categoria_por_cuil": self._categoria_por_cuil(quincena),
         }
+
+    @staticmethod
+    def _clasificar_conceptos(conceptos: list) -> tuple:
+        """
+        Clasifica filas del maestro en los 4 caminos de matching (ADR-0011).
+        Devuelve (comunes, por_cliente, especificos, por_supervisor):
+        - comunes:        tarea -> [ConceptoLiquidacion]           (sin cliente ni supervisor)
+        - por_cliente:    (tarea, cliente) -> [...]                (cliente sin finca)
+        - especificos:    (tarea, cliente, finca) -> [...]
+        - por_supervisor: (tarea, supervisor) -> [...]             (una fila con supervisor
+                          va SOLO acá, aunque tuviera cliente cargado — no debería, el
+                          API valida cliente XOR supervisor)
+        Compartido entre el path de generación (_construir_cache) y el de
+        recálculo reactivo (_cache_conceptos_quincena) para que ambos queden
+        consistentes.
+        """
+        comunes, por_cliente, especificos, por_supervisor = {}, {}, {}, {}
+        for c in conceptos:
+            t = c.tarea_nombre.strip().upper()
+            if c.supervisor_nombre is not None and c.supervisor_nombre.strip():
+                sup = c.supervisor_nombre.strip().upper()
+                por_supervisor.setdefault((t, sup), []).append(c)
+            elif c.cliente_nombre is None:
+                comunes.setdefault(t, []).append(c)
+            else:
+                cl = c.cliente_nombre.strip().upper()
+                fn = (c.finca_nombre or "").strip().upper()
+                if fn:
+                    especificos.setdefault((t, cl, fn), []).append(c)
+                else:
+                    por_cliente.setdefault((t, cl), []).append(c)
+        return comunes, por_cliente, especificos, por_supervisor
 
     def _categoria_por_cuil(self, quincena: date) -> dict:
         """Mapa {cuil -> categoria} de categoria_operario para la quincena
@@ -253,40 +281,47 @@ class PreliquidacionService:
         categoria_persona = categoria_por_cuil.get((cuil or "").strip())
         return [c for c in conceptos if c.categoria is None or c.categoria == categoria_persona]
 
-    def _aplicar_reemplazo_comun(self, esp: list, com: list) -> list:
+    def _aplicar_reemplazo_comun(self, no_comunes: list, com: list) -> list:
         """
-        WS11: si alguno de los específicos aplicables (esp) tiene
-        reemplaza_comun=True, se descartan los comunes (com) — la línea paga
-        solo lo específico. Si ninguno lo tiene, comportamiento actual
-        (esp + com, siempre suman). Compartido entre el path de generación
-        (_buscar_conceptos_cache) y el de recálculo (_aplicar_conceptos_a_lineas).
+        WS11 / ADR-0011: `no_comunes` es la lista unificada de reglas NO
+        comunes que matchean la línea (específicos + por cliente + por
+        supervisor). Si CUALQUIERA de ellas tiene reemplaza_comun=True, se
+        descartan SOLO los comunes (com) — los niveles no-comunes nunca se
+        apagan entre sí. Si ninguna lo tiene, todos suman (no_comunes + com).
+        Compartido entre el path de generación (_buscar_conceptos_cache) y el
+        de recálculo (_aplicar_conceptos_a_lineas).
         """
-        if any(c.reemplaza_comun for c in esp):
-            return esp
-        return esp + com
+        if any(c.reemplaza_comun for c in no_comunes):
+            return no_comunes
+        return no_comunes + com
 
     def _buscar_conceptos_cache(
         self, tarea: str, cliente: str, finca: str, cache: dict, cuil: str = None,
+        supervisor: str = None,
     ) -> list:
         """
-        Devuelve todas las reglas que matchean esta línea.
-        Específicos + comunes suman, salvo que algún específico tenga el
-        tilde reemplaza_comun (WS11): en ese caso se descartan los comunes.
-        Matching: tarea + cliente + finca exactos (sin grupo_pago).
-        Además, filtra por categoría (ADR-0008): reglas con categoria=NULL
-        pasan siempre, reglas con categoria=X solo si el cuil dado tiene esa
-        categoría asignada en la quincena.
+        Devuelve todas las reglas que matchean esta línea, juntando los 4
+        caminos (ADR-0011): específicos (tarea+cliente+finca), por cliente
+        (tarea+cliente, cualquier finca), por supervisor (tarea+supervisor)
+        y comunes (tarea sola). Los 4 SUMAN, salvo que alguna regla no-común
+        tenga el tilde reemplaza_comun: en ese caso se descartan SOLO los
+        comunes. Además, filtra por categoría (ADR-0008) en todos los niveles:
+        reglas con categoria=NULL pasan siempre, reglas con categoria=X solo
+        si el cuil dado tiene esa categoría asignada en la quincena.
         """
-        t  = tarea.strip().upper()
-        cl = (cliente or "").strip().upper()
-        fn = (finca or "").strip().upper()
+        t   = tarea.strip().upper()
+        cl  = (cliente or "").strip().upper()
+        fn  = (finca or "").strip().upper()
+        sup = (supervisor or "").strip().upper()
 
-        esp = cache["especificos"].get((t, cl, fn), [])
-        com = cache["comunes"].get(t, [])
+        esp     = cache["especificos"].get((t, cl, fn), [])
+        por_cli = cache["por_cliente"].get((t, cl), []) if cl else []
+        por_sup = cache["por_supervisor"].get((t, sup), []) if sup else []
+        com     = cache["comunes"].get(t, [])
         categoria_por_cuil = cache.get("categoria_por_cuil", {})
-        esp = self._filtrar_por_categoria(esp, cuil, categoria_por_cuil)
-        com = self._filtrar_por_categoria(com, cuil, categoria_por_cuil)
-        return self._aplicar_reemplazo_comun(esp, com)
+        no_comunes = self._filtrar_por_categoria(esp + por_cli + por_sup, cuil, categoria_por_cuil)
+        com        = self._filtrar_por_categoria(com, cuil, categoria_por_cuil)
+        return self._aplicar_reemplazo_comun(no_comunes, com)
 
     def _procesar_fila_con_cache(
         self,
@@ -316,10 +351,14 @@ class PreliquidacionService:
         # grupo_pago es informativo (control de PLANTA); no participa del cálculo de importe
         grupo_pago = cache["grupo_pago_catalogo"].get(nombre_tarea.strip().upper(), "")
 
-        # Buscar reglas del maestro: específicos + comunes suman, filtradas
+        # Buscar reglas del maestro: los 4 caminos suman (ADR-0011), filtradas
         # por categoría de la persona (ADR-0008)
         cuil = str(fila.get("cuit", "") or "")
-        reglas = self._buscar_conceptos_cache(nombre_tarea, nombre_cliente, nombre_finca, cache, cuil=cuil)
+        nombre_supervisor = fila.get("nombre_supervisor", "") or ""
+        reglas = self._buscar_conceptos_cache(
+            nombre_tarea, nombre_cliente, nombre_finca, cache, cuil=cuil,
+            supervisor=nombre_supervisor,
+        )
         reglas_con_codigo = [r for r in reglas if r.codigo is not None]
         # Completa = tiene código Y precio (lo único que realmente genera un
         # ConceptoAdicional); un código sin precio no cuenta como completa.
@@ -428,23 +467,14 @@ class PreliquidacionService:
     # ─── Aplicar conceptos ────────────────────────────────────────────────────
 
     def _cache_conceptos_quincena(self, quincena):
-        """Cache comunes/específicos del maestro vigente para una quincena (solo con código)."""
+        """Cache de los 4 caminos del maestro vigente para una quincena (solo
+        con código). Devuelve (comunes, por_cliente, especificos, por_supervisor)
+        con la misma clasificación que _construir_cache (ADR-0011)."""
         conceptos = self.db.query(ConceptoLiquidacion).filter(
             ConceptoLiquidacion.quincena == quincena,
             ConceptoLiquidacion.codigo.isnot(None),
         ).all()
-
-        cache_comunes = {}
-        cache_especificos = {}
-        for c in conceptos:
-            t = c.tarea_nombre.strip().upper()
-            if c.cliente_nombre is None:
-                cache_comunes.setdefault(t, []).append(c)
-            else:
-                cl = c.cliente_nombre.strip().upper()
-                fn = (c.finca_nombre or "").strip().upper()
-                cache_especificos.setdefault((t, cl, fn), []).append(c)
-        return cache_comunes, cache_especificos
+        return self._clasificar_conceptos(conceptos)
 
     def _aplicar_conceptos_a_lineas(self, quincena, lineas: list) -> dict:
         """
@@ -475,22 +505,26 @@ class PreliquidacionService:
             ConceptoAdicional.ingresado_por.is_(None),
         ).delete(synchronize_session=False)
 
-        cache_comunes, cache_especificos = self._cache_conceptos_quincena(quincena)
+        cache_comunes, cache_por_cliente, cache_especificos, cache_por_supervisor = \
+            self._cache_conceptos_quincena(quincena)
         categoria_por_cuil = self._categoria_por_cuil(quincena)
 
         actualizadas = sin_reglas = 0
         conceptos_nuevos = []
 
         for linea in lineas:
-            t  = (linea.nombre_tarea   or "").strip().upper()
-            cl = (linea.nombre_cliente or "").strip().upper()
-            fn = (linea.nombre_finca   or "").strip().upper()
+            t   = (linea.nombre_tarea       or "").strip().upper()
+            cl  = (linea.nombre_cliente     or "").strip().upper()
+            fn  = (linea.nombre_finca       or "").strip().upper()
+            sup = (linea.nombre_supervisor  or "").strip().upper()
 
-            esp    = cache_especificos.get((t, cl, fn), [])
-            com    = cache_comunes.get(t, [])
-            esp    = self._filtrar_por_categoria(esp, linea.cuit, categoria_por_cuil)
-            com    = self._filtrar_por_categoria(com, linea.cuit, categoria_por_cuil)
-            reglas = self._aplicar_reemplazo_comun(esp, com)
+            esp     = cache_especificos.get((t, cl, fn), [])
+            por_cli = cache_por_cliente.get((t, cl), []) if cl else []
+            por_sup = cache_por_supervisor.get((t, sup), []) if sup else []
+            com     = cache_comunes.get(t, [])
+            no_comunes = self._filtrar_por_categoria(esp + por_cli + por_sup, linea.cuit, categoria_por_cuil)
+            com        = self._filtrar_por_categoria(com, linea.cuit, categoria_por_cuil)
+            reglas = self._aplicar_reemplazo_comun(no_comunes, com)
 
             # nuevos ya viene filtrado por precio (ver _generar_conceptos_automaticos):
             # una línea solo está completa si al menos una regla generó un concepto real.
@@ -540,14 +574,21 @@ class PreliquidacionService:
 
     # ─── Impacto reactivo del maestro (ADR-0002) ─────────────────────────────
 
-    def _lineas_por_match(self, preliq_id, tarea_nombre, cliente_nombre=None, finca_nombre=None) -> list:
-        """Líneas de una preliquidación que matchean tarea (+cliente+finca si se pasan)."""
+    def _lineas_por_match(self, preliq_id, tarea_nombre, cliente_nombre=None,
+                          finca_nombre=None, supervisor_nombre=None) -> list:
+        """Líneas de una preliquidación que matchean el alcance de una regla
+        (ADR-0011): tarea sola (común), tarea+supervisor (por supervisor),
+        tarea+cliente en cualquier finca (por cliente, finca_nombre vacío) o
+        tarea+cliente+finca (específico)."""
         t = (tarea_nombre or "").strip().upper()
         lineas = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.preliquidacion_id == preliq_id,
             func.upper(func.trim(PreliquidacionLinea.nombre_tarea)) == t,
         ).options(joinedload(PreliquidacionLinea.conceptos)).all()
 
+        if supervisor_nombre:
+            sup = supervisor_nombre.strip().upper()
+            lineas = [l for l in lineas if (l.nombre_supervisor or "").strip().upper() == sup]
         if cliente_nombre:
             cl = cliente_nombre.strip().upper()
             lineas = [l for l in lineas if (l.nombre_cliente or "").strip().upper() == cl]
@@ -560,9 +601,9 @@ class PreliquidacionService:
         """
         Impacto reactivo de un concepto creado/editado/borrado: recalcula las
         líneas que matchean su estado actual y, si sus claves de match
-        (tarea/cliente/finca) cambiaron, también las que matcheaba antes
-        (unión) — evita ConceptoAdicional fantasma en líneas que dejaron de
-        matchear.
+        (tarea/cliente/finca/supervisor) cambiaron, también las que matcheaba
+        antes (unión) — evita ConceptoAdicional fantasma en líneas que dejaron
+        de matchear.
         """
         preliq = self.db.query(Preliquidacion).filter(
             Preliquidacion.quincena == quincena
@@ -577,6 +618,7 @@ class PreliquidacionService:
                 clave.get("tarea_nombre"),
                 clave.get("cliente_nombre"),
                 clave.get("finca_nombre"),
+                clave.get("supervisor_nombre"),
             ):
                 vistas[linea.id] = linea
 

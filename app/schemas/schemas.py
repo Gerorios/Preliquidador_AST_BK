@@ -114,10 +114,14 @@ class ConceptoUnifResponse(BaseModel):
     # ADR-0008: categoría (1-7) de Mantenimiento mecánico. None = concepto
     # común (comportamiento actual, sin filtro por categoría).
     categoria: Optional[int] = None
-    # WS11: tilde opcional, solo tiene sentido en un concepto ESPECÍFICO. Si
-    # True, descarta los comunes de la tarea para las líneas que matcheen
-    # este específico (paga solo lo específico). Default False = comportamiento
-    # actual (comunes y específicos suman).
+    # ADR-0011: camino "por supervisor" — aplica a las líneas de esa tarea
+    # cuyo nombre_supervisor coincida. Excluyente con cliente_nombre.
+    supervisor_nombre: Optional[str] = None
+    # WS11 / ADR-0011: tilde opcional de cualquier concepto NO común
+    # (específico, por cliente o por supervisor). Si True, descarta SOLO los
+    # comunes de la tarea para las líneas que matcheen esta regla (los
+    # niveles no-comunes nunca se apagan entre sí). Default False =
+    # comportamiento histórico (todos suman).
     reemplaza_comun: bool = False
 
     class Config:
@@ -127,16 +131,18 @@ class ConceptoUnifResponse(BaseModel):
 class ConceptoUnifRequest(BaseModel):
     quincena: date
     tarea_nombre: str
-    cliente_nombre: Optional[str] = None   # NULL = común
-    finca_nombre: Optional[str] = None
+    cliente_nombre: Optional[str] = None   # NULL = común (o por supervisor)
+    finca_nombre: Optional[str] = None     # NULL con cliente = por cliente (cualquier finca)
+    # ADR-0011: excluyente con cliente_nombre (422 si vienen ambos).
+    supervisor_nombre: Optional[str] = None
     codigo: Optional[int] = None
     unidad_base: UnidadBaseConcepto = UnidadBaseConcepto.FIJO
     precio: Optional[Decimal] = None
     tipo: TipoConcepto = TipoConcepto.OTRO
     categoria: Optional[int] = Field(default=None, ge=1, le=12)
-    # None = no lo mandaron: crear_concepto decide el default (True si es
-    # específico, False si es común). Si viene explícito (True/False) se
-    # respeta tal cual.
+    # None = no lo mandaron: crear_concepto decide el default (True si NO es
+    # común — específico, por cliente o por supervisor —, False si es común).
+    # Si viene explícito (True/False) se respeta tal cual.
     reemplaza_comun: Optional[bool] = None
 
 
@@ -146,6 +152,7 @@ class ConceptoUnifUpdateRequest(BaseModel):
     precio: Optional[Decimal] = None
     tipo: Optional[TipoConcepto] = None
     categoria: Optional[int] = Field(default=None, ge=1, le=12)
+    supervisor_nombre: Optional[str] = None
     reemplaza_comun: Optional[bool] = None
 
 
@@ -154,14 +161,16 @@ class ConceptoPorCodigoRequest(BaseModel):
 
 
 class ConceptoPanelResponse(BaseModel):
-    """Fila del panel de precios: conceptos comunes y específicos de una
-    quincena, planos, con el precio de la quincena anterior para comparar."""
+    """Fila del panel de precios: todos los conceptos de una quincena (los 4
+    caminos, ADR-0011), planos, con el precio de la quincena anterior para
+    comparar."""
     id: int
     tarea_nombre: str
     codigo: Optional[int] = None
     cliente_nombre: Optional[str] = None
     finca_nombre: Optional[str] = None
     categoria: Optional[int] = None
+    supervisor_nombre: Optional[str] = None
     unidad_base: UnidadBaseConcepto
     tipo: TipoConcepto
     precio: Optional[Decimal] = None

@@ -57,12 +57,15 @@ class Usuario(Base):
 #
 # Reemplaza precio_maestro + precio_comun + concepto_liquidacion anterior.
 #
-# TIPO COMÚN:     cliente_nombre IS NULL  → aplica a todas las líneas con esa tarea
-# TIPO ESPECÍFICO: cliente_nombre NOT NULL → aplica solo a cliente+finca exactos
+# CAMINOS DE MATCHING (ADR-0011, los 4 SUMAN entre sí):
+# COMÚN:         cliente y supervisor NULL      → todas las líneas con esa tarea
+# POR CLIENTE:   cliente NOT NULL, finca NULL   → esa tarea+cliente en cualquier finca
+# ESPECÍFICO:    cliente y finca NOT NULL       → tarea+cliente+finca exactos
+# POR SUPERVISOR: supervisor_nombre NOT NULL    → esa tarea con ese nombre_supervisor
 #
-# Matching: tarea_nombre + cliente_nombre + finca_nombre + quincena
+# Un concepto tiene cliente(±finca) O supervisor, nunca ambos (se valida en el API).
+# Matching: tarea_nombre (+cliente/finca o supervisor) + quincena
 # El campo grupo_pago fue eliminado — la unidad_base define el cálculo de cada regla.
-# Ambos tipos siempre SUMAN (nunca se reemplazan).
 
 class ConceptoLiquidacion(Base):
     __tablename__ = "concepto_liquidacion"
@@ -70,8 +73,12 @@ class ConceptoLiquidacion(Base):
     id             = Column(Integer, primary_key=True, autoincrement=True)
     quincena       = Column(Date, nullable=False)
     tarea_nombre   = Column(String(200), nullable=False)
-    cliente_nombre = Column(String(150), nullable=True)   # NULL = común
-    finca_nombre   = Column(String(150), nullable=True)   # NULL solo si cliente también es NULL
+    cliente_nombre = Column(String(150), nullable=True)   # NULL = común (o por supervisor)
+    finca_nombre   = Column(String(150), nullable=True)   # NULL con cliente cargado = por cliente (cualquier finca)
+    # ADR-0011: camino "por supervisor" — el concepto aplica a las líneas de
+    # esa tarea cuyo nombre_supervisor coincida (normalizado, como cliente/finca).
+    # Excluyente con cliente_nombre: un concepto tiene cliente(±finca) O supervisor.
+    supervisor_nombre = Column(String(150), nullable=True)
     codigo         = Column(Integer, nullable=True)
     unidad_base    = Column(
         Enum(UnidadBaseConcepto, values_callable=lambda e: [x.value for x in e]),
@@ -97,6 +104,7 @@ class ConceptoLiquidacion(Base):
     __table_args__ = (
         UniqueConstraint(
             "quincena", "tarea_nombre", "cliente_nombre", "finca_nombre", "codigo", "categoria",
+            "supervisor_nombre",
             name="uq_concepto_unif",
         ),
     )
