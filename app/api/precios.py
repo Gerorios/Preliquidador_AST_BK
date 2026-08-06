@@ -119,7 +119,7 @@ def listar_supervisores(
 @router.get("/conceptos", response_model=list[ConceptoUnifResponse])
 def listar_conceptos(
     quincena: Optional[date] = Query(None),
-    scope: Optional[str] = Query(None),   # 'comun' | 'especifico'
+    scope: Optional[str] = Query(None),   # 'comun' | 'cliente' | 'finca' | 'supervisor' | 'especifico' (legado = cliente+finca juntos)
     tarea: Optional[str] = Query(None),
     db: Session = Depends(get_db_propia),
 ):
@@ -133,6 +133,20 @@ def listar_conceptos(
             ConceptoLiquidacion.cliente_nombre.is_(None),
             ConceptoLiquidacion.supervisor_nombre.is_(None),
         )
+    elif scope == "cliente":
+        # Por cliente: cliente cargado sin finca (aplica a todas las fincas).
+        q = q.filter(
+            ConceptoLiquidacion.cliente_nombre.isnot(None),
+            ConceptoLiquidacion.finca_nombre.is_(None),
+        )
+    elif scope == "finca":
+        # Específico histórico: tarea+cliente+finca exactos.
+        q = q.filter(
+            ConceptoLiquidacion.cliente_nombre.isnot(None),
+            ConceptoLiquidacion.finca_nombre.isnot(None),
+        )
+    elif scope == "supervisor":
+        q = q.filter(ConceptoLiquidacion.supervisor_nombre.isnot(None))
     elif scope == "especifico":
         q = q.filter(ConceptoLiquidacion.cliente_nombre.isnot(None))
     if tarea:
