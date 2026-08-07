@@ -5,10 +5,12 @@
   caminos nuevos (por cliente / por supervisor, ADR-0011) quedan cubiertos sin
   replicar el matching del motor.
 - La comparativa común vs especial se eliminó (se rearmará aparte).
-- Comparativa nueva contra el "valor jornal" (jornada de 8 hs) cargado por
-  quincena: jornadas = hsmaquina/8, total a jornal = jornadas × valor, con
-  diferencias por totales y por jornada. Signo como en Tancadas:
-  diff = (pagado por planta − a jornal) / a jornal.
+- Comparativa contra el jornal tractorista: el liquidador carga el VALOR HORA
+  del tractorista por quincena; el jornal tractorista es ese valor × 8, FIJO
+  para todas las filas (no se multiplica por las jornadas de la fila).
+  %Dif = (Prom Jornal − jornal tractorista) / jornal tractorista: cuánto más
+  caro (+) o más barato (−) cobra la jornada pagada por planta que el jornal
+  del tractorista.
 """
 from datetime import date
 from decimal import Decimal
@@ -35,9 +37,9 @@ def db():
     session.close()
 
 
-def _preliq(db, valor_jornal=None):
+def _preliq(db, valor_hora=None):
     p = Preliquidacion(quincena=date(2026, 8, 1), creado_por=1,
-                       valor_jornal_planta=valor_jornal)
+                       valor_hora_tractorista=valor_hora)
     db.add(p); db.commit(); db.refresh(p)
     return p
 
@@ -103,7 +105,6 @@ def test_precio_promedio_ponderado_con_precios_mezclados(db):
     assert len(res["filas"]) == 1
     # (6000 + 8000) / (600 + 400) = 14
     assert res["filas"][0]["precio_promedio"] == 14.0
-    assert res["filas"][0]["total_planta"] == 14000.0
 
 
 def test_concepto_supervisor_no_contamina_otras_filas(db):
@@ -123,33 +124,43 @@ def test_concepto_supervisor_no_contamina_otras_filas(db):
     assert res["filas"][0]["precio_promedio"] == 10.0
 
 
-# ─── Comparativa contra el valor jornal ───────────────────────────────────────
+# ─── Comparativa contra el jornal tractorista ─────────────────────────────────
 
-def test_comparativa_con_valor_jornal_cargado(db):
-    preliq = _preliq(db, valor_jornal=Decimal("20000"))
+def test_comparativa_con_valor_hora_cargado(db):
+    preliq = _preliq(db, valor_hora=Decimal("1000"))
     linea = _linea(db, preliq, unidades="1000", hsmaquina="16")
     _pagar(db, linea, precio="10", cantidad="1000")
 
     res = _control(db, preliq)
-    assert res["valor_jornal_planta"] == 20000.0
+    assert res["valor_hora_tractorista"] == 1000.0
     f = res["filas"][0]
     assert f["unidades"] == 1000.0
     assert f["hs"] == 16.0
     assert f["plantas_por_hsm"] == 62.5
     assert f["plantas_por_hsm_x8"] == 500.0
     assert f["prom_jornal"] == 5000.0          # 500 plantas/jornada × $10
-    assert f["jornadas"] == 2.0                # 16 hs / 8
-    assert f["total_planta"] == 10000.0        # pagado real
-    assert f["total_jornal"] == 40000.0        # 2 jornadas × $20.000
-    assert f["diff_total"] == -30000.0         # planta − jornal
-    assert f["diff_total_pct"] == -0.75        # (10000 − 40000) / 40000
-    # Definición del liquidador (2026-08-06): la diferencia sale del cociente
-    # Prom Jornal / Total jornal → (5000 − 40000) / 40000 = −0.875
-    assert f["diff_jornada_pct"] == -0.875
+    assert f["jornadas"] == 2.0                # 16 hs / 8 (informativo)
+    # El jornal tractorista es FIJO: valor hora × 8, sin multiplicar por las
+    # jornadas de la fila.
+    assert f["total_jornal"] == 8000.0
+    assert f["diff_jornada_pct"] == -0.375     # (5000 − 8000) / 8000
 
 
-def test_totales_recalculados_sobre_sumas(db):
-    preliq = _preliq(db, valor_jornal=Decimal("10000"))
+def test_jornal_tractorista_no_depende_de_las_jornadas(db):
+    """Dos filas con distinta cantidad de horas comparten el mismo jornal
+    tractorista (valor hora × 8)."""
+    preliq = _preliq(db, valor_hora=Decimal("1000"))
+    l1 = _linea(db, preliq, unidades="500", hsmaquina="8", finca="FINCA 1")
+    l2 = _linea(db, preliq, unidades="500", hsmaquina="40", finca="FINCA 2")
+    _pagar(db, l1, precio="10", cantidad="500")
+    _pagar(db, l2, precio="10", cantidad="500")
+
+    res = _control(db, preliq)
+    assert [f["total_jornal"] for f in res["filas"]] == [8000.0, 8000.0]
+
+
+def test_totales_con_la_misma_definicion(db):
+    preliq = _preliq(db, valor_hora=Decimal("1000"))
     l1 = _linea(db, preliq, unidades="500", hsmaquina="8", finca="FINCA 1")
     l2 = _linea(db, preliq, unidades="300", hsmaquina="8", finca="FINCA 2")
     _pagar(db, l1, precio="10", cantidad="500")   # 5000
@@ -159,42 +170,36 @@ def test_totales_recalculados_sobre_sumas(db):
     t = res["totales"]
     assert t["unidades"] == 800.0
     assert t["hs"] == 16.0
-    assert t["total_planta"] == 8000.0
     assert t["jornadas"] == 2.0
-    assert t["total_jornal"] == 20000.0
-    assert t["diff_total"] == -12000.0
-    assert t["diff_total_pct"] == -0.6
-    # % sobre los agregados con la misma definición: prom_jornal total
-    # (50×8×$10 = 4000) vs total_jornal (20000) → (4000 − 20000) / 20000 = −0.8
-    assert t["diff_jornada_pct"] == -0.8
+    assert t["total_jornal"] == 8000.0
+    # Prom jornal agregado: (800/16)×8×$10 = 4000 → (4000 − 8000) / 8000 = −0.5
+    assert t["prom_jornal"] == 4000.0
+    assert t["diff_jornada_pct"] == -0.5
 
 
-def test_sin_valor_jornal_las_comparaciones_quedan_null(db):
+def test_sin_valor_hora_las_comparaciones_quedan_null(db):
     preliq = _preliq(db)   # sin valor cargado
     linea = _linea(db, preliq, unidades="100", hsmaquina="8")
     _pagar(db, linea, precio="10", cantidad="100")
 
     res = _control(db, preliq)
-    assert res["valor_jornal_planta"] is None
+    assert res["valor_hora_tractorista"] is None
     f = res["filas"][0]
     assert f["jornadas"] == 1.0                 # las jornadas se muestran igual
     assert f["total_jornal"] is None
-    assert f["diff_total"] is None
-    assert f["diff_total_pct"] is None
     assert f["diff_jornada_pct"] is None
 
 
 def test_sin_horas_maquina_no_hay_comparacion(db):
-    preliq = _preliq(db, valor_jornal=Decimal("20000"))
+    preliq = _preliq(db, valor_hora=Decimal("1000"))
     linea = _linea(db, preliq, unidades="100", hsmaquina="0")
     _pagar(db, linea, precio="10", cantidad="100")
 
     res = _control(db, preliq)
     f = res["filas"][0]
     assert f["jornadas"] == 0.0
-    assert f["total_jornal"] == 0.0
-    assert f["diff_total"] is None              # jornal 0: no hay contra qué comparar
-    assert f["diff_total_pct"] is None
+    assert f["total_jornal"] == 8000.0
+    # Sin horas no hay jornada pagada por planta que comparar.
     assert f["diff_jornada_pct"] is None
 
 
@@ -211,12 +216,12 @@ def test_columnas_comun_especial_eliminadas(db):
         assert clave not in f
 
 
-# ─── Setter del valor jornal ──────────────────────────────────────────────────
+# ─── Setter del valor hora ────────────────────────────────────────────────────
 
-def test_set_valor_jornal_planta(db):
+def test_set_valor_hora_tractorista(db):
     preliq = _preliq(db)
     svc = PreliquidacionService(db)
-    actualizada = svc.set_valor_jornal_planta(preliq.id, Decimal("15000"))
-    assert actualizada.valor_jornal_planta == Decimal("15000")
-    actualizada = svc.set_valor_jornal_planta(preliq.id, None)   # None limpia
-    assert actualizada.valor_jornal_planta is None
+    actualizada = svc.set_valor_hora_tractorista(preliq.id, Decimal("1500"))
+    assert actualizada.valor_hora_tractorista == Decimal("1500")
+    actualizada = svc.set_valor_hora_tractorista(preliq.id, None)   # None limpia
+    assert actualizada.valor_hora_tractorista is None

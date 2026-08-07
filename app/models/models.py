@@ -125,12 +125,13 @@ class Preliquidacion(Base):
     # Tancadas vs Jornal. Nullable: las quincenas viejas y las recién creadas
     # arrancan sin cargarlo, y en ese caso la comparación se muestra sin dato.
     valor_hora_pulv = Column(Numeric(12, 2), nullable=True)
-    # Valor de la jornada de 8 hs para el control Plantas vs Jornal (grilling
-    # 2026-08-06): compara lo pagado por planta contra lo que costaría pagar
-    # esas horas "a jornal" (jornadas = hsmaquina/8 × este valor). Sin recargo,
-    # un solo valor por quincena. Nullable: sin cargar, la comparación se
-    # muestra sin dato (igual que valor_hora_pulv en Tancadas).
-    valor_jornal_planta = Column(Numeric(12, 2), nullable=True)
+    # Valor HORA del tractorista para el control Plantas vs Jornal (grilling
+    # 2026-08-06): el jornal tractorista es este valor × 8, fijo para toda la
+    # tabla (no se multiplica por las jornadas de cada fila), y contra él se
+    # compara lo que cobra la jornada pagada por planta. Sin recargo, un solo
+    # valor por quincena. Nullable: sin cargar, la comparación se muestra sin
+    # dato (igual que valor_hora_pulv en Tancadas).
+    valor_hora_tractorista = Column(Numeric(12, 2), nullable=True)
 
     creador = relationship("Usuario")
     lineas  = relationship(

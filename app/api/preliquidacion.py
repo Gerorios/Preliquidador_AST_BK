@@ -11,7 +11,7 @@ from app.schemas.schemas import (
     LineaResponse, LineaUpdateRequest,
     ConceptoAdicionalRequest, ConceptoAdicionalResponse,
     ConceptoPorCodigoRequest,
-    MensajeResponse, ValorHoraPulvRequest, ValorJornalPlantaRequest,
+    MensajeResponse, ValorHoraPulvRequest, ValorHoraTractoristaRequest,
     CategoriaOperarioRequest, OperarioMantenimientoResponse,
 )
 
@@ -212,11 +212,11 @@ def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Dep
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.patch("/{preliq_id}/valor-jornal-planta")
-def set_valor_jornal_planta(preliq_id: int, datos: ValorJornalPlantaRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+@router.patch("/{preliq_id}/valor-hora-tractorista")
+def set_valor_hora_tractorista(preliq_id: int, datos: ValorHoraTractoristaRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
     try:
-        preliq = service.set_valor_jornal_planta(preliq_id, datos.valor_jornal_planta)
-        return {"valor_jornal_planta": float(preliq.valor_jornal_planta) if preliq.valor_jornal_planta is not None else None}
+        preliq = service.set_valor_hora_tractorista(preliq_id, datos.valor_hora_tractorista)
+        return {"valor_hora_tractorista": float(preliq.valor_hora_tractorista) if preliq.valor_hora_tractorista is not None else None}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

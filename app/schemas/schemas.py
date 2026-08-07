@@ -98,10 +98,11 @@ class ValorHoraPulvRequest(BaseModel):
     valor_hora_pulv: Optional[Decimal] = None
 
 
-class ValorJornalPlantaRequest(BaseModel):
-    # Valor de la jornada de 8 hs del control Plantas vs Jornal. None limpia
-    # el valor (deja la comparación contra jornal sin dato).
-    valor_jornal_planta: Optional[Decimal] = None
+class ValorHoraTractoristaRequest(BaseModel):
+    # Valor hora del tractorista del control Plantas vs Jornal (el jornal
+    # tractorista es este valor × 8). None limpia el valor (deja la
+    # comparación contra jornal sin dato).
+    valor_hora_tractorista: Optional[Decimal] = None
 
 
 # ─── Maestro unificado de Conceptos ───────────────────────────────────────────

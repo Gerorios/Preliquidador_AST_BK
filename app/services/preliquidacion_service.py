@@ -1001,10 +1001,13 @@ class PreliquidacionService:
         ):
             pagos[(cliente, finca, tarea)] = [float(imp or 0), float(cant or 0)]
 
-        # Valor de la jornada de 8 hs cargado por el liquidador (sin recargo).
-        # Sin cargar, las columnas de comparación van en null (no 0, para no
-        # mentir) — mismo criterio que valor_hora_pulv en Tancadas.
-        vj = float(preliq.valor_jornal_planta) if preliq.valor_jornal_planta is not None else None
+        # Valor hora del tractorista cargado por el liquidador (sin recargo).
+        # El jornal tractorista (valor × 8) es FIJO para toda la tabla: no se
+        # multiplica por las jornadas de cada fila. Sin cargar, las columnas de
+        # comparación van en null (no 0, para no mentir) — mismo criterio que
+        # valor_hora_pulv en Tancadas.
+        vh = float(preliq.valor_hora_tractorista) if preliq.valor_hora_tractorista is not None else None
+        jornal_tractorista = (vh * 8) if vh is not None else None
 
         filas = []
         for cliente, finca, tarea, suma_unidades, suma_hs in agregados:
@@ -1012,18 +1015,14 @@ class PreliquidacionService:
             pp = (importe_pagado / cantidad_pagada) if cantidad_pagada else 0.0
             u  = float(suma_unidades or 0); h = float(suma_hs or 0)
             phsm = (u / h) if h else 0
-            prom_jornal = phsm * 8 * pp        # costo de una jornada pagada por planta
-            jornadas = h / 8
-            total_jornal = (jornadas * vj) if vj is not None else None
-            # Signo como en Tancadas: (pagado por planta − a jornal) / a jornal.
-            diff_total = diff_total_pct = None
-            if total_jornal:
-                diff_total     = round(importe_pagado - total_jornal, 2)
-                diff_total_pct = round((importe_pagado - total_jornal) / total_jornal, 4)
-            # Definición del liquidador: la diferencia sale del cociente
-            # Prom Jornal / Total jornal (no contra el valor jornal unitario).
+            prom_jornal = phsm * 8 * pp        # lo que cobra una jornada pagada por planta
+            jornadas = h / 8                   # informativo
+            # Definición del liquidador: %Dif = Prom Jornal / jornal
+            # tractorista. Sin horas no hay jornada pagada por planta que
+            # comparar.
             diff_jornada_pct = (
-                round((prom_jornal - total_jornal) / total_jornal, 4) if total_jornal else None
+                round((prom_jornal - jornal_tractorista) / jornal_tractorista, 4)
+                if (jornal_tractorista and h) else None
             )
             filas.append({
                 "nombre_cliente": cliente, "nombre_finca": finca,
@@ -1031,11 +1030,8 @@ class PreliquidacionService:
                 "unidades": round(u, 2), "hs": round(h, 2),
                 "plantas_por_hsm": round(phsm, 2), "plantas_por_hsm_x8": round(phsm * 8, 2),
                 "prom_jornal": round(prom_jornal, 2),
-                "total_planta": round(importe_pagado, 2),
                 "jornadas": round(jornadas, 2),
-                "total_jornal": round(total_jornal, 2) if total_jornal is not None else None,
-                "diff_total": diff_total,
-                "diff_total_pct": diff_total_pct,
+                "total_jornal": jornal_tractorista,
                 "diff_jornada_pct": diff_jornada_pct,
             })
         filas.sort(key=lambda f: (f["nombre_cliente"] or "", f["nombre_finca"] or "", f["nombre_tarea"] or ""))
@@ -1043,42 +1039,35 @@ class PreliquidacionService:
         # Totales recalculados sobre las sumas (NO promedio de los % por fila,
         # que mentiría).
         tu = sum(f["unidades"] for f in filas); th = sum(f["hs"] for f in filas)
-        ttp = sum(f["total_planta"] for f in filas)
+        timporte = sum(pagos[k][0] for k in pagos)
         tcant = sum(pagos[k][1] for k in pagos)
-        tprecio = (ttp / tcant) if tcant else 0
+        tprecio = (timporte / tcant) if tcant else 0
         tphsm = (tu / th) if th else 0
-        tjornadas = th / 8
-        ttj = (tjornadas * vj) if vj is not None else None
-        tdiff = tdiff_pct = None
-        if ttj:
-            tdiff     = round(ttp - ttj, 2)
-            tdiff_pct = round((ttp - ttj) / ttj, 4)
+        tprom_jornal = tphsm * 8 * tprecio
         return {
-            "valor_jornal_planta": vj,
+            "valor_hora_tractorista": vh,
             "filas": filas,
             "totales": {
                 "unidades": round(tu, 2), "hs": round(th, 2),
                 "precio_promedio": round(tprecio, 2), "plantas_por_hsm": round(tphsm, 2),
                 "plantas_por_hsm_x8": round(tphsm * 8, 2),
-                "prom_jornal": round(tphsm * 8 * tprecio, 2),
-                "total_planta": round(ttp, 2),
-                "jornadas": round(tjornadas, 2),
-                "total_jornal": round(ttj, 2) if ttj is not None else None,
-                "diff_total": tdiff,
-                "diff_total_pct": tdiff_pct,
+                "prom_jornal": round(tprom_jornal, 2),
+                "jornadas": round(th / 8, 2),
+                "total_jornal": jornal_tractorista,
                 "diff_jornada_pct": (
-                    round((tphsm * 8 * tprecio - ttj) / ttj, 4) if ttj else None
+                    round((tprom_jornal - jornal_tractorista) / jornal_tractorista, 4)
+                    if (jornal_tractorista and th) else None
                 ),
             },
         }
 
-    def set_valor_jornal_planta(self, preliq_id: int, valor):
-        """Setea (o limpia con None) el valor de la jornada de 8 hs del control
+    def set_valor_hora_tractorista(self, preliq_id: int, valor):
+        """Setea (o limpia con None) el valor hora del tractorista del control
         Plantas vs Jornal. Devuelve la Preliquidacion actualizada."""
         preliq = self.obtener(preliq_id)
         if not preliq:
             raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
-        preliq.valor_jornal_planta = valor
+        preliq.valor_hora_tractorista = valor
         self.db.commit()
         self.db.refresh(preliq)
         return preliq
