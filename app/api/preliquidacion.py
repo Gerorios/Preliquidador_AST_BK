@@ -11,7 +11,7 @@ from app.schemas.schemas import (
     LineaResponse, LineaUpdateRequest,
     ConceptoAdicionalRequest, ConceptoAdicionalResponse,
     ConceptoPorCodigoRequest,
-    MensajeResponse, ValorHoraPulvRequest,
+    MensajeResponse, ValorHoraPulvRequest, ValorHoraTractoristaRequest,
     CategoriaOperarioRequest, OperarioMantenimientoResponse,
 )
 
@@ -206,6 +206,17 @@ def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Dep
     try:
         preliq = service.set_valor_hora_pulv(preliq_id, datos.valor_hora_pulv)
         return {"valor_hora_pulv": float(preliq.valor_hora_pulv) if preliq.valor_hora_pulv is not None else None}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{preliq_id}/valor-hora-tractorista")
+def set_valor_hora_tractorista(preliq_id: int, datos: ValorHoraTractoristaRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+    try:
+        preliq = service.set_valor_hora_tractorista(preliq_id, datos.valor_hora_tractorista)
+        return {"valor_hora_tractorista": float(preliq.valor_hora_tractorista) if preliq.valor_hora_tractorista is not None else None}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

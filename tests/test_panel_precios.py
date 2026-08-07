@@ -186,53 +186,10 @@ def test_precio_masivo_sin_ids_encontrados_da_404(db):
 
 # ─── control_plantas_jornal: precio_comun / precio_especial ──────────────────
 
-def test_control_plantas_separa_precio_comun_y_especial(db):
-    preliq = _preliq(db)
-    linea = _linea(db, preliq, "PLANTACION", "CLIENTE A", "FINCA 1")
-    linea.unidades = Decimal("800")
-    linea.hsmaquina = Decimal("8")
-    linea.grupo_pago_aplicado = "PLANTA"
-    db.commit()
-    _aplicar_concepto(db, linea, "unidades", precio=Decimal("2"))
-
-    _concepto(db, preliq.quincena, "PLANTACION", cliente=None, finca=None,
-              codigo=1, precio=Decimal("2"), unidad=UnidadBaseConcepto.UNIDADES)
-    _concepto(db, preliq.quincena, "PLANTACION", cliente="CLIENTE A", finca="FINCA 1",
-              codigo=2, precio=Decimal("3"), unidad=UnidadBaseConcepto.UNIDADES)
-
-    svc = PreliquidacionService(db)
-    resultado = svc.control_plantas_jornal(preliq.id)
-
-    fila = resultado["filas"][0]
-    assert fila["precio_comun"] == 2.0
-    assert fila["precio_especial"] == 3.0
-    assert fila["var_pct"] == pytest.approx(0.5, abs=1e-4)  # (3-2)/2
-    phsm = 800 / 8
-    assert fila["prom_jornal_comun"] == round(phsm * 8 * 2, 2)
-    assert fila["prom_jornal_especial"] == round(phsm * 8 * 3, 2)
-
-
-def test_control_plantas_precio_especial_null_si_no_hay_especifico(db):
-    preliq = _preliq(db)
-    linea = _linea(db, preliq, "PLANTACION", "CLIENTE A", "FINCA 1")
-    linea.unidades = Decimal("800")
-    linea.hsmaquina = Decimal("8")
-    linea.grupo_pago_aplicado = "PLANTA"
-    db.commit()
-    _aplicar_concepto(db, linea, "unidades", precio=Decimal("2"))
-
-    _concepto(db, preliq.quincena, "PLANTACION", cliente=None, finca=None,
-              codigo=1, precio=Decimal("2"), unidad=UnidadBaseConcepto.UNIDADES)
-
-    svc = PreliquidacionService(db)
-    resultado = svc.control_plantas_jornal(preliq.id)
-
-    fila = resultado["filas"][0]
-    assert fila["precio_comun"] == 2.0
-    assert fila["precio_especial"] is None
-    assert fila["var_pct"] is None
-    assert fila["prom_jornal_especial"] is None
-
+# La comparativa común vs especial de control_plantas_jornal se eliminó
+# (grilling 2026-08-06): el control valoriza con el pago real y se rearmará
+# una comparativa por caminos aparte. Ver tests/test_control_plantas_jornal.py.
+# En Tancadas la comparativa sigue vigente:
 
 # ─── control_tancadas_jornal: precio_comun / precio_especial ─────────────────
 

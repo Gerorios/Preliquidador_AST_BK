@@ -302,9 +302,20 @@ Se navegan con los botones de sección; cada uno muestra un número si hay casos
 En los controles de excesos, cada caso es una tarjeta que se **clickea para expandir** y ver el
 detalle de las líneas. Hay buscador (**"Buscar empleado o legajo..."**) y filtros.
 
+### Valor hora tractorista (Plantas vs Jornal)
+
+En la sección **"Plantas vs Jornal"** hay un campo editable: el **"Valor hora tractorista"** —
+cuánto vale **una hora** del tractorista. Escribí el número y confirmá con **Enter** o el botón
+**"Guardar"**. Con ese valor cargado, la tabla muestra el **Jornal tractorista** (el valor hora
+× 8, el mismo para todas las filas) y el **%Dif**: cuánto más caro (+, resaltado) o más barato
+(−) cobra la jornada pagada por planta (**Prom Jornal**) que ese jornal tractorista. Sin el
+valor cargado, esas columnas quedan vacías. La columna **Jornadas** (horas de máquina ÷ 8) es
+informativa. El precio por planta de cada fila es el **realmente pagado** en las líneas (si hubo
+precios distintos, el promedio ponderado).
+
 ### Valor hora pulverización
 
-En la sección **"Tancadas vs Jornal"** está el **único campo editable** de Verificación: el
+En la sección **"Tancadas vs Jornal"** está el otro campo editable de Verificación: el
 **"Valor hora pulverización"**. Escribí el número y confirmá con **Enter** o el botón **"Guardar"**.
 Sin ese valor cargado, la comparación de esa sección no se puede mostrar (*"Cargá el valor hora
 para ver la comparación a jornal."*).
