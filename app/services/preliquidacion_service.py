@@ -1064,6 +1064,9 @@ class PreliquidacionService:
                 "total_jornal": round(ttj, 2) if ttj is not None else None,
                 "diff_total": tdiff,
                 "diff_total_pct": tdiff_pct,
+                "diff_jornada_pct": (
+                    round((tphsm * 8 * tprecio - vj) / vj, 4) if (vj and th) else None
+                ),
             },
         }
 

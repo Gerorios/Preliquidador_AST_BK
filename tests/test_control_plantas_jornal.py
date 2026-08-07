@@ -162,6 +162,10 @@ def test_totales_recalculados_sobre_sumas(db):
     assert t["total_jornal"] == 20000.0
     assert t["diff_total"] == -12000.0
     assert t["diff_total_pct"] == -0.6
+    # % por jornada sobre los agregados: prom_jornal total (50×8×$10 = 4000)
+    # vs valor jornal (10000) → -0.6 (coincide con el % por totales: es la
+    # misma comparación en otra escala).
+    assert t["diff_jornada_pct"] == -0.6
 
 
 def test_sin_valor_jornal_las_comparaciones_quedan_null(db):
