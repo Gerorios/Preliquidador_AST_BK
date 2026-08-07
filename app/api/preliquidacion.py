@@ -11,7 +11,7 @@ from app.schemas.schemas import (
     LineaResponse, LineaUpdateRequest,
     ConceptoAdicionalRequest, ConceptoAdicionalResponse,
     ConceptoPorCodigoRequest,
-    MensajeResponse, ValorHoraPulvRequest,
+    MensajeResponse, ValorHoraPulvRequest, ValorJornalPlantaRequest,
     CategoriaOperarioRequest, OperarioMantenimientoResponse,
 )
 
@@ -206,6 +206,17 @@ def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Dep
     try:
         preliq = service.set_valor_hora_pulv(preliq_id, datos.valor_hora_pulv)
         return {"valor_hora_pulv": float(preliq.valor_hora_pulv) if preliq.valor_hora_pulv is not None else None}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{preliq_id}/valor-jornal-planta")
+def set_valor_jornal_planta(preliq_id: int, datos: ValorJornalPlantaRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+    try:
+        preliq = service.set_valor_jornal_planta(preliq_id, datos.valor_jornal_planta)
+        return {"valor_jornal_planta": float(preliq.valor_jornal_planta) if preliq.valor_jornal_planta is not None else None}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

@@ -63,6 +63,10 @@ _Avoid_: confundir con Jornal tope 1 (que ignora todo excedente) o con fijo (que
 Unidad de trabajo de pulverización que se registra en la línea. Se cuenta **ida y vuelta**, por lo que el dato cargado viene doblado: los controles que la valorizan lo dividen `/2` para contar la pasada real. Puede ser Unidad base de un concepto (la tarea se paga por tancada).
 _Avoid_: confundir la tancada (el hecho medible) con el grupo de pago TANCADA (atributo informativo del catálogo; ver Grupo de pago).
 
+**Valor jornal (planta)**:
+Costo de una jornada de trabajo de **8 horas** que el liquidador carga **por quincena** en el control Plantas vs Jornal. Sirve para comparar lo pagado por planta contra lo que costaría pagar ese mismo trabajo "a jornal": las horas de máquina divididas por 8 dan las jornadas, y jornadas × este valor da el total a jornal. Sin recargo; un solo valor para toda la quincena.
+_Avoid_: valor hora (es por jornada de 8 hs, no por hora); confundir con Valor hora pulverización (otro control, otro parámetro)
+
 **Valor hora pulverización**:
 Costo de una hora de jornal de pulverización que el liquidador carga **por quincena**. Sirve para valorizar "a jornal" el trabajo de pulverización y compararlo contra lo que costó pagarlo "a tancada" (control Tancadas vs Jornal). Sobre este valor se aplica un recargo fijo de pulverización (×1,3) antes de comparar.
 

@@ -971,71 +971,112 @@ class PreliquidacionService:
         agregados = self._sumar_por_unidad_base(preliq_id, "unidades", ["unidades", "hsmaquina"],
                                                 grupo_pago="PLANTA")
 
-        # Precio por planta: sale del maestro (concepto con unidad_base = unidades),
-        # no del difunto precio_a. Cache específicos + comunes de la quincena.
-        precio_esp: dict[tuple, list] = {}   # (tarea, cliente, finca) -> [precios]
-        precio_com: dict[str, list] = {}     # tarea -> [precios]
-        for c in self.db.query(ConceptoLiquidacion).filter(
-            ConceptoLiquidacion.quincena == preliq.quincena,
-            ConceptoLiquidacion.unidad_base == UnidadBaseConcepto.UNIDADES,
-            ConceptoLiquidacion.precio.isnot(None),
-        ).all():
-            t = c.tarea_nombre.strip().upper()
-            if c.cliente_nombre is None:
-                precio_com.setdefault(t, []).append(c.precio)
-            else:
-                clave_esp = (t, c.cliente_nombre.strip().upper(), (c.finca_nombre or "").strip().upper())
-                precio_esp.setdefault(clave_esp, []).append(c.precio)
+        # Precio por planta: del PAGO REAL (Σ importe / Σ cantidad de los
+        # conceptos adicionales con unidad "unidades"), NO del maestro. El
+        # matching ya lo hizo el motor al pagar — venga el precio del camino
+        # que venga (común, por cliente, específico o por supervisor, ADR-0011),
+        # acá solo se lee el snapshot congelado. La comparativa común vs
+        # especial que vivía acá se eliminó (se rearmará aparte).
+        pagos = {}   # (cliente, finca, tarea) -> [Σ importe, Σ cantidad]
+        for cliente, finca, tarea, imp, cant in (
+            self.db.query(
+                PreliquidacionLinea.nombre_cliente,
+                PreliquidacionLinea.nombre_finca,
+                PreliquidacionLinea.nombre_tarea,
+                func.sum(ConceptoAdicional.importe),
+                func.sum(ConceptoAdicional.cantidad),
+            )
+            .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
+            .filter(
+                PreliquidacionLinea.preliquidacion_id == preliq_id,
+                ConceptoAdicional.unidad_base == "unidades",
+                func.upper(func.trim(PreliquidacionLinea.grupo_pago_aplicado)) == "PLANTA",
+            )
+            .group_by(
+                PreliquidacionLinea.nombre_cliente,
+                PreliquidacionLinea.nombre_finca,
+                PreliquidacionLinea.nombre_tarea,
+            )
+            .all()
+        ):
+            pagos[(cliente, finca, tarea)] = [float(imp or 0), float(cant or 0)]
 
-        def precio_planta(tarea, cliente, finca):
-            t  = (tarea or "").strip().upper()
-            cl = (cliente or "").strip().upper()
-            fn = (finca or "").strip().upper()
-            precios = precio_esp.get((t, cl, fn)) or precio_com.get(t)
-            if not precios:
-                return Decimal("0")
-            return sum(precios) / len(precios)
+        # Valor de la jornada de 8 hs cargado por el liquidador (sin recargo).
+        # Sin cargar, las columnas de comparación van en null (no 0, para no
+        # mentir) — mismo criterio que valor_hora_pulv en Tancadas.
+        vj = float(preliq.valor_jornal_planta) if preliq.valor_jornal_planta is not None else None
 
         filas = []
         for cliente, finca, tarea, suma_unidades, suma_hs in agregados:
-            precio = precio_planta(tarea, cliente, finca)
-            precio_comun, precio_especial = self._precio_comun_especial(
-                precio_esp, precio_com, tarea, cliente, finca
-            )
-            pp = float(precio)
+            importe_pagado, cantidad_pagada = pagos.get((cliente, finca, tarea), [0.0, 0.0])
+            pp = (importe_pagado / cantidad_pagada) if cantidad_pagada else 0.0
             u  = float(suma_unidades or 0); h = float(suma_hs or 0)
             phsm = (u / h) if h else 0
-            prom_jornal_comun = (
-                round(phsm * 8 * float(precio_comun), 2) if precio_comun is not None else None
-            )
-            prom_jornal_especial = (
-                round(phsm * 8 * float(precio_especial), 2) if precio_especial is not None else None
+            prom_jornal = phsm * 8 * pp        # costo de una jornada pagada por planta
+            jornadas = h / 8
+            total_jornal = (jornadas * vj) if vj is not None else None
+            # Signo como en Tancadas: (pagado por planta − a jornal) / a jornal.
+            diff_total = diff_total_pct = None
+            if total_jornal:
+                diff_total     = round(importe_pagado - total_jornal, 2)
+                diff_total_pct = round((importe_pagado - total_jornal) / total_jornal, 4)
+            diff_jornada_pct = (
+                round((prom_jornal - vj) / vj, 4) if (vj and h) else None
             )
             filas.append({
                 "nombre_cliente": cliente, "nombre_finca": finca,
                 "nombre_tarea": tarea, "precio_promedio": round(pp, 2),
                 "unidades": round(u, 2), "hs": round(h, 2),
                 "plantas_por_hsm": round(phsm, 2), "plantas_por_hsm_x8": round(phsm * 8, 2),
-                "prom_jornal": round(phsm * 8 * pp, 2),
-                "precio_comun": round(float(precio_comun), 2) if precio_comun is not None else None,
-                "precio_especial": round(float(precio_especial), 2) if precio_especial is not None else None,
-                "prom_jornal_comun": prom_jornal_comun,
-                "prom_jornal_especial": prom_jornal_especial,
-                "var_pct": self._var_pct(precio_comun, precio_especial),
+                "prom_jornal": round(prom_jornal, 2),
+                "total_planta": round(importe_pagado, 2),
+                "jornadas": round(jornadas, 2),
+                "total_jornal": round(total_jornal, 2) if total_jornal is not None else None,
+                "diff_total": diff_total,
+                "diff_total_pct": diff_total_pct,
+                "diff_jornada_pct": diff_jornada_pct,
             })
         filas.sort(key=lambda f: (f["nombre_cliente"] or "", f["nombre_finca"] or "", f["nombre_tarea"] or ""))
 
+        # Totales recalculados sobre las sumas (NO promedio de los % por fila,
+        # que mentiría).
         tu = sum(f["unidades"] for f in filas); th = sum(f["hs"] for f in filas)
-        tp = sum(f["precio_promedio"] for f in filas) / len(filas) if filas else 0
+        ttp = sum(f["total_planta"] for f in filas)
+        tcant = sum(pagos[k][1] for k in pagos)
+        tprecio = (ttp / tcant) if tcant else 0
         tphsm = (tu / th) if th else 0
+        tjornadas = th / 8
+        ttj = (tjornadas * vj) if vj is not None else None
+        tdiff = tdiff_pct = None
+        if ttj:
+            tdiff     = round(ttp - ttj, 2)
+            tdiff_pct = round((ttp - ttj) / ttj, 4)
         return {
+            "valor_jornal_planta": vj,
             "filas": filas,
             "totales": {
                 "unidades": round(tu, 2), "hs": round(th, 2),
-                "precio_promedio": round(tp, 2), "plantas_por_hsm": round(tphsm, 2),
-                "plantas_por_hsm_x8": round(tphsm * 8, 2), "prom_jornal": round(tphsm * 8 * tp, 2),
+                "precio_promedio": round(tprecio, 2), "plantas_por_hsm": round(tphsm, 2),
+                "plantas_por_hsm_x8": round(tphsm * 8, 2),
+                "prom_jornal": round(tphsm * 8 * tprecio, 2),
+                "total_planta": round(ttp, 2),
+                "jornadas": round(tjornadas, 2),
+                "total_jornal": round(ttj, 2) if ttj is not None else None,
+                "diff_total": tdiff,
+                "diff_total_pct": tdiff_pct,
             },
         }
+
+    def set_valor_jornal_planta(self, preliq_id: int, valor):
+        """Setea (o limpia con None) el valor de la jornada de 8 hs del control
+        Plantas vs Jornal. Devuelve la Preliquidacion actualizada."""
+        preliq = self.obtener(preliq_id)
+        if not preliq:
+            raise ValueError(f"Preliquidacion {preliq_id} no encontrada")
+        preliq.valor_jornal_planta = valor
+        self.db.commit()
+        self.db.refresh(preliq)
+        return preliq
 
     # Recargo fijo de pulverización sobre el valor hora de jornal (ADR-0007).
     RECARGO_PULV = Decimal("1.3")

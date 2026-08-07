@@ -75,7 +75,7 @@ app/
 - **Snapshot** (ADR-0006): cada `concepto_adicional` congela precio y cantidad; editar el maestro no reescribe pagos ya calculados (se recalculan explícitamente).
 - **Línea incompleta** (ADR-0003): línea sin ningún concepto con código y precio > 0 — es lo único que el liquidador debe resolver.
 - **Mantenimiento mecánico** (ADR-0008): el campo carga todo como una sola tarea; el liquidador asigna categoría 1-7 por persona/quincena (heredable de la quincena anterior) que determina el precio.
-- **Controles de razonabilidad**: Plantas vs Jornal y Tancadas vs Jornal (tancada ida y vuelta → /2; recargo pulverización ×1,3, ADR-0007). Excesos: >13 hs, >35 tancadas, >6.000 plantas por empleado/día.
+- **Controles de razonabilidad**: Plantas vs Jornal (precio desde el pago real; comparación contra el valor jornal de 8 hs cargado por quincena) y Tancadas vs Jornal (tancada ida y vuelta → /2; recargo pulverización ×1,3, ADR-0007). Excesos: >13 hs, >35 tancadas, >6.000 plantas por empleado/día.
 
 Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0009). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
 
@@ -189,6 +189,7 @@ Lista completa e interactiva en `/docs`. Resumen:
 | GET | `/{id}/control-plantas-jornal` | Control Plantas vs Jornal |
 | GET | `/{id}/control-tancadas-jornal` | Control Tancadas vs Jornal |
 | PATCH | `/{id}/valor-hora-pulv` | Valor hora de pulverización de la quincena |
+| PATCH | `/{id}/valor-jornal-planta` | Valor jornal (8 hs) del control Plantas vs Jornal |
 | GET | `/{id}/operarios-mantenimiento` | Operarios de taller con su categoría |
 | PUT | `/{id}/categoria-operario` | Asigna categoría 1-7 y recalcula |
 | POST | `/{id}/categorias-operario/heredar` | Hereda categorías de la quincena anterior |
@@ -230,5 +231,5 @@ Lista completa e interactiva en `/docs`. Resumen:
 
 - **Tabla `usuarios`**: ya existe en la BD propia; el sistema no la crea ni la modifica.
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
-- **Migraciones**: SQL manual en `migrations/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible.
+- **Migraciones**: SQL manual en `migrations/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible.
 - **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción).
