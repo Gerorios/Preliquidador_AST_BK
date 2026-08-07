@@ -307,9 +307,10 @@ detalle de las líneas. Hay buscador (**"Buscar empleado o legajo..."**) y filtr
 En la sección **"Plantas vs Jornal"** hay un campo editable: el **"Valor jornal"** — cuánto se
 paga una **jornada de 8 horas**. Escribí el número y confirmá con **Enter** o el botón
 **"Guardar"**. Con ese valor cargado, la tabla muestra las **Jornadas** de cada fila (las horas de
-máquina divididas por 8), el **Total jornal** (jornadas × valor cargado) y el **%Dif**: cuánto más
-caro (+, resaltado) o más barato (−) resulta el Prom Jornal —lo que cuesta una jornada pagándola
-por planta— contra el valor del jornal cargado. Sin el valor cargado, esas columnas quedan vacías.
+máquina divididas por 8), el **Total jornal** (jornadas × valor cargado) y el **%Dif**: la
+diferencia del cociente **Prom Jornal / Total jornal** — cuánto más caro (+, resaltado) o más
+barato (−) resulta lo que cobra la jornada pagada por planta contra el total que costaría a
+jornal. Sin el valor cargado, esas columnas quedan vacías.
 El precio por planta de cada fila es el **realmente pagado** en las líneas (si hubo precios
 distintos, el promedio ponderado).
 

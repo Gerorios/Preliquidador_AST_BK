@@ -1020,8 +1020,10 @@ class PreliquidacionService:
             if total_jornal:
                 diff_total     = round(importe_pagado - total_jornal, 2)
                 diff_total_pct = round((importe_pagado - total_jornal) / total_jornal, 4)
+            # Definición del liquidador: la diferencia sale del cociente
+            # Prom Jornal / Total jornal (no contra el valor jornal unitario).
             diff_jornada_pct = (
-                round((prom_jornal - vj) / vj, 4) if (vj and h) else None
+                round((prom_jornal - total_jornal) / total_jornal, 4) if total_jornal else None
             )
             filas.append({
                 "nombre_cliente": cliente, "nombre_finca": finca,
@@ -1065,7 +1067,7 @@ class PreliquidacionService:
                 "diff_total": tdiff,
                 "diff_total_pct": tdiff_pct,
                 "diff_jornada_pct": (
-                    round((tphsm * 8 * tprecio - vj) / vj, 4) if (vj and th) else None
+                    round((tphsm * 8 * tprecio - ttj) / ttj, 4) if ttj else None
                 ),
             },
         }

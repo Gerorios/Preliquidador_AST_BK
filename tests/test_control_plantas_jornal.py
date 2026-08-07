@@ -143,7 +143,9 @@ def test_comparativa_con_valor_jornal_cargado(db):
     assert f["total_jornal"] == 40000.0        # 2 jornadas × $20.000
     assert f["diff_total"] == -30000.0         # planta − jornal
     assert f["diff_total_pct"] == -0.75        # (10000 − 40000) / 40000
-    assert f["diff_jornada_pct"] == -0.75      # (5000 − 20000) / 20000
+    # Definición del liquidador (2026-08-06): la diferencia sale del cociente
+    # Prom Jornal / Total jornal → (5000 − 40000) / 40000 = −0.875
+    assert f["diff_jornada_pct"] == -0.875
 
 
 def test_totales_recalculados_sobre_sumas(db):
@@ -162,10 +164,9 @@ def test_totales_recalculados_sobre_sumas(db):
     assert t["total_jornal"] == 20000.0
     assert t["diff_total"] == -12000.0
     assert t["diff_total_pct"] == -0.6
-    # % por jornada sobre los agregados: prom_jornal total (50×8×$10 = 4000)
-    # vs valor jornal (10000) → -0.6 (coincide con el % por totales: es la
-    # misma comparación en otra escala).
-    assert t["diff_jornada_pct"] == -0.6
+    # % sobre los agregados con la misma definición: prom_jornal total
+    # (50×8×$10 = 4000) vs total_jornal (20000) → (4000 − 20000) / 20000 = −0.8
+    assert t["diff_jornada_pct"] == -0.8
 
 
 def test_sin_valor_jornal_las_comparaciones_quedan_null(db):
