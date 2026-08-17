@@ -7,9 +7,7 @@
 #
 # Todas las agregaciones usan PreliquidacionLinea.importe_total, que ya es la
 # suma de los conceptos adicionales de la línea (manuales incluidos) — no hace
-# falta joinear concepto_adicional. La única excepción es el KPI de conceptos
-# manuales dentro de _metricas(), que sí joinea concepto_adicional para poder
-# discriminar por codigo_concepto (ver ese método para el criterio).
+# falta joinear concepto_adicional.
 #
 # Período: una quincena exacta (fecha) o un mes calendario ("YYYY-MM" = sus
 # quincenas presentes en la base). El desvío por persona compara promedios
@@ -22,7 +20,7 @@ from datetime import date
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.models import ConceptoAdicional, Preliquidacion, PreliquidacionLinea
+from app.models.models import Preliquidacion, PreliquidacionLinea
 
 
 # Desvío por persona (ver CONTEXT.md): últimas 6 quincenas con actividad,
@@ -127,13 +125,7 @@ class GerencialService:
         }
 
     def _metricas(self, quincenas: list[date], empresa: str | None) -> dict:
-        """Métricas de control del período: totales + horas + conceptos
-        manuales (ConceptoAdicional sin codigo_concepto). El discriminador
-        de "manual" es codigo_concepto, no concepto_liquidacion_id: ese FK
-        es ON DELETE SET NULL (ver models.py), así que un concepto
-        automático cuya regla del maestro se borró también quedaría con
-        concepto_liquidacion_id NULL sin ser manual — inflando el KPI
-        histórico. codigo_concepto no muta cuando se borra la regla."""
+        """Métricas de control del período: totales + horas + $/hora jornal."""
         fila = (
             self._lineas_periodo(quincenas, empresa)
             .with_entities(
@@ -147,28 +139,12 @@ class GerencialService:
         total, personas, lineas, horas = (
             float(fila[0]), int(fila[1]), int(fila[2]), float(fila[3])
         )
-
-        q_manual = (
-            self.db.query(func.coalesce(func.sum(ConceptoAdicional.importe), 0))
-            .join(PreliquidacionLinea, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
-            .join(Preliquidacion, PreliquidacionLinea.preliquidacion_id == Preliquidacion.id)
-            .filter(
-                Preliquidacion.quincena.in_(quincenas),
-                ConceptoAdicional.codigo_concepto.is_(None),
-            )
-        )
-        if empresa:
-            q_manual = q_manual.filter(PreliquidacionLinea.empresa_asignada == empresa)
-        manuales = float(q_manual.scalar())
-
         return {
             "total": total,
             "personas": personas,
             "lineas": lineas,
             "horas_jornal": horas,
             "costo_hora": round(total / horas, 2) if horas > 0 else None,
-            "manuales": round(manuales, 2),
-            "manuales_pct": round(manuales / total * 100, 1) if total > 0 else None,
         }
 
     def indicadores(self, quincena: date | None, mes: str | None, empresa: str | None) -> dict:
@@ -189,11 +165,6 @@ class GerencialService:
                 "costo_hora_pct": (
                     round((actual["costo_hora"] / anterior["costo_hora"] - 1) * 100, 1)
                     if actual["costo_hora"] is not None and anterior["costo_hora"] else None
-                ),
-                "manuales_pct_puntos": (
-                    round(actual["manuales_pct"] - anterior["manuales_pct"], 1)
-                    if actual["manuales_pct"] is not None
-                    and anterior["manuales_pct"] is not None else None
                 ),
             }
             p0, p1 = anterior["personas"], actual["personas"]

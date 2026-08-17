@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import ConceptoAdicional, Preliquidacion, PreliquidacionLinea
+from app.models.models import Preliquidacion, PreliquidacionLinea
 from app.services.gerencial_service import GerencialService, PeriodoInvalidoError
 
 
@@ -42,27 +42,6 @@ def _linea(db, preliq, importe, cuil="20-11111111-1", nombre="JUAN",
     db.add(l)
     db.commit()
     return l
-
-
-_SIN_ESPECIFICAR = object()
-
-
-def _concepto(db, linea, importe, manual=False, descripcion="CONCEPTO",
-              concepto_liquidacion_id=_SIN_ESPECIFICAR):
-    """`manual` gobierna codigo_concepto (el criterio real de "manual").
-    `concepto_liquidacion_id` es seteable aparte para simular un concepto
-    automático cuya regla del maestro fue borrada (FK ON DELETE SET NULL)."""
-    if concepto_liquidacion_id is _SIN_ESPECIFICAR:
-        concepto_liquidacion_id = None if manual else 999
-    c = ConceptoAdicional(
-        linea_id=linea.id, descripcion=descripcion,
-        importe=Decimal(str(importe)),
-        codigo_concepto=None if manual else 101,
-        concepto_liquidacion_id=concepto_liquidacion_id,
-    )
-    db.add(c)
-    db.commit()
-    return c
 
 
 # Quincenas: 1ra = día 1, 2da = día 16
@@ -252,50 +231,17 @@ def test_desvios_mes_usa_promedio_quincenal(db):
 
 def test_indicadores_metricas_del_periodo(db):
     p = _preliq(db, Q_MAY_1)
-    # línea de 1000: 900 de un concepto del maestro + 100 manual
-    l1 = _linea(db, p, 1000, hsjornal=10)
-    _concepto(db, l1, 900, manual=False)
-    _concepto(db, l1, 100, manual=True)
-    # línea de 200: un concepto del maestro de 200 (sin manuales)
-    l2 = _linea(db, p, 200, cuil="20-2", hsjornal=None)
-    _concepto(db, l2, 200, manual=False)
+    _linea(db, p, 1000, hsjornal=10)
+    _linea(db, p, 200, cuil="20-2", hsjornal=None)
 
     r = GerencialService(db).indicadores(Q_MAY_1, None, None)
     a = r["actual"]
     assert a["total"] == 1200.0
     assert a["horas_jornal"] == 10.0
     assert a["costo_hora"] == 120.0          # 1200 / 10
-    assert a["manuales"] == 100.0
-    assert a["manuales_pct"] == 8.3          # 100/1200
     assert r["anterior"] is None
     assert r["variaciones"] is None
     assert r["descomposicion"] is None
-
-
-def test_indicadores_manuales_no_cuenta_regla_borrada_del_maestro(db):
-    # Concepto automático cuya regla del maestro fue borrada: el FK
-    # concepto_liquidacion_id queda NULL (ON DELETE SET NULL), pero
-    # codigo_concepto persiste porque nunca dependió de esa fila. NO debe
-    # contar como manual: si contara, el KPI histórico se inflaría cada vez
-    # que se borra una regla del maestro.
-    p = _preliq(db, Q_MAY_1)
-    l = _linea(db, p, 1000, hsjornal=10)
-    _concepto(db, l, 900, manual=False, concepto_liquidacion_id=None)  # regla borrada
-    _concepto(db, l, 100, manual=True)  # manual de verdad: sin código
-
-    r = GerencialService(db).indicadores(Q_MAY_1, None, None)
-    assert r["actual"]["manuales"] == 100.0
-
-
-def test_indicadores_manuales_filtra_por_empresa(db):
-    p = _preliq(db, Q_MAY_1)
-    l_ast = _linea(db, p, 1000, cuil="20-1", empresa="LA ASTURIANA")
-    _concepto(db, l_ast, 100, manual=True)
-    l_pam = _linea(db, p, 1000, cuil="20-2", empresa="PAMPLONA")
-    _concepto(db, l_pam, 300, manual=True)
-
-    r = GerencialService(db).indicadores(Q_MAY_1, None, "PAMPLONA")
-    assert r["actual"]["manuales"] == 300.0
 
 
 def test_indicadores_sin_horas_costo_hora_none(db):
@@ -329,7 +275,6 @@ def test_indicadores_descomposicion_suma_exacta(db):
     v = r["variaciones"]
     assert v["total_pct"] == 98.0
     assert v["costo_hora_pct"] == 10.0         # 110 vs 100
-    assert v["manuales_pct_puntos"] == 0.0     # sin conceptos manuales en ningún período
 
 
 def test_indicadores_descomposicion_none_sin_horas_previas(db):
