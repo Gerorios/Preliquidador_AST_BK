@@ -288,3 +288,37 @@ def test_indicadores_descomposicion_none_sin_horas_previas(db):
     assert r["descomposicion"] is None          # H0 == 0 → no explicable
     assert r["variaciones"]["total_pct"] == 20.0
     assert r["variaciones"]["costo_hora_pct"] is None
+
+
+def test_indicadores_descomposicion_suma_exacta_con_decimales(db):
+    # Valores no enteros: hpp0 y cph0 no terminan, así que redondear cada
+    # componente por separado desalinearía la suma contra round(t1-t0, 2).
+    p0 = _preliq(db, Q_MAY_1)
+    _linea(db, p0, 244.44, cuil="20-1", hsjornal="4.10", importe_base=244.44)
+    _linea(db, p0, 244.44, cuil="20-2", hsjornal="3.30", importe_base=244.44)
+    _linea(db, p0, 244.45, cuil="20-3", hsjornal="2.60", importe_base=244.45)
+
+    p1 = _preliq(db, Q_MAY_2)
+    _linea(db, p1, 111.11, cuil="20-1", hsjornal="2.20", importe_base=111.11)
+    _linea(db, p1, 111.11, cuil="20-2", hsjornal="1.90", importe_base=111.11)
+    _linea(db, p1, 111.11, cuil="20-3", hsjornal="1.70", importe_base=111.11)
+    _linea(db, p1, 111.12, cuil="20-4", hsjornal="2.05", importe_base=111.12)
+
+    r = GerencialService(db).indicadores(Q_MAY_2, None, None)
+    d = r["descomposicion"]
+    t0, t1 = r["anterior"]["total"], r["actual"]["total"]
+    suma = d["dotacion"]["monto"] + d["actividad"]["monto"] + d["precio"]["monto"]
+    assert suma == round(t1 - t0, 2)
+
+
+def test_indicadores_costo_hora_pct_con_costo_hora_actual_cero(db):
+    # Actual: importe total 0 pero con horas cargadas → costo_hora == 0.0
+    # (legítimo, no ausente). El chequeo debe distinguirlo de "sin dato".
+    p0 = _preliq(db, Q_MAY_1)
+    _linea(db, p0, 1000, hsjornal=10, importe_base=1000)
+    p1 = _preliq(db, Q_MAY_2)
+    _linea(db, p1, 0, hsjornal=10, importe_base=0)
+
+    r = GerencialService(db).indicadores(Q_MAY_2, None, None)
+    assert r["actual"]["costo_hora"] == 0.0
+    assert r["variaciones"]["costo_hora_pct"] == -100.0

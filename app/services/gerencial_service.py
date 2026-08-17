@@ -168,7 +168,7 @@ class GerencialService:
                 "total_pct": round((t1 / t0 - 1) * 100, 1) if t0 > 0 else None,
                 "costo_hora_pct": (
                     round((actual["costo_hora"] / anterior["costo_hora"] - 1) * 100, 1)
-                    if actual["costo_hora"] and anterior["costo_hora"] else None
+                    if actual["costo_hora"] is not None and anterior["costo_hora"] else None
                 ),
                 "adicionales_pct_puntos": (
                     round(actual["adicionales_pct"] - anterior["adicionales_pct"], 1)
@@ -181,11 +181,13 @@ class GerencialService:
             if t0 > 0 and p0 > 0 and h0 > 0 and p1 > 0 and h1 > 0:
                 hpp0 = h0 / p0   # horas por persona del período base
                 cph0 = t0 / h0   # $ por hora del período base
-                dotacion = (p1 - p0) * hpp0 * cph0
-                actividad = (h1 - p1 * hpp0) * cph0
-                precio = t1 - h1 * cph0
+                dotacion = round((p1 - p0) * hpp0 * cph0, 2)
+                actividad = round((h1 - p1 * hpp0) * cph0, 2)
+                # precio como residuo: garantiza que la descomposición sume
+                # exacto round(t1 - t0, 2) aunque hpp0/cph0 no sean terminantes.
+                precio = round(round(t1 - t0, 2) - dotacion - actividad, 2)
                 descomposicion = {
-                    clave: {"monto": round(monto, 2), "pct": round(monto / t0 * 100, 1)}
+                    clave: {"monto": monto, "pct": round(monto / t0 * 100, 1)}
                     for clave, monto in (
                         ("dotacion", dotacion), ("actividad", actividad), ("precio", precio)
                     )
