@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import Preliquidacion, PreliquidacionLinea
+from app.models.models import ConceptoAdicional, Preliquidacion, PreliquidacionLinea
 from app.services.gerencial_service import GerencialService, PeriodoInvalidoError
 
 
@@ -42,6 +42,17 @@ def _linea(db, preliq, importe, cuil="20-11111111-1", nombre="JUAN",
     db.add(l)
     db.commit()
     return l
+
+
+def _concepto(db, linea, importe, manual=False, descripcion="CONCEPTO"):
+    c = ConceptoAdicional(
+        linea_id=linea.id, descripcion=descripcion,
+        importe=Decimal(str(importe)),
+        concepto_liquidacion_id=None if manual else 999,
+    )
+    db.add(c)
+    db.commit()
+    return c
 
 
 # Quincenas: 1ra = día 1, 2da = día 16
@@ -231,20 +242,35 @@ def test_desvios_mes_usa_promedio_quincenal(db):
 
 def test_indicadores_metricas_del_periodo(db):
     p = _preliq(db, Q_MAY_1)
-    # 2 líneas: 10 hs a $100/h con base 900 (adicional 100), y una sin horas
-    _linea(db, p, 1000, hsjornal=10, importe_base=900)
-    _linea(db, p, 200, cuil="20-2", hsjornal=None, importe_base=200)
+    # línea de 1000: 900 de un concepto del maestro + 100 manual
+    l1 = _linea(db, p, 1000, hsjornal=10)
+    _concepto(db, l1, 900, manual=False)
+    _concepto(db, l1, 100, manual=True)
+    # línea de 200: un concepto del maestro de 200 (sin manuales)
+    l2 = _linea(db, p, 200, cuil="20-2", hsjornal=None)
+    _concepto(db, l2, 200, manual=False)
 
     r = GerencialService(db).indicadores(Q_MAY_1, None, None)
     a = r["actual"]
     assert a["total"] == 1200.0
     assert a["horas_jornal"] == 10.0
     assert a["costo_hora"] == 120.0          # 1200 / 10
-    assert a["adicionales"] == 100.0         # 1200 - 1100
-    assert a["adicionales_pct"] == 8.3       # 100/1200
+    assert a["manuales"] == 100.0
+    assert a["manuales_pct"] == 8.3          # 100/1200
     assert r["anterior"] is None
     assert r["variaciones"] is None
     assert r["descomposicion"] is None
+
+
+def test_indicadores_manuales_filtra_por_empresa(db):
+    p = _preliq(db, Q_MAY_1)
+    l_ast = _linea(db, p, 1000, cuil="20-1", empresa="LA ASTURIANA")
+    _concepto(db, l_ast, 100, manual=True)
+    l_pam = _linea(db, p, 1000, cuil="20-2", empresa="PAMPLONA")
+    _concepto(db, l_pam, 300, manual=True)
+
+    r = GerencialService(db).indicadores(Q_MAY_1, None, "PAMPLONA")
+    assert r["actual"]["manuales"] == 300.0
 
 
 def test_indicadores_sin_horas_costo_hora_none(db):
@@ -278,7 +304,7 @@ def test_indicadores_descomposicion_suma_exacta(db):
     v = r["variaciones"]
     assert v["total_pct"] == 98.0
     assert v["costo_hora_pct"] == 10.0         # 110 vs 100
-    assert v["adicionales_pct_puntos"] == 0.0
+    assert v["manuales_pct_puntos"] == 0.0     # sin conceptos manuales en ningún período
 
 
 def test_indicadores_descomposicion_none_sin_horas_previas(db):
