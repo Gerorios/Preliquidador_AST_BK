@@ -322,3 +322,35 @@ def test_indicadores_costo_hora_pct_con_costo_hora_actual_cero(db):
     r = GerencialService(db).indicadores(Q_MAY_2, None, None)
     assert r["actual"]["costo_hora"] == 0.0
     assert r["variaciones"]["costo_hora_pct"] == -100.0
+
+
+# ─── Desvíos por cliente ─────────────────────────────────────────────────────
+
+def test_desvios_cliente_contra_su_media(db):
+    # Historia del CLIENTE A: 3 quincenas a 1000
+    for q in (date(2026, 4, 1), date(2026, 4, 16), Q_MAY_1):
+        _linea(db, _preliq(db, q), 1000, cliente="CLIENTE A")
+    # Período actual: CLIENTE A gasta 1500 (+50%), CLIENTE B aparece nuevo
+    p = _preliq(db, Q_MAY_2)
+    _linea(db, p, 1500, cliente="CLIENTE A")
+    _linea(db, p, 800, cuil="20-2", cliente="CLIENTE B")
+
+    r = GerencialService(db).desvios_por_cliente(Q_MAY_2, None, None, umbral_pct=30.0)
+    a = next(c for c in r["clientes"] if c["cliente"] == "CLIENTE A")
+    assert a["promedio_quincenal"] == 1500.0
+    assert a["media_historica"] == 1000.0
+    assert a["desvio_pct"] == 50.0
+    assert a["supera_umbral"] is True
+    nuevos = [c["cliente"] for c in r["sin_historial"]]
+    assert "CLIENTE B" in nuevos
+
+
+def test_desvios_cliente_sin_cliente_agrupa(db):
+    for q in (date(2026, 4, 1), date(2026, 4, 16), Q_MAY_1):
+        _linea(db, _preliq(db, q), 500, cliente=None)
+    p = _preliq(db, Q_MAY_2)
+    _linea(db, p, 500, cliente=None)
+
+    r = GerencialService(db).desvios_por_cliente(Q_MAY_2, None, None)
+    assert [c["cliente"] for c in r["clientes"]] == ["SIN CLIENTE"]
+    assert r["clientes"][0]["desvio_pct"] == 0.0

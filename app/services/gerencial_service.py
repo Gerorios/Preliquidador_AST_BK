@@ -326,6 +326,50 @@ class GerencialService:
         ]
         return sorted(resultado, key=lambda r: r["total"], reverse=True)
 
+    def _calcular_desvios(self, filas, quincenas_periodo: set, umbral_pct: float):
+        """Núcleo común de los desvíos. `filas`: (quincena, clave, etiqueta, total).
+        Compara el promedio POR QUINCENA del período contra la media de las
+        últimas VENTANA_HISTORICA quincenas con actividad (mínimo MINIMO_...)."""
+        inicio_periodo = min(quincenas_periodo)
+        acumulado: dict[str, dict] = {}
+        for qcna, clave, etiqueta, total in filas:
+            datos = acumulado.setdefault(clave, {"etiqueta": etiqueta, "actual": [], "historia": {}})
+            datos["etiqueta"] = etiqueta or datos["etiqueta"]
+            if qcna in quincenas_periodo:
+                datos["actual"].append(float(total))
+            elif qcna < inicio_periodo:
+                datos["historia"][qcna] = float(total)
+
+        comparables, sin_historial = [], []
+        for clave, datos in acumulado.items():
+            if not datos["actual"]:
+                continue  # sin actividad en el período
+            promedio_actual = sum(datos["actual"]) / len(datos["actual"])
+            historia = [
+                total for _, total in sorted(datos["historia"].items(), reverse=True)
+            ][:VENTANA_HISTORICA]
+            entrada = {
+                "clave": clave,
+                "etiqueta": datos["etiqueta"],
+                "promedio_quincenal": round(promedio_actual, 2),
+                "quincenas_historia": len(historia),
+            }
+            if len(historia) < MINIMO_QUINCENAS_HISTORIA:
+                sin_historial.append(entrada)
+                continue
+            media = sum(historia) / len(historia)
+            desvio = round((promedio_actual / media - 1) * 100, 1) if media > 0 else None
+            entrada.update({
+                "media_historica": round(media, 2),
+                "desvio_pct": desvio,
+                "supera_umbral": desvio is not None and desvio >= umbral_pct,
+            })
+            comparables.append(entrada)
+
+        comparables.sort(key=lambda p: (p["desvio_pct"] is None, -(p["desvio_pct"] or 0)))
+        sin_historial.sort(key=lambda p: -p["promedio_quincenal"])
+        return comparables, sin_historial
+
     def desvios_por_persona(
         self,
         quincena: date | None,
@@ -337,8 +381,6 @@ class GerencialService:
         "Desvío por persona"). Se comparan promedios POR QUINCENA: para un mes,
         el promedio de sus quincenas con actividad."""
         quincenas_periodo = set(self._resolver_periodo(quincena, mes))
-        inicio_periodo = min(quincenas_periodo)
-
         q = self.db.query(
             Preliquidacion.quincena,
             PreliquidacionLinea.cuit,
@@ -349,47 +391,51 @@ class GerencialService:
             q = q.filter(PreliquidacionLinea.empresa_asignada == empresa)
         q = q.group_by(Preliquidacion.quincena, PreliquidacionLinea.cuit)
 
-        por_persona: dict[str, dict] = {}
-        for qcna, cuil, nombre, total in q.all():
-            datos = por_persona.setdefault(cuil, {"nombre": nombre, "actual": [], "historia": {}})
-            datos["nombre"] = nombre or datos["nombre"]
-            if qcna in quincenas_periodo:
-                datos["actual"].append(float(total))
-            elif qcna < inicio_periodo:
-                datos["historia"][qcna] = float(total)
+        comparables, sin_historial = self._calcular_desvios(q.all(), quincenas_periodo, umbral_pct)
 
-        comparables, sin_historial = [], []
-        for cuil, datos in por_persona.items():
-            if not datos["actual"]:
-                continue  # sin actividad en el período
-            promedio_actual = sum(datos["actual"]) / len(datos["actual"])
-            historia = [
-                total for _, total in sorted(datos["historia"].items(), reverse=True)
-            ][:VENTANA_HISTORICA]
-            persona = {
-                "cuil": cuil,
-                "nombre": datos["nombre"],
-                "promedio_quincenal": round(promedio_actual, 2),
-                "quincenas_historia": len(historia),
-            }
-            if len(historia) < MINIMO_QUINCENAS_HISTORIA:
-                sin_historial.append(persona)
-                continue
-            media = sum(historia) / len(historia)
-            desvio = round((promedio_actual / media - 1) * 100, 1) if media > 0 else None
-            persona.update({
-                "media_historica": round(media, 2),
-                "desvio_pct": desvio,
-                "supera_umbral": desvio is not None and desvio >= umbral_pct,
-            })
-            comparables.append(persona)
+        def _persona(e):
+            e = {**e, "cuil": e.pop("clave"), "nombre": e.pop("etiqueta")}
+            return e
 
-        comparables.sort(key=lambda p: (p["desvio_pct"] is None, -(p["desvio_pct"] or 0)))
-        sin_historial.sort(key=lambda p: -p["promedio_quincenal"])
         return {
             "umbral_pct": umbral_pct,
             "ventana_quincenas": VENTANA_HISTORICA,
             "minimo_quincenas": MINIMO_QUINCENAS_HISTORIA,
-            "personas": comparables,
-            "sin_historial": sin_historial,
+            "personas": [_persona(e) for e in comparables],
+            "sin_historial": [_persona(e) for e in sin_historial],
+        }
+
+    def desvios_por_cliente(
+        self,
+        quincena: date | None,
+        mes: str | None,
+        empresa: str | None,
+        umbral_pct: float = UMBRAL_DESVIO_DEFAULT,
+    ) -> dict:
+        """Cada cliente contra su propia media histórica (misma ventana que
+        los desvíos por persona). Líneas sin cliente caen en "SIN CLIENTE"."""
+        quincenas_periodo = set(self._resolver_periodo(quincena, mes))
+        q = self.db.query(
+            Preliquidacion.quincena,
+            func.coalesce(PreliquidacionLinea.nombre_cliente, "SIN CLIENTE"),
+            func.coalesce(PreliquidacionLinea.nombre_cliente, "SIN CLIENTE"),
+            func.coalesce(func.sum(PreliquidacionLinea.importe_total), 0),
+        ).join(PreliquidacionLinea)
+        if empresa:
+            q = q.filter(PreliquidacionLinea.empresa_asignada == empresa)
+        q = q.group_by(Preliquidacion.quincena, PreliquidacionLinea.nombre_cliente)
+
+        comparables, sin_historial = self._calcular_desvios(q.all(), quincenas_periodo, umbral_pct)
+
+        def _cliente(e):
+            e = {**e, "cliente": e.pop("clave")}
+            e.pop("etiqueta")
+            return e
+
+        return {
+            "umbral_pct": umbral_pct,
+            "ventana_quincenas": VENTANA_HISTORICA,
+            "minimo_quincenas": MINIMO_QUINCENAS_HISTORIA,
+            "clientes": [_cliente(e) for e in comparables],
+            "sin_historial": [_cliente(e) for e in sin_historial],
         }
