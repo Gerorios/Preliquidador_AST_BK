@@ -102,3 +102,27 @@ def desvios_persona(
 ):
     """Personas vs. su propia media histórica (6 quincenas, mínimo 3)."""
     return _atrapar_periodo(service.desvios_por_persona, quincena, mes, empresa, umbral)
+
+
+@router.get("/indicadores")
+def indicadores(
+    quincena: Optional[date] = Query(None),
+    mes: Optional[str] = Query(None),
+    empresa: Optional[str] = Query(None),
+    service: GerencialService = Depends(get_service),
+):
+    """KPIs de control: $/hora jornal, % adicionales y descomposición de la
+    variación (dotación / actividad / precio) contra el período anterior."""
+    return _atrapar_periodo(service.indicadores, quincena, mes, empresa)
+
+
+@router.get("/desvios-cliente")
+def desvios_cliente(
+    quincena: Optional[date] = Query(None),
+    mes: Optional[str] = Query(None),
+    empresa: Optional[str] = Query(None),
+    umbral: float = Query(UMBRAL_DESVIO_DEFAULT, ge=0, le=500),
+    service: GerencialService = Depends(get_service),
+):
+    """Clientes vs. su propia media histórica (6 quincenas, mínimo 3)."""
+    return _atrapar_periodo(service.desvios_por_cliente, quincena, mes, empresa, umbral)
