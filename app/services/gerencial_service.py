@@ -7,7 +7,9 @@
 #
 # Todas las agregaciones usan PreliquidacionLinea.importe_total, que ya es la
 # suma de los conceptos adicionales de la línea (manuales incluidos) — no hace
-# falta joinear concepto_adicional.
+# falta joinear concepto_adicional. La única excepción es el KPI de conceptos
+# manuales dentro de _metricas(), que sí joinea concepto_adicional para poder
+# discriminar por codigo_concepto (ver ese método para el criterio).
 #
 # Período: una quincena exacta (fecha) o un mes calendario ("YYYY-MM" = sus
 # quincenas presentes en la base). El desvío por persona compara promedios
@@ -126,8 +128,12 @@ class GerencialService:
 
     def _metricas(self, quincenas: list[date], empresa: str | None) -> dict:
         """Métricas de control del período: totales + horas + conceptos
-        manuales (ConceptoAdicional con concepto_liquidacion_id NULL, es
-        decir sin origen en el maestro de sueldos)."""
+        manuales (ConceptoAdicional sin codigo_concepto). El discriminador
+        de "manual" es codigo_concepto, no concepto_liquidacion_id: ese FK
+        es ON DELETE SET NULL (ver models.py), así que un concepto
+        automático cuya regla del maestro se borró también quedaría con
+        concepto_liquidacion_id NULL sin ser manual — inflando el KPI
+        histórico. codigo_concepto no muta cuando se borra la regla."""
         fila = (
             self._lineas_periodo(quincenas, empresa)
             .with_entities(
@@ -148,7 +154,7 @@ class GerencialService:
             .join(Preliquidacion, PreliquidacionLinea.preliquidacion_id == Preliquidacion.id)
             .filter(
                 Preliquidacion.quincena.in_(quincenas),
-                ConceptoAdicional.concepto_liquidacion_id.is_(None),
+                ConceptoAdicional.codigo_concepto.is_(None),
             )
         )
         if empresa:
