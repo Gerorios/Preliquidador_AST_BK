@@ -124,6 +124,82 @@ class GerencialService:
             "lineas": int(fila[2]),
         }
 
+    def _metricas(self, quincenas: list[date], empresa: str | None) -> dict:
+        """Métricas de control del período: totales + horas + adicionales."""
+        fila = (
+            self._lineas_periodo(quincenas, empresa)
+            .with_entities(
+                func.coalesce(func.sum(PreliquidacionLinea.importe_total), 0),
+                func.count(func.distinct(PreliquidacionLinea.cuit)),
+                func.count(PreliquidacionLinea.id),
+                func.coalesce(func.sum(func.coalesce(PreliquidacionLinea.hsjornal, 0)), 0),
+                func.coalesce(func.sum(func.coalesce(PreliquidacionLinea.importe_base, 0)), 0),
+            )
+            .one()
+        )
+        total, personas, lineas, horas, base = (
+            float(fila[0]), int(fila[1]), int(fila[2]), float(fila[3]), float(fila[4])
+        )
+        adicionales = round(total - base, 2)
+        return {
+            "total": total,
+            "personas": personas,
+            "lineas": lineas,
+            "horas_jornal": horas,
+            "costo_hora": round(total / horas, 2) if horas > 0 else None,
+            "adicionales": adicionales,
+            "adicionales_pct": round(adicionales / total * 100, 1) if total > 0 else None,
+        }
+
+    def indicadores(self, quincena: date | None, mes: str | None, empresa: str | None) -> dict:
+        """KPIs de control con comparación y descomposición de la variación
+        (dotación → actividad → precio, atribución secuencial que suma exacto)."""
+        quincenas = self._resolver_periodo(quincena, mes)
+        actual = self._metricas(quincenas, empresa)
+
+        anteriores = self._periodo_anterior(quincena, mes)
+        anterior = self._metricas(anteriores, empresa) if anteriores else None
+
+        variaciones = None
+        descomposicion = None
+        if anterior:
+            t0, t1 = anterior["total"], actual["total"]
+            variaciones = {
+                "total_pct": round((t1 / t0 - 1) * 100, 1) if t0 > 0 else None,
+                "costo_hora_pct": (
+                    round((actual["costo_hora"] / anterior["costo_hora"] - 1) * 100, 1)
+                    if actual["costo_hora"] and anterior["costo_hora"] else None
+                ),
+                "adicionales_pct_puntos": (
+                    round(actual["adicionales_pct"] - anterior["adicionales_pct"], 1)
+                    if actual["adicionales_pct"] is not None
+                    and anterior["adicionales_pct"] is not None else None
+                ),
+            }
+            p0, p1 = anterior["personas"], actual["personas"]
+            h0, h1 = anterior["horas_jornal"], actual["horas_jornal"]
+            if t0 > 0 and p0 > 0 and h0 > 0 and p1 > 0 and h1 > 0:
+                hpp0 = h0 / p0   # horas por persona del período base
+                cph0 = t0 / h0   # $ por hora del período base
+                dotacion = (p1 - p0) * hpp0 * cph0
+                actividad = (h1 - p1 * hpp0) * cph0
+                precio = t1 - h1 * cph0
+                descomposicion = {
+                    clave: {"monto": round(monto, 2), "pct": round(monto / t0 * 100, 1)}
+                    for clave, monto in (
+                        ("dotacion", dotacion), ("actividad", actividad), ("precio", precio)
+                    )
+                }
+            anterior = {**anterior, "quincenas": [str(q) for q in anteriores]}
+
+        return {
+            "quincenas": [str(q) for q in quincenas],
+            "actual": actual,
+            "anterior": anterior,
+            "variaciones": variaciones,
+            "descomposicion": descomposicion,
+        }
+
     # ─── Paneles ─────────────────────────────────────────────────────────────
 
     def resumen(self, quincena: date | None, mes: str | None, empresa: str | None) -> dict:

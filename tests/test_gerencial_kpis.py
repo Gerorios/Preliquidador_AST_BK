@@ -29,12 +29,15 @@ def _preliq(db, quincena):
 
 
 def _linea(db, preliq, importe, cuil="20-11111111-1", nombre="JUAN",
-           empresa="LA ASTURIANA", cliente="CLIENTE A", tarea="COSECHA LIMON"):
+           empresa="LA ASTURIANA", cliente="CLIENTE A", tarea="COSECHA LIMON",
+           hsjornal=None, importe_base=None):
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id,
         cuit=cuil, nombre_empleado=nombre, empresa_asignada=empresa,
         nombre_cliente=cliente, nombre_finca="FINCA 1", nombre_tarea=tarea,
         importe_total=Decimal(str(importe)),
+        hsjornal=Decimal(str(hsjornal)) if hsjornal is not None else None,
+        importe_base=Decimal(str(importe_base)) if importe_base is not None else None,
     )
     db.add(l)
     db.commit()
@@ -218,3 +221,70 @@ def test_desvios_mes_usa_promedio_quincenal(db):
 
     r = GerencialService(db).desvios_por_persona(None, "2026-05", None)
     assert r["personas"][0]["desvio_pct"] == 20.0
+
+
+# ─── Indicadores de control ──────────────────────────────────────────────────
+
+def test_indicadores_metricas_del_periodo(db):
+    p = _preliq(db, Q_MAY_1)
+    # 2 líneas: 10 hs a $100/h con base 900 (adicional 100), y una sin horas
+    _linea(db, p, 1000, hsjornal=10, importe_base=900)
+    _linea(db, p, 200, cuil="20-2", hsjornal=None, importe_base=200)
+
+    r = GerencialService(db).indicadores(Q_MAY_1, None, None)
+    a = r["actual"]
+    assert a["total"] == 1200.0
+    assert a["horas_jornal"] == 10.0
+    assert a["costo_hora"] == 120.0          # 1200 / 10
+    assert a["adicionales"] == 100.0         # 1200 - 1100
+    assert a["adicionales_pct"] == 8.3       # 100/1200
+    assert r["anterior"] is None
+    assert r["variaciones"] is None
+    assert r["descomposicion"] is None
+
+
+def test_indicadores_sin_horas_costo_hora_none(db):
+    p = _preliq(db, Q_MAY_1)
+    _linea(db, p, 500)  # sin hsjornal
+    r = GerencialService(db).indicadores(Q_MAY_1, None, None)
+    assert r["actual"]["horas_jornal"] == 0.0
+    assert r["actual"]["costo_hora"] is None
+
+
+def test_indicadores_descomposicion_suma_exacta(db):
+    # Anterior: 2 personas × 10 hs × $100/h = 2000
+    p0 = _preliq(db, Q_MAY_1)
+    _linea(db, p0, 1000, cuil="20-1", hsjornal=10, importe_base=1000)
+    _linea(db, p0, 1000, cuil="20-2", hsjornal=10, importe_base=1000)
+    # Actual: 3 personas × 12 hs × $110/h = 3960
+    p1 = _preliq(db, Q_MAY_2)
+    for c in ("20-1", "20-2", "20-3"):
+        _linea(db, p1, 1320, cuil=c, hsjornal=12, importe_base=1320)
+
+    r = GerencialService(db).indicadores(Q_MAY_2, None, None)
+    d = r["descomposicion"]
+    assert d["dotacion"]["monto"] == 1000.0    # (3-2) × 10 × 100
+    assert d["actividad"]["monto"] == 600.0    # (36 - 30) × 100
+    assert d["precio"]["monto"] == 360.0       # 3960 - 3600
+    # suma exacta de la variación
+    assert d["dotacion"]["monto"] + d["actividad"]["monto"] + d["precio"]["monto"] == 1960.0
+    assert d["dotacion"]["pct"] == 50.0
+    assert d["actividad"]["pct"] == 30.0
+    assert d["precio"]["pct"] == 18.0
+    v = r["variaciones"]
+    assert v["total_pct"] == 98.0
+    assert v["costo_hora_pct"] == 10.0         # 110 vs 100
+    assert v["adicionales_pct_puntos"] == 0.0
+
+
+def test_indicadores_descomposicion_none_sin_horas_previas(db):
+    p0 = _preliq(db, Q_MAY_1)
+    _linea(db, p0, 1000)                        # sin horas en el período anterior
+    p1 = _preliq(db, Q_MAY_2)
+    _linea(db, p1, 1200, hsjornal=10, importe_base=1200)
+
+    r = GerencialService(db).indicadores(Q_MAY_2, None, None)
+    assert r["anterior"] is not None
+    assert r["descomposicion"] is None          # H0 == 0 → no explicable
+    assert r["variaciones"]["total_pct"] == 20.0
+    assert r["variaciones"]["costo_hora_pct"] is None
