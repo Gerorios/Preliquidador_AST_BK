@@ -13,9 +13,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import Base, get_db_propia
+from app.core.database import Base, get_db_propia, get_db_externa, get_db_sueldos
 from app.api.auth import get_usuario_actual
 from app.main import app
+from app.models.models import Preliquidacion
 
 
 @pytest.fixture()
@@ -38,6 +39,10 @@ def _cliente_con_rol(db, rol: str) -> TestClient:
     usuario = SimpleNamespace(id=1, nombre="Test", email="t@t.com", rol=rol, activo=True)
     app.dependency_overrides[get_usuario_actual] = lambda: usuario
     app.dependency_overrides[get_db_propia] = lambda: db
+    # Los controles gerenciales construyen PreliquidacionService, que declara
+    # las 3 sesiones aunque solo use db_propia — se apuntan todas a la sqlite.
+    app.dependency_overrides[get_db_externa] = lambda: db
+    app.dependency_overrides[get_db_sueldos] = lambda: db
     # Sin `with`: no corre el lifespan (que verifica las 3 conexiones reales)
     return TestClient(app)
 
@@ -105,6 +110,24 @@ def test_operativo_accede_a_vista_gerencial(db, rol):
 def test_gerencial_periodo_invalido_da_400(db):
     cliente = _cliente_con_rol(db, "gerente")
     r = cliente.get("/api/gerencial/resumen")  # sin quincena ni mes
+    assert r.status_code == 400
+
+
+def test_gerente_ve_controles_de_pago(db):
+    # Los controles Plantas/Tancadas vs Jornal se exponen en el router
+    # gerencial por quincena (solo lectura, sin el PATCH del valor hora).
+    db.add(Preliquidacion(quincena=date(2026, 5, 1), creado_por=1))
+    db.commit()
+    cliente = _cliente_con_rol(db, "gerente")
+    for ruta in ("control-plantas", "control-tancadas"):
+        r = cliente.get(f"/api/gerencial/{ruta}", params={"quincena": "2026-05-01"})
+        assert r.status_code == 200, ruta
+        assert r.json()["filas"] == []
+
+
+def test_gerencial_control_quincena_inexistente_da_400(db):
+    cliente = _cliente_con_rol(db, "gerente")
+    r = cliente.get("/api/gerencial/control-plantas", params={"quincena": "2030-01-01"})
     assert r.status_code == 400
 
 

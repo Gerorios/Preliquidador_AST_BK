@@ -4,9 +4,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db_propia, get_db_externa
+from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
 from app.api.auth import requiere_rol
+from app.models.models import Preliquidacion
 from app.services.consulta_externa import ConsultaExternaService
+from app.services.preliquidacion_service import PreliquidacionService
 from app.services.gerencial_service import (
     GerencialService, PeriodoInvalidoError, UMBRAL_DESVIO_DEFAULT,
 )
@@ -111,8 +113,8 @@ def indicadores(
     empresa: Optional[str] = Query(None),
     service: GerencialService = Depends(get_service),
 ):
-    """KPIs de control: $/hora jornal, % adicionales y descomposición de la
-    variación (dotación / actividad / precio) contra el período anterior."""
+    """KPIs de control: $/hora jornal y descomposición de la variación
+    (dotación / actividad / precio) contra el período anterior."""
     return _atrapar_periodo(service.indicadores, quincena, mes, empresa)
 
 
@@ -126,3 +128,60 @@ def desvios_cliente(
 ):
     """Clientes vs. su propia media histórica (6 quincenas, mínimo 3)."""
     return _atrapar_periodo(service.desvios_por_cliente, quincena, mes, empresa, umbral)
+
+
+# ─── Controles de pago (solo lectura) ────────────────────────────────────────
+#
+# Los controles Plantas/Tancadas vs Jornal viven en Verificación para el
+# liquidador (que además carga el valor hora). Acá se exponen los MISMOS
+# cálculos por quincena para el gerente, sin la escritura: si el valor hora
+# no está cargado, la respuesta lo trae en null y el front lo avisa.
+
+def _control_por_quincena(
+    metodo: str,
+    quincena: date,
+    db_propia: Session,
+    db_externa: Session,
+    db_sueldos: Session,
+):
+    preliq = (
+        db_propia.query(Preliquidacion)
+        .filter(Preliquidacion.quincena == quincena)
+        .first()
+    )
+    if preliq is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No existe preliquidación de la quincena {quincena}",
+        )
+    service = PreliquidacionService(db_propia, db_externa, db_sueldos)
+    try:
+        return getattr(service, metodo)(preliq.id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/control-plantas")
+def control_plantas(
+    quincena: date = Query(...),
+    db_propia: Session = Depends(get_db_propia),
+    db_externa: Session = Depends(get_db_externa),
+    db_sueldos: Session = Depends(get_db_sueldos),
+):
+    """Control Plantas vs Jornal de la quincena (lectura)."""
+    return _control_por_quincena(
+        "control_plantas_jornal", quincena, db_propia, db_externa, db_sueldos
+    )
+
+
+@router.get("/control-tancadas")
+def control_tancadas(
+    quincena: date = Query(...),
+    db_propia: Session = Depends(get_db_propia),
+    db_externa: Session = Depends(get_db_externa),
+    db_sueldos: Session = Depends(get_db_sueldos),
+):
+    """Control Tancadas vs Jornal de la quincena (lectura)."""
+    return _control_por_quincena(
+        "control_tancadas_jornal", quincena, db_propia, db_externa, db_sueldos
+    )
