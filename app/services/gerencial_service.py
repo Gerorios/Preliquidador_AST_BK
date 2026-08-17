@@ -394,7 +394,9 @@ class GerencialService:
         comparables, sin_historial = self._calcular_desvios(q.all(), quincenas_periodo, umbral_pct)
 
         def _persona(e):
-            e = {**e, "cuil": e.pop("clave"), "nombre": e.pop("etiqueta")}
+            e = dict(e)
+            e["cuil"] = e.pop("clave")
+            e["nombre"] = e.pop("etiqueta")
             return e
 
         return {
@@ -428,7 +430,8 @@ class GerencialService:
         comparables, sin_historial = self._calcular_desvios(q.all(), quincenas_periodo, umbral_pct)
 
         def _cliente(e):
-            e = {**e, "cliente": e.pop("clave")}
+            e = dict(e)
+            e["cliente"] = e.pop("clave")
             e.pop("etiqueta")
             return e
 

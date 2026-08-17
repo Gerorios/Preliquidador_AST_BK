@@ -187,6 +187,10 @@ def test_desvios_persona_contra_su_media(db):
     assert juan["desvio_pct"] == 40.0
     assert juan["supera_umbral"] is True
     assert juan["quincenas_historia"] == 6
+    assert set(juan.keys()) == {
+        "cuil", "nombre", "promedio_quincenal", "quincenas_historia",
+        "media_historica", "desvio_pct", "supera_umbral",
+    }
 
     assert [p["nombre"] for p in r["sin_historial"]] == ["PEDRO"]
 
@@ -341,6 +345,10 @@ def test_desvios_cliente_contra_su_media(db):
     assert a["media_historica"] == 1000.0
     assert a["desvio_pct"] == 50.0
     assert a["supera_umbral"] is True
+    assert set(a.keys()) == {
+        "cliente", "promedio_quincenal", "quincenas_historia",
+        "media_historica", "desvio_pct", "supera_umbral",
+    }
     nuevos = [c["cliente"] for c in r["sin_historial"]]
     assert "CLIENTE B" in nuevos
 
