@@ -45,10 +45,11 @@ def _preliq(db, valor_hora=None):
 
 
 def _linea(db, preliq, unidades, hsmaquina, tarea="DESBROTE", cliente="CLIENTE A",
-           finca="FINCA 1", supervisor=None):
+           finca="FINCA 1", supervisor=None, nombre_empleado=None):
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id, nombre_tarea=tarea, nombre_cliente=cliente,
         nombre_finca=finca, nombre_supervisor=supervisor, grupo_pago_aplicado="PLANTA",
+        nombre_empleado=nombre_empleado,
         unidades=Decimal(unidades), hsmaquina=Decimal(hsmaquina),
         tancadas=Decimal("0"), hsjornal=Decimal("0"),
         importe_total=Decimal("0"), linea_incompleta=False,
@@ -90,6 +91,25 @@ def test_precio_sale_del_pago_real_no_del_maestro(db):
     res = _control(db, preliq)
     assert len(res["filas"]) == 1
     assert res["filas"][0]["precio_promedio"] == 12.0
+
+
+def test_excluye_lineas_de_empleados_mensualizados(db):
+    """Las líneas de personas mensualizadas (hardcodeadas en
+    EMPLEADOS_MENSUALIZADOS) no entran a este control — pagan sueldo fijo,
+    no jornal, así que la comparación no les aplica."""
+    from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+    preliq = _preliq(db)
+    l1 = _linea(db, preliq, unidades="1000", hsmaquina="16",
+                nombre_empleado=EMPLEADOS_MENSUALIZADOS[0])
+    _pagar(db, l1, precio="12", cantidad="1000")
+    l2 = _linea(db, preliq, unidades="500", hsmaquina="8",
+                nombre_empleado="OTRO, EMPLEADO")
+    _pagar(db, l2, precio="12", cantidad="500")
+
+    res = _control(db, preliq)
+
+    assert len(res["filas"]) == 1
+    assert res["filas"][0]["unidades"] == 500.0
 
 
 def test_precio_promedio_ponderado_con_precios_mezclados(db):

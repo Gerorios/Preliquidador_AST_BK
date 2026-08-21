@@ -31,12 +31,13 @@ def _preliq(db, quincena=date(2026, 5, 1), valor_hora_pulv=None):
     return p
 
 
-def _linea(db, preliq, tarea, cliente, finca, tancadas, hsjornal, hsmaquina):
+def _linea(db, preliq, tarea, cliente, finca, tancadas, hsjornal, hsmaquina, nombre_empleado=None):
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id,
         nombre_tarea=tarea, nombre_cliente=cliente, nombre_finca=finca,
         tancadas=Decimal(tancadas), hsjornal=Decimal(hsjornal), hsmaquina=Decimal(hsmaquina),
         unidades=Decimal("0"), importe_total=Decimal("0"), linea_incompleta=False,
+        nombre_empleado=nombre_empleado,
     )
     db.add(l)
     db.commit()
@@ -155,3 +156,20 @@ def test_solo_incluye_lineas_pagadas_por_tancada(db):
 
     assert len(res["filas"]) == 1
     assert res["filas"][0]["nombre_tarea"] == "PULV"
+
+
+def test_excluye_lineas_de_empleados_mensualizados(db):
+    """Las líneas de personas mensualizadas (hardcodeadas en
+    EMPLEADOS_MENSUALIZADOS) no entran a este control."""
+    from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+    preliq = _preliq(db, valor_hora_pulv=Decimal("100"))
+    l1 = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                tancadas="40", hsjornal="10", hsmaquina="5",
+                nombre_empleado=EMPLEADOS_MENSUALIZADOS[1])
+    _aplicar_tancada(db, l1)
+    _concepto_maestro_tancada(db, preliq.quincena, "PULV", "CLIENTE A", "FINCA 1")
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert res["filas"] == []
