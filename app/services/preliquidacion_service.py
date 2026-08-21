@@ -14,6 +14,18 @@ from app.services.sueldos_service import SueldosService
 from app.schemas.schemas import LineaUpdateRequest, ConceptoAdicionalRequest
 
 
+# Personas mensualizadas (no jornalizadas): sus líneas se excluyen de todas
+# las pantallas de Verificación (excesos, resumen por empleado, controles
+# Plantas/Tancadas vs Jornal) porque esos controles miden razonabilidad del
+# pago jornalizado y no aplican a un sueldo mensual fijo. Lista hardcodeada
+# a pedido del usuario (2026-08-21) — si la nómina de mensualizados crece,
+# esto debería pasar a una columna en el maestro de empleados.
+EMPLEADOS_MENSUALIZADOS = [
+    "ARAOZ, GUILLERMO HORACIO",
+    "TORANZO, JOSE PIO",
+]
+
+
 def _n(v) -> str:
     if v is None: return "None"
     try: return f"{float(str(v)):.2f}"
@@ -907,6 +919,8 @@ class PreliquidacionService:
         """
         filtros = [
             PreliquidacionLinea.preliquidacion_id == preliq_id,
+            or_(PreliquidacionLinea.nombre_empleado.is_(None),
+                PreliquidacionLinea.nombre_empleado.notin_(EMPLEADOS_MENSUALIZADOS)),
             ConceptoAdicional.unidad_base == unidad_base,
         ]
         if grupo_pago is not None:
@@ -968,6 +982,8 @@ class PreliquidacionService:
             .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
             .filter(
                 PreliquidacionLinea.preliquidacion_id == preliq_id,
+                or_(PreliquidacionLinea.nombre_empleado.is_(None),
+                PreliquidacionLinea.nombre_empleado.notin_(EMPLEADOS_MENSUALIZADOS)),
                 ConceptoAdicional.unidad_base == "unidades",
                 func.upper(func.trim(PreliquidacionLinea.grupo_pago_aplicado)) == "PLANTA",
             )
@@ -1085,6 +1101,8 @@ class PreliquidacionService:
             .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
             .filter(
                 PreliquidacionLinea.preliquidacion_id == preliq_id,
+                or_(PreliquidacionLinea.nombre_empleado.is_(None),
+                    PreliquidacionLinea.nombre_empleado.notin_(EMPLEADOS_MENSUALIZADOS)),
                 ConceptoAdicional.unidad_base == "tancadas",
             )
             .group_by(

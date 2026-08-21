@@ -92,6 +92,19 @@ def test_resumen_quincena_y_variacion(db):
     assert r["variacion_pct"] == 50.0
 
 
+def test_resumen_excluye_mensualizados(db):
+    """La plata de las personas mensualizadas (sueldo fijo, no jornal) no
+    entra a ningún cálculo de mano de obra de Gerencial."""
+    from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+    p = _preliq(db, Q_MAY_1)
+    _linea(db, p, 1000, cuil="20-1", nombre="OTRO")
+    _linea(db, p, 5000, cuil="20-2", nombre=EMPLEADOS_MENSUALIZADOS[0])
+
+    r = GerencialService(db).resumen(Q_MAY_1, None, None)
+    assert r["total"] == 1000.0
+    assert r["personas"] == 1
+
+
 def test_resumen_mes_agrupa_sus_quincenas_y_compara_mes_anterior(db):
     pm1 = _preliq(db, Q_MAY_1)
     pm2 = _preliq(db, Q_MAY_2)
@@ -191,8 +204,19 @@ def test_desvios_persona_contra_su_media(db):
         "cuil", "nombre", "promedio_quincenal", "quincenas_historia",
         "media_historica", "desvio_pct", "supera_umbral",
     }
-
     assert [p["nombre"] for p in r["sin_historial"]] == ["PEDRO"]
+
+
+def test_desvios_persona_excluye_mensualizados(db):
+    from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+    p = _preliq(db, Q_MAY_1)
+    _linea(db, p, 1000, cuil="20-1", nombre="JUAN")
+    _linea(db, p, 9000, cuil="20-2", nombre=EMPLEADOS_MENSUALIZADOS[0])
+
+    r = GerencialService(db).desvios_por_persona(Q_MAY_1, None, None)
+
+    nombres = {p["nombre"] for p in r["personas"] + r["sin_historial"]}
+    assert EMPLEADOS_MENSUALIZADOS[0] not in nombres
 
 
 def test_desvios_ventana_limita_a_6_quincenas(db):
