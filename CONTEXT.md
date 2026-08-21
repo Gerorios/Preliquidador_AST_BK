@@ -100,8 +100,12 @@ Nivel de acceso de un usuario del sistema: `admin` y `jefe` operan la preliquida
 Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).
 
 **Mano de obra gastada**:
-Costo total de la preliquidación de un período: la suma de **todos** los Conceptos adicionales de sus líneas, manuales incluidos (es lo que efectivamente se paga). Consolidada entre empresas por defecto, filtrable por empresa.
-_Avoid_: excluir los conceptos manuales (haría mentir al indicador)
+Costo total de la preliquidación de un período: la suma de **todos** los Conceptos adicionales de sus líneas, manuales incluidos (es lo que efectivamente se paga), **excepto** las líneas de Personas mensualizadas (ver esa entrada). Consolidada entre empresas por defecto, filtrable por empresa.
+_Avoid_: excluir los conceptos manuales de alguien jornalizado (haría mentir al indicador); confundir la exclusión de mensualizados con "esconder plata" — no cobran por jornal, así que no hay costo de mano de obra jornalizada que atribuirles acá.
+
+**Personas mensualizadas**:
+Personas que cobran un sueldo mensual fijo, no por jornal. Sus líneas quedan excluidas de **toda** Verificación (excesos, resumen por empleado, Plantas/Tancadas vs Jornal) y de **todos** los cálculos de Mano de obra gastada de la Vista gerencial — esos controles miden razonabilidad del pago jornalizado y no aplican a un sueldo fijo. Lista hardcodeada (`EMPLEADOS_MENSUALIZADOS` en `preliquidacion_service.py`, constante espejo en `Verificacion.jsx`), a pedido del usuario (2026-08-21).
+_Avoid_: excluirlas de Revisión — ahí siguen visibles/editables porque igual hay que liquidarles el sueldo; la exclusión es solo para los controles de razonabilidad de jornal.
 
 **Grupo de tareas**:
 Agrupador funcional (`grupo_tarea`) que el catálogo de tareas del sistema de campo trae en la descripción (primera parte separada por `;`). Es la dimensión gerencial de "¿en qué se va la plata?"; se resuelve por nombre de tarea contra el catálogo, no se persiste en la línea.
