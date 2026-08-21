@@ -17,10 +17,11 @@
 from collections import defaultdict
 from datetime import date
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.models import Preliquidacion, PreliquidacionLinea
+from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
 
 
 # Desvío por persona (ver CONTEXT.md): últimas 6 quincenas con actividad,
@@ -33,6 +34,16 @@ UMBRAL_DESVIO_DEFAULT = 30.0
 
 class PeriodoInvalidoError(ValueError):
     pass
+
+
+def _filtro_no_mensualizado():
+    """Excluye a EMPLEADOS_MENSUALIZADOS (sueldo fijo, no jornal) de todos los
+    cálculos de mano de obra de Gerencial. `or_(is_(None), notin_(...))`
+    porque NOT IN con NULL en SQL da NULL (fila excluida), no TRUE."""
+    return or_(
+        PreliquidacionLinea.nombre_empleado.is_(None),
+        PreliquidacionLinea.nombre_empleado.notin_(EMPLEADOS_MENSUALIZADOS),
+    )
 
 
 class GerencialService:
@@ -103,6 +114,7 @@ class GerencialService:
             self.db.query(PreliquidacionLinea)
             .join(Preliquidacion)
             .filter(Preliquidacion.quincena.in_(quincenas))
+            .filter(_filtro_no_mensualizado())
         )
         if empresa:
             q = q.filter(PreliquidacionLinea.empresa_asignada == empresa)
@@ -224,7 +236,7 @@ class GerencialService:
             Preliquidacion.quincena,
             func.coalesce(func.sum(PreliquidacionLinea.importe_total), 0),
             func.count(func.distinct(PreliquidacionLinea.cuit)),
-        ).join(PreliquidacionLinea)
+        ).join(PreliquidacionLinea).filter(_filtro_no_mensualizado())
         if empresa:
             q = q.filter(PreliquidacionLinea.empresa_asignada == empresa)
         filas = (
@@ -377,7 +389,7 @@ class GerencialService:
             PreliquidacionLinea.cuit,
             func.max(PreliquidacionLinea.nombre_empleado),
             func.coalesce(func.sum(PreliquidacionLinea.importe_total), 0),
-        ).join(PreliquidacionLinea)
+        ).join(PreliquidacionLinea).filter(_filtro_no_mensualizado())
         if empresa:
             q = q.filter(PreliquidacionLinea.empresa_asignada == empresa)
         q = q.group_by(Preliquidacion.quincena, PreliquidacionLinea.cuit)
@@ -413,7 +425,7 @@ class GerencialService:
             func.coalesce(PreliquidacionLinea.nombre_cliente, "SIN CLIENTE"),
             func.coalesce(PreliquidacionLinea.nombre_cliente, "SIN CLIENTE"),
             func.coalesce(func.sum(PreliquidacionLinea.importe_total), 0),
-        ).join(PreliquidacionLinea)
+        ).join(PreliquidacionLinea).filter(_filtro_no_mensualizado())
         if empresa:
             q = q.filter(PreliquidacionLinea.empresa_asignada == empresa)
         q = q.group_by(Preliquidacion.quincena, PreliquidacionLinea.nombre_cliente)
