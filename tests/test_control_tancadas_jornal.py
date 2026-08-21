@@ -74,9 +74,8 @@ def test_control_tancadas_calcula_valores_y_diff(db):
     preliq = _preliq(db, valor_hora_pulv=Decimal("5458.34"))
     linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
                    tancadas="40", hsjornal="10", hsmaquina="5")
-    _aplicar_tancada(db, linea)
-    _concepto_maestro_tancada(db, preliq.quincena, "PULV", "CLIENTE A", "FINCA 1",
-                              precio=Decimal("1000"))
+    # precio del pago real: importe/cantidad = 40000/40 = 1000
+    _aplicar_tancada(db, linea, precio=Decimal("1000"), cantidad=Decimal("40"))
     svc = PreliquidacionService(db)
 
     res = svc.control_tancadas_jornal(preliq.id)
@@ -88,6 +87,7 @@ def test_control_tancadas_calcula_valores_y_diff(db):
     assert fila["tancadas"] == 40.0
     assert fila["hsjornal"] == 10.0
     assert fila["hsmaquina"] == 5.0
+    # precio del pago real: Σimporte/Σcantidad = 40000/40 = 1000
     assert fila["precio"] == 1000.0
     # VALOR S/JORNAL = hsjornal/2 * (valor_hora * 1.3) = 5 * 7095.842 = 35479.21
     assert fila["valor_jornal"] == 35479.21
@@ -107,8 +107,7 @@ def test_sin_valor_hora_pulv_devuelve_null_no_error(db):
     preliq = _preliq(db, valor_hora_pulv=None)
     linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
                    tancadas="40", hsjornal="10", hsmaquina="5")
-    _aplicar_tancada(db, linea)
-    _concepto_maestro_tancada(db, preliq.quincena, "PULV", "CLIENTE A", "FINCA 1")
+    _aplicar_tancada(db, linea, precio=Decimal("1000"), cantidad=Decimal("40"))
     svc = PreliquidacionService(db)
 
     res = svc.control_tancadas_jornal(preliq.id)
@@ -128,8 +127,7 @@ def test_hsjornal_cero_deja_diff_en_null(db):
     preliq = _preliq(db, valor_hora_pulv=Decimal("5458.34"))
     linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
                    tancadas="40", hsjornal="0", hsmaquina="5")
-    _aplicar_tancada(db, linea)
-    _concepto_maestro_tancada(db, preliq.quincena, "PULV", "CLIENTE A", "FINCA 1")
+    _aplicar_tancada(db, linea, precio=Decimal("1000"), cantidad=Decimal("40"))
     svc = PreliquidacionService(db)
 
     res = svc.control_tancadas_jornal(preliq.id)
@@ -145,11 +143,10 @@ def test_solo_incluye_lineas_pagadas_por_tancada(db):
     # línea pagada por tancada (entra)
     l1 = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
                 tancadas="10", hsjornal="8", hsmaquina="4")
-    _aplicar_tancada(db, l1)
+    _aplicar_tancada(db, l1, precio=Decimal("1000"), cantidad=Decimal("10"))
     # línea sin concepto de tancada (NO entra)
     l2 = _linea(db, preliq, "OTRA", "CLIENTE B", "FINCA 2",
                 tancadas="99", hsjornal="8", hsmaquina="4")
-    _concepto_maestro_tancada(db, preliq.quincena, "PULV", "CLIENTE A", "FINCA 1")
     svc = PreliquidacionService(db)
 
     res = svc.control_tancadas_jornal(preliq.id)
@@ -167,9 +164,30 @@ def test_excluye_lineas_de_empleados_mensualizados(db):
                 tancadas="40", hsjornal="10", hsmaquina="5",
                 nombre_empleado=EMPLEADOS_MENSUALIZADOS[1])
     _aplicar_tancada(db, l1)
-    _concepto_maestro_tancada(db, preliq.quincena, "PULV", "CLIENTE A", "FINCA 1")
     svc = PreliquidacionService(db)
 
     res = svc.control_tancadas_jornal(preliq.id)
 
     assert res["filas"] == []
+
+
+def test_precio_viene_del_pago_real_no_del_maestro(db):
+    """El precio de la tancada tiene que salir de Σimporte/Σcantidad de los
+    conceptos aplicados, ignorando lo que diga el maestro (que puede estar
+    desactualizado o no reflejar por-cliente/por-supervisor, ADR-0011)."""
+    preliq = _preliq(db, valor_hora_pulv=None)
+    linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                   tancadas="10", hsjornal="8", hsmaquina="4")
+    # el pago real fue a 1500, el maestro dice 1000 — debe ganar el pago real
+    _aplicar_tancada(db, linea, precio=Decimal("1500"), cantidad=Decimal("10"))
+    _concepto_maestro_tancada(db, preliq.quincena, "PULV", "CLIENTE A", "FINCA 1",
+                              precio=Decimal("1000"))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    fila = res["filas"][0]
+    assert fila["precio"] == 1500.0
+    assert "precio_comun" not in fila
+    assert "precio_especial" not in fila
+    assert "var_pct" not in fila

@@ -184,36 +184,9 @@ def test_precio_masivo_sin_ids_encontrados_da_404(db):
     assert exc.value.status_code == 404
 
 
-# ─── control_plantas_jornal: precio_comun / precio_especial ──────────────────
+# ─── control_plantas_jornal / control_tancadas_jornal: precio_comun / precio_especial ──
 
-# La comparativa común vs especial de control_plantas_jornal se eliminó
-# (grilling 2026-08-06): el control valoriza con el pago real y se rearmará
-# una comparativa por caminos aparte. Ver tests/test_control_plantas_jornal.py.
-# En Tancadas la comparativa sigue vigente:
-
-# ─── control_tancadas_jornal: precio_comun / precio_especial ─────────────────
-
-def test_control_tancadas_separa_precio_comun_y_especial(db):
-    preliq = _preliq(db, )
-    linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1")
-    linea.tancadas = Decimal("40")
-    linea.hsjornal = Decimal("10")
-    linea.hsmaquina = Decimal("5")
-    db.commit()
-    _aplicar_concepto(db, linea, "tancadas", precio=Decimal("1000"))
-
-    _concepto(db, preliq.quincena, "PULV", cliente=None, finca=None,
-              codigo=1, precio=Decimal("1000"), unidad=UnidadBaseConcepto.TANCADAS)
-    _concepto(db, preliq.quincena, "PULV", cliente="CLIENTE A", finca="FINCA 1",
-              codigo=2, precio=Decimal("1200"), unidad=UnidadBaseConcepto.TANCADAS)
-
-    svc = PreliquidacionService(db)
-    resultado = svc.control_tancadas_jornal(preliq.id)
-
-    fila = resultado["filas"][0]
-    assert fila["precio_comun"] == 1000.0
-    assert fila["precio_especial"] == 1200.0
-    assert fila["var_pct"] == pytest.approx(0.2, abs=1e-4)  # (1200-1000)/1000
-    # tancadas/2 * precio
-    assert fila["valor_tancada_comun"] == 20000.0
-    assert fila["valor_tancada_especial"] == 24000.0
+# La comparativa común vs especial de estos dos controles se eliminó (Plantas:
+# grilling 2026-08-06; Tancadas: mismo rediseño aplicado 2026-08-21). Ambos
+# valorizan con el pago real; la comparativa por caminos se rearmará aparte.
+# Ver tests/test_control_plantas_jornal.py y tests/test_control_tancadas_jornal.py.
