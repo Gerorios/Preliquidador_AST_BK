@@ -25,6 +25,30 @@ EMPLEADOS_MENSUALIZADOS = [
     "TORANZO, JOSE PIO",
 ]
 
+# ADR-0012: tareas alias de pago. La clave (alias) existe solo para IDENTIFICAR
+# un subconjunto de horas de su canónica (el valor); paga exactamente con el
+# maestro de la canónica. Ambos lados NORMALIZADOS (upper/trim). Nombres
+# exactos del catálogo de campo.
+TAREAS_ALIAS_PAGO = {
+    "MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)":
+        "MANTENIMIENTOS MECANICOS (TALLERES)",
+}
+
+
+def tarea_canonica(nombre) -> str:
+    """Nombre normalizado de la tarea con la que PAGA una línea (ADR-0012):
+    la propia, salvo que sea un alias de pago."""
+    t = (nombre or "").strip().upper()
+    return TAREAS_ALIAS_PAGO.get(t, t)
+
+
+def tareas_que_pagan_como(tareas_normalizadas) -> list:
+    """Sentido inverso del alias: dado un conjunto de tareas canónicas
+    (normalizadas), agrega los alias que pagan con ellas. Para expandir
+    búsquedas de líneas afectadas por reglas del maestro."""
+    base = set(tareas_normalizadas)
+    return sorted(base | {a for a, c in TAREAS_ALIAS_PAGO.items() if c in base})
+
 
 def _n(v) -> str:
     if v is None: return "None"
@@ -321,7 +345,7 @@ class PreliquidacionService:
         reglas con categoria=NULL pasan siempre, reglas con categoria=X solo
         si el cuil dado tiene esa categoría asignada en la quincena.
         """
-        t   = tarea.strip().upper()
+        t   = tarea_canonica(tarea)  # ADR-0012: un alias paga con su canónica
         cl  = (cliente or "").strip().upper()
         fn  = (finca or "").strip().upper()
         sup = (supervisor or "").strip().upper()
@@ -525,7 +549,7 @@ class PreliquidacionService:
         conceptos_nuevos = []
 
         for linea in lineas:
-            t   = (linea.nombre_tarea       or "").strip().upper()
+            t   = tarea_canonica(linea.nombre_tarea)  # ADR-0012
             cl  = (linea.nombre_cliente     or "").strip().upper()
             fn  = (linea.nombre_finca       or "").strip().upper()
             sup = (linea.nombre_supervisor  or "").strip().upper()
@@ -593,9 +617,11 @@ class PreliquidacionService:
         tarea+cliente en cualquier finca (por cliente, finca_nombre vacío) o
         tarea+cliente+finca (específico)."""
         t = (tarea_nombre or "").strip().upper()
+        # ADR-0012: expandir búsqueda para incluir alias que pagan con esta tarea
+        tareas = tareas_que_pagan_como([t])
         lineas = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.preliquidacion_id == preliq_id,
-            func.upper(func.trim(PreliquidacionLinea.nombre_tarea)) == t,
+            func.upper(func.trim(PreliquidacionLinea.nombre_tarea)).in_(tareas),
         ).options(joinedload(PreliquidacionLinea.conceptos)).all()
 
         if supervisor_nombre:
@@ -648,7 +674,8 @@ class PreliquidacionService:
             ConceptoLiquidacion.quincena == quincena,
             ConceptoLiquidacion.categoria.isnot(None),
         ).distinct().all()
-        return [r[0].strip().upper() for r in rows if r[0]]
+        # ADR-0012: las tareas alias de una tarea de taller también son taller.
+        return tareas_que_pagan_como([r[0].strip().upper() for r in rows if r[0]])
 
     def recalcular_por_categoria(self, quincena: date, cuil: str) -> dict:
         """

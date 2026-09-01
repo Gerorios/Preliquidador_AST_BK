@@ -8,7 +8,9 @@ from app.core.database import get_db_propia, get_db_externa
 from app.api.auth import get_usuario_actual, requiere_conceptos
 from app.models.models import ConceptoLiquidacion, Preliquidacion
 from app.services.consulta_externa import ConsultaExternaService
-from app.services.preliquidacion_service import PreliquidacionService
+from app.services.preliquidacion_service import (
+    PreliquidacionService, TAREAS_ALIAS_PAGO, tarea_canonica,
+)
 from app.schemas.schemas import (
     ConceptoUnifRequest, ConceptoUnifResponse, ConceptoUnifUpdateRequest,
     MensajeResponse, ConceptoPanelResponse, ConceptoPrecioMasivoRequest,
@@ -32,6 +34,19 @@ def _validar_cliente_xor_supervisor(cliente_nombre, supervisor_nombre):
             status_code=422,
             detail="Un concepto no puede tener cliente y supervisor a la vez: "
                    "cargá cliente (± finca) O supervisor, no ambos.",
+        )
+
+
+def _validar_tarea_no_alias(tarea_nombre: str):
+    """ADR-0012: una tarea alias de pago no existe para el maestro."""
+    t = (tarea_nombre or "").strip().upper()
+    canonica = tarea_canonica(t)
+    if canonica != t:
+        raise HTTPException(
+            status_code=422,
+            detail=f"La tarea '{t}' es solo para identificar horas: paga "
+                   f"automáticamente con los conceptos de '{canonica}'. "
+                   f"Cargá el concepto en esa tarea.",
         )
 
 # dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
@@ -59,7 +74,12 @@ def listar_fincas(cliente: str = Query(...), db_externa: Session = Depends(get_d
 
 @router.get("/maestro/tareas")
 def listar_tareas(db_externa: Session = Depends(get_db_externa)):
-    return ConsultaExternaService(db_externa).obtener_tareas()
+    tareas = ConsultaExternaService(db_externa).obtener_tareas()
+    # ADR-0012: las tareas alias de pago no existen para el maestro.
+    return [
+        t for t in tareas
+        if str(t.get("nombre", "")).strip().upper() not in TAREAS_ALIAS_PAGO
+    ]
 
 
 @router.get("/grupos-pago")
@@ -272,6 +292,7 @@ def precio_masivo(
 @router.post("/conceptos", response_model=ConceptoUnifResponse,
              dependencies=[Depends(requiere_conceptos)])
 def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_propia)):
+    _validar_tarea_no_alias(datos.tarea_nombre)
     cliente_nombre = datos.cliente_nombre.strip() if datos.cliente_nombre else None
     supervisor_nombre = datos.supervisor_nombre.strip() if datos.supervisor_nombre else None
     _validar_cliente_xor_supervisor(cliente_nombre, supervisor_nombre)
@@ -442,9 +463,20 @@ def conceptos_faltantes(
     4 caminos de matching — ADR-0011). Un concepto con código pero sin precio
     no cuenta como completo.
     """
-    rows = db.execute(text("""
+    # ADR-0012: las líneas de una tarea alias faltan/matchean como su canónica.
+    casos = " ".join(
+        f"WHEN UPPER(TRIM(pl.nombre_tarea)) = :alias_{i} THEN :canon_{i}"
+        for i in range(len(TAREAS_ALIAS_PAGO))
+    )
+    tarea_pago = f"CASE {casos} ELSE pl.nombre_tarea END" if casos else "pl.nombre_tarea"
+    params = {"quincena": quincena}
+    for i, (alias, canon) in enumerate(sorted(TAREAS_ALIAS_PAGO.items())):
+        params[f"alias_{i}"] = alias
+        params[f"canon_{i}"] = canon
+
+    rows = db.execute(text(f"""
         SELECT DISTINCT
-            pl.nombre_tarea,
+            {tarea_pago} AS nombre_tarea,
             pl.nombre_cliente,
             pl.nombre_finca
         FROM preliquidacion_linea pl
@@ -453,7 +485,7 @@ def conceptos_faltantes(
           AND NOT EXISTS (
               SELECT 1 FROM concepto_liquidacion cl
               WHERE cl.quincena = :quincena
-                AND cl.tarea_nombre = pl.nombre_tarea
+                AND UPPER(TRIM(cl.tarea_nombre)) = UPPER(TRIM({tarea_pago}))
                 AND cl.codigo IS NOT NULL
                 AND cl.precio IS NOT NULL
                 AND (
@@ -466,8 +498,8 @@ def conceptos_faltantes(
                             UPPER(TRIM(COALESCE(pl.nombre_supervisor, ''))))
                 )
           )
-        ORDER BY pl.nombre_tarea, pl.nombre_cliente, pl.nombre_finca
-    """), {"quincena": quincena}).fetchall()
+        ORDER BY nombre_tarea, pl.nombre_cliente, pl.nombre_finca
+    """), params).fetchall()
 
     return [
         {"tarea_nombre": r[0], "cliente_nombre": r[1], "finca_nombre": r[2]}
