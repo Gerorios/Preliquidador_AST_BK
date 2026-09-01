@@ -1,5 +1,5 @@
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import and_, or_, func, case, bindparam, text as sql_text
@@ -9,7 +9,7 @@ from app.models.models import (
     AjusteManual, ConceptoLiquidacion, UnidadBaseConcepto, CategoriaOperario,
 )
 from app.services.consulta_externa import ConsultaExternaService
-from app.services.motor_reglas import MotorReglas
+from app.services.motor_reglas import MotorReglas, normalizar_decimal
 from app.services.sueldos_service import SueldosService
 from app.schemas.schemas import LineaUpdateRequest, ConceptoAdicionalRequest
 
@@ -50,10 +50,9 @@ def tareas_que_pagan_como(tareas_normalizadas) -> list:
     return sorted(base | {a for a, c in TAREAS_ALIAS_PAGO.items() if c in base})
 
 
-def _n(v) -> str:
-    if v is None: return "None"
-    try: return f"{float(str(v)):.2f}"
-    except: return "None"
+# Normalización canónica compartida con detectar_duplicados (motor_reglas):
+# la clave del diff y el criterio de duplicado deben ver el mismo valor.
+_n = normalizar_decimal
 
 
 def _clave_linea(fila: dict) -> tuple:
@@ -574,12 +573,19 @@ class PreliquidacionService:
         return resultado
 
     def _to_decimal(self, valor) -> Optional[Decimal]:
+        # Cuantizado a 2 decimales half-up ANTES de insertar: así el valor en
+        # memoria (con el que se calculan los conceptos) es idéntico al que la
+        # columna DECIMAL(x,2) va a guardar, en cualquier motor. Sin esto, el
+        # redondeo lo hacía MySQL a su manera y la clave del diff no cerraba.
         if valor is None:
             return None
         try:
-            return Decimal(str(valor))
+            d = Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         except Exception:
             return None
+        if not d.is_finite():
+            return None
+        return abs(d) if d == 0 else d
 
     # ─── Aplicar conceptos ────────────────────────────────────────────────────
 
