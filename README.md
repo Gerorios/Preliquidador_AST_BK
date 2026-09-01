@@ -20,7 +20,7 @@ Repositorio hermano (frontend React + Vite): `frontend_preliquidacion` / `Gerori
 | Asistente de ayuda | OpenAI (gpt-4o-mini) — opcional |
 | Tests | pytest (SQLite in-memory) |
 
-> Alembic figura en `requirements.txt` pero **no se usa**: las migraciones son SQL manual versionado en `migrations/` (ws1…ws11 + fix).
+> Alembic figura en `requirements.txt` pero **no se usa**: las migraciones son SQL manual versionado en `migrations/` (ws1…ws16 + fix).
 
 ---
 
@@ -42,12 +42,14 @@ app/
 │   ├── auth.py              # /api/auth — login JWT
 │   ├── preliquidacion.py    # /api/preliquidacion — núcleo
 │   ├── precios.py           # /api/precios — maestro de conceptos
+│   ├── gerencial.py         # /api/gerencial — vista gerente (solo lectura)
 │   ├── export.py            # export a Excel
 │   └── asistente.py         # /api/asistente — chat de ayuda (opcional)
 ├── models/models.py         # ORM + Enums
 ├── schemas/schemas.py       # DTOs Pydantic
 └── services/
     ├── preliquidacion_service.py  # Motor principal (generación, recálculo reactivo)
+    ├── gerencial_service.py       # Agregaciones e indicadores de la vista gerencial
     ├── motor_reglas.py            # Cálculo por unidad base, resolución empresa/legajo
     ├── consulta_externa.py        # Extracción de tareas de campo (SQL crudo)
     ├── sueldos_service.py         # Maestro de empleados + cache
@@ -76,8 +78,10 @@ app/
 - **Línea incompleta** (ADR-0003): línea sin ningún concepto con código y precio > 0 — es lo único que el liquidador debe resolver.
 - **Mantenimiento mecánico** (ADR-0008): el campo carga todo como una sola tarea; el liquidador asigna categoría 1-7 por persona/quincena (heredable de la quincena anterior) que determina el precio.
 - **Controles de razonabilidad**: Plantas vs Jornal (precio desde el pago real; %Dif contra el jornal tractorista = valor hora cargado por quincena × 8) y Tancadas vs Jornal (tancada ida y vuelta → /2; recargo pulverización ×1,3, ADR-0007). Excesos: >13 hs, >35 tancadas, >6.000 plantas por empleado/día.
+- **Personas mensualizadas**: cobran sueldo mensual fijo; sus líneas se excluyen de toda la Verificación y de los cálculos de mano de obra de la vista gerencial (siguen visibles en Revisión). Lista hardcodeada `EMPLEADOS_MENSUALIZADOS` en `preliquidacion_service.py`.
+- **Vista gerencial**: solo lectura, roles admin/jefe/gerente; agrega mano de obra gastada con comparación vs período anterior, descomposición de la variación (dotación/actividad/precio), desvíos por persona y por cliente contra su media histórica (6 quincenas, mínimo 3).
 
-Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0009). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
+Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0011). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
 
 ---
 
@@ -161,7 +165,7 @@ VPS único (Hostinger São Paulo), uvicorn bajo systemd con `--workers 1` (el ca
 pytest
 ```
 
-Corren sobre SQLite in-memory. Cubren el motor de reglas, la generación de conceptos, el recálculo reactivo, reemplaza-común, categorías de mantenimiento, controles de razonabilidad, copia de quincena, reasignación de empresa, cache de sueldos y estadísticas.
+Corren sobre SQLite in-memory. Cubren el motor de reglas, la generación de conceptos, el recálculo reactivo, reemplaza-común, conceptos por cliente/supervisor, categorías de mantenimiento, controles de razonabilidad, copia de quincena, reasignación de empresa, cache de sueldos, estadísticas, autorización por roles, KPIs gerenciales y export a Excel.
 
 ---
 
@@ -219,6 +223,21 @@ Lista completa e interactiva en `/docs`. Resumen:
 | DELETE | `/conceptos/{id}` | Elimina concepto (+ recálculo reactivo) |
 | PATCH | `/conceptos/precio-masivo` | Precio masivo (+ recálculo batcheado) |
 | POST | `/conceptos/copiar` | Copia conceptos entre quincenas (marca heredado) |
+
+### Vista gerencial (`/api/gerencial`) — solo lectura, roles admin/jefe/gerente
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/quincenas` | Quincenas con preliquidación (selector de período) |
+| GET | `/empresas` | Empresas con líneas preliquidadas (filtro) |
+| GET | `/resumen` | Mano de obra gastada del período vs período anterior |
+| GET | `/evolucion` | Evolución por quincena |
+| GET | `/por-cliente` | Gasto por cliente |
+| GET | `/por-grupo-tarea` | Gasto por grupo de tareas, con drill-down |
+| GET | `/desvios-persona` | Cada persona vs su media histórica (6 quincenas, mín. 3) |
+| GET | `/desvios-cliente` | Cada cliente vs su media histórica (misma ventana) |
+| GET | `/indicadores` | KPIs de control: $/hora jornal + descomposición de la variación |
+| GET | `/control-plantas` | Control Plantas vs Jornal por quincena (lectura) |
+| GET | `/control-tancadas` | Control Tancadas vs Jornal por quincena (lectura) |
 
 ### Asistente (`/api/asistente`)
 | Método | Ruta | Descripción |
