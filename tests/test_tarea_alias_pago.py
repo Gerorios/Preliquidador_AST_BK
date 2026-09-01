@@ -14,7 +14,7 @@ from app.services.preliquidacion_service import (
     PreliquidacionService, TAREAS_ALIAS_PAGO, tarea_canonica, tareas_que_pagan_como,
 )
 
-TAREA_ALIAS = "MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)"
+TAREA_ALIAS = "MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)"
 TAREA_CANONICA = "MANTENIMIENTOS MECANICOS (TALLERES)"
 
 
@@ -173,7 +173,7 @@ def test_editar_concepto_de_la_canonica_recalcula_la_linea_alias(db):
 
 # ─── Mantenimiento: líneas alias = líneas de taller ─────────────────────────
 
-def test_persona_con_solo_horas_extras_aparece_en_operarios(db):
+def test_persona_con_solo_horas_guardia_aparece_en_operarios(db):
     preliq = _preliq(db)
     _linea(db, preliq, TAREA_ALIAS, cuil="20111111119")
     _concepto(db, preliq.quincena, TAREA_CANONICA, codigo=50,

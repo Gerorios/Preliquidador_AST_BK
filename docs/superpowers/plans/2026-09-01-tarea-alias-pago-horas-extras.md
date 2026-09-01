@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** La tarea `MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)` paga exactamente con el maestro de conceptos de `MANTENIMIENTOS MECANICOS (TALLERES)` (mismas categorías, mismos precios, sin recargo), sin que el liquidador cargue ningún concepto nuevo — la línea conserva su nombre real para que la liquidación formal identifique las horas extras.
+**Goal:** La tarea `MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)` paga exactamente con el maestro de conceptos de `MANTENIMIENTOS MECANICOS (TALLERES)` (mismas categorías, mismos precios, sin recargo), sin que el liquidador cargue ningún concepto nuevo — la línea conserva su nombre real para que la liquidación formal identifique las horas extras.
 
 **Architecture:** Un diccionario hardcodeado `TAREAS_ALIAS_PAGO {alias → canónica}` (nombres normalizados) en `preliquidacion_service.py` + dos helpers puros (`tarea_canonica`, `tareas_que_pagan_como`). El alias se aplica en los DOS puntos donde se matchea el maestro (generación: `_buscar_conceptos_cache`; recálculo: bloque inline de `_aplicar_conceptos_a_lineas`), en sentido inverso en el impacto reactivo (`_lineas_por_match`) y en mantenimiento (`_tareas_con_categoria`). En el API de precios: 422 al crear conceptos para una tarea alias, faltantes mapea alias→canónica, y el catálogo de tareas del maestro oculta los alias. Solo backend; el frontend no se toca (el dropdown de tareas viene del backend).
 
@@ -16,7 +16,7 @@
 - PROHIBIDO deployar al VPS o tocar producción. La base `preliquidacion` es dato real: solo lecturas.
 - Tests: `python -m pytest tests/ -q` desde la raíz del backend. Deben pasar TODOS (hoy: 146).
 - Sin migraciones de base: el mapeo vive en código.
-- Los nombres del alias son EXACTOS del catálogo real (verificados 2026-09-01): alias `MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)`, canónica `MANTENIMIENTOS MECANICOS (TALLERES)`. Ojo: los tests viejos usan un nombre parecido pero distinto ("MANTENIMIENTO MECANICO (TALLERES)", singular) — es irrelevante, el matching de tests es agnóstico del nombre.
+- Los nombres del alias son EXACTOS del catálogo real (verificados 2026-09-01): alias `MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)`, canónica `MANTENIMIENTOS MECANICOS (TALLERES)`. Ojo: los tests viejos usan un nombre parecido pero distinto ("MANTENIMIENTO MECANICO (TALLERES)", singular) — es irrelevante, el matching de tests es agnóstico del nombre.
 - Textos de error en español con tildes correctas. Código en español, snake_case.
 - Commits terminan con:
   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
@@ -77,7 +77,7 @@ from app.services.preliquidacion_service import (
     PreliquidacionService, TAREAS_ALIAS_PAGO, tarea_canonica, tareas_que_pagan_como,
 )
 
-TAREA_ALIAS = "MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)"
+TAREA_ALIAS = "MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)"
 TAREA_CANONICA = "MANTENIMIENTOS MECANICOS (TALLERES)"
 
 
@@ -226,7 +226,7 @@ En `app/services/preliquidacion_service.py`, inmediatamente después de la lista
 # maestro de la canónica. Ambos lados NORMALIZADOS (upper/trim). Nombres
 # exactos del catálogo de campo.
 TAREAS_ALIAS_PAGO = {
-    "MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)":
+    "MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)":
         "MANTENIMIENTOS MECANICOS (TALLERES)",
 }
 
@@ -644,7 +644,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 En `README.md`, en la lista de "Reglas de negocio clave", agregar después del bullet de "Mantenimiento mecánico":
 
 ```markdown
-- **Tarea alias de pago** (ADR-0012): `MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)` existe solo para identificar horas extras de taller; paga automáticamente con el maestro de `MANTENIMIENTOS MECANICOS (TALLERES)` (mismas categorías y precios, sin recargo). No aparece en faltantes ni admite conceptos propios; la línea conserva su nombre real en Revisión y en el Excel.
+- **Tarea alias de pago** (ADR-0012): `MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)` existe solo para identificar horas extras de taller; paga automáticamente con el maestro de `MANTENIMIENTOS MECANICOS (TALLERES)` (mismas categorías y precios, sin recargo). No aparece en faltantes ni admite conceptos propios; la línea conserva su nombre real en Revisión y en el Excel.
 ```
 
 - [ ] **Step 2: Correr TODA la suite una última vez**
@@ -661,7 +661,7 @@ python -c "
 from app.core.database import SessionPropia
 from sqlalchemy import text
 s = SessionPropia()
-r = s.execute(text(\"SELECT COUNT(*) FROM preliquidacion_linea WHERE UPPER(TRIM(nombre_tarea)) = 'MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)'\")).scalar()
+r = s.execute(text(\"SELECT COUNT(*) FROM preliquidacion_linea WHERE UPPER(TRIM(nombre_tarea)) = 'MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)'\")).scalar()
 print('lineas alias en base:', r)
 s.close()"
 ```
