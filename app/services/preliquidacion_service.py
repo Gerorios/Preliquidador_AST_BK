@@ -57,6 +57,9 @@ def _n(v) -> str:
 
 
 def _clave_linea(fila: dict) -> tuple:
+    # supervisor y cuit integran la clave porque determinan el PAGO (camino
+    # por-supervisor ADR-0011 y filtro por categoría ADR-0008): dos cargas
+    # iguales salvo en ellos NO son intercambiables al diffear.
     return (
         str(fila.get("planilla", "") or "").strip().upper(),
         str(fila.get("fecha_tarea", "") or ""),
@@ -66,6 +69,8 @@ def _clave_linea(fila: dict) -> tuple:
         str(fila.get("nombre_cliente", "") or "").strip().upper(),
         str(fila.get("nombre_finca", "") or "").strip().upper(),
         str(fila.get("nombre_tractor", "") or "").strip().upper(),
+        str(fila.get("nombre_supervisor", "") or "").strip().upper(),
+        str(fila.get("cuit", "") or "").strip(),
         _n(fila.get("hsjornal")),
         _n(fila.get("hsmaquina")),
         _n(fila.get("tancadas")),
@@ -157,6 +162,7 @@ class PreliquidacionService:
         rows = self.db.execute(sql_text("""
             SELECT id, planilla, fecha_tarea, legajo_campo, nombre_empleado,
                    nombre_tarea, nombre_cliente, nombre_finca, nombre_tractor,
+                   nombre_supervisor, cuit,
                    hsjornal, hsmaquina, tancadas, unidades
             FROM preliquidacion_linea
             WHERE preliquidacion_id = :pid
@@ -173,7 +179,9 @@ class PreliquidacionService:
                 str(row[6] or "").strip().upper(),
                 str(row[7] or "").strip().upper(),
                 str(row[8] or "").strip().upper(),
-                _n(row[9]), _n(row[10]), _n(row[11]), _n(row[12]),
+                str(row[9] or "").strip().upper(),
+                str(row[10] or "").strip(),
+                _n(row[11]), _n(row[12]), _n(row[13]), _n(row[14]),
             )
             ids_por_clave.setdefault(clave, []).append(row[0])
 
@@ -253,9 +261,38 @@ class PreliquidacionService:
             if conceptos_auto:
                 self.db.bulk_save_objects(conceptos_auto)
 
+        # es_duplicado es estado derivado: recalcularlo sobre la quincena
+        # entera deja el mismo resultado que una generación fresca. Antes, un
+        # duplicado agregado incrementalmente quedaba sin marcar (no aparecía
+        # en la alerta de Verificación) y al borrar la copia el sobreviviente
+        # quedaba marcado para siempre.
+        if eliminadas or insertadas:
+            self._recalcular_flags_duplicado(preliq.id)
+
         sin_cambios = len(rows) - eliminadas
         self.db.commit()
         return {"preliquidacion_id": preliq.id, "insertadas": insertadas, "eliminadas": eliminadas, "sin_cambios": sin_cambios}
+
+    def _recalcular_flags_duplicado(self, preliq_id: int) -> None:
+        """Reaplica detectar_duplicados a TODAS las líneas de la preliquidación
+        (mismo criterio que la generación fresca) y actualiza solo los flags
+        que cambiaron."""
+        lineas = self.db.query(PreliquidacionLinea).filter(
+            PreliquidacionLinea.preliquidacion_id == preliq_id
+        ).all()
+        filas = [{
+            "planilla": l.planilla, "fecha_tarea": l.fecha_tarea,
+            "legajo": l.legajo_campo, "nombre_empleado": l.nombre_empleado,
+            "nombre_tarea": l.nombre_tarea, "nombre_cliente": l.nombre_cliente,
+            "nombre_finca": l.nombre_finca, "nombre_tractor": l.nombre_tractor,
+            "hsjornal": l.hsjornal, "hsmaquina": l.hsmaquina,
+            "tancadas": l.tancadas, "unidades": l.unidades,
+        } for l in lineas]
+        duplicados = self.motor.detectar_duplicados(filas)
+        for i, linea in enumerate(lineas):
+            flag = i in duplicados
+            if bool(linea.es_duplicado) != flag:
+                linea.es_duplicado = flag
 
     def _ids_con_datos_manuales(self, linea_ids: list) -> set:
         """Ids de línea con conceptos manuales o ajustes de auditoría: al
