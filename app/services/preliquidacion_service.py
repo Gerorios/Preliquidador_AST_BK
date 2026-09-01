@@ -1,5 +1,5 @@
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import and_, or_, func, case, bindparam, text as sql_text
@@ -51,9 +51,12 @@ def tareas_que_pagan_como(tareas_normalizadas) -> list:
 
 
 def _n(v) -> str:
+    # Half-up sobre Decimal, igual que las columnas DECIMAL(x,2) de MySQL.
+    # El formateo por float redondeaba '12.985' a '12.98' (la DB guarda 12.99)
+    # y la clave nunca coincidía: la línea churneaba en cada actualización.
     if v is None: return "None"
-    try: return f"{float(str(v)):.2f}"
-    except: return "None"
+    try: return str(Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    except Exception: return "None"
 
 
 def _clave_linea(fila: dict) -> tuple:
@@ -574,10 +577,14 @@ class PreliquidacionService:
         return resultado
 
     def _to_decimal(self, valor) -> Optional[Decimal]:
+        # Cuantizado a 2 decimales half-up ANTES de insertar: así el valor en
+        # memoria (con el que se calculan los conceptos) es idéntico al que la
+        # columna DECIMAL(x,2) va a guardar, en cualquier motor. Sin esto, el
+        # redondeo lo hacía MySQL a su manera y la clave del diff no cerraba.
         if valor is None:
             return None
         try:
-            return Decimal(str(valor))
+            return Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         except Exception:
             return None
 

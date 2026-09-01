@@ -272,6 +272,35 @@ def test_flag_duplicado_se_apaga_al_borrar_la_copia(db):
     assert bool(lineas[0].es_duplicado) is False
 
 
+def test_valor_con_tres_decimales_no_churnea(db):
+    """El campo puede mandar '12.985' (3 decimales); la columna DECIMAL(10,2)
+    redondea half-up a 12.99 pero el formateo por float daba '12.98': la clave
+    nunca coincidía y la línea se borraba y reinsertaba en CADA actualización
+    (perdiendo id y conceptos manuales). Caso real: ORELLANA 2026-08-19."""
+    _concepto(db)
+    fila = _fila()
+    fila["unidades"] = "12.985"
+    svc = _svc(db, [fila])
+    svc.generar(Q, usuario_id=1)
+    ids_antes = [l.id for l in _lineas(db)]
+
+    r = svc.generar(Q, usuario_id=1)
+
+    assert r["eliminadas"] == 0
+    assert r["insertadas"] == 0
+    assert [l.id for l in _lineas(db)] == ids_antes
+
+
+def test_normalizacion_redondea_half_up_como_mysql():
+    from app.services.preliquidacion_service import _n
+    assert _n("12.985") == "12.99"   # float lo bajaba a 12.98
+    assert _n("12.984") == "12.98"
+    assert _n(Decimal("12.985")) == "12.99"
+    assert _n(8) == "8.00"
+    assert _n(None) == "None"
+    assert _n("no numerico") == "None"
+
+
 def test_sin_cambios_no_toca_nada(db):
     _concepto(db)
     fila = _fila()
