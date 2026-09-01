@@ -1,5 +1,7 @@
 # Vista Gerencial: Indicadores de Control Implementation Plan
 
+> **ESTADO (2026-09-01): IMPLEMENTADO Y MERGEADO** — backend en PR #21 (`10614bb`, 2026-08-17) y frontend en su rama homónima. Los checkboxes se marcaron retroactivamente contra el código mergeado. Pendiente sin registro de ejecución: Task 7 pasos 2 y 3 (smoke con datos reales y smoke visual del frontend) — la funcionalidad está en producción y en uso, pero esa verificación formal no quedó documentada.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Agregar a la vista gerencial (control post-cierre) la descomposición de la variación (dotación / actividad / precio), los KPIs $/hora jornal y % adicionales, y los desvíos por cliente contra su media histórica.
@@ -45,21 +47,21 @@ Sean período actual (1) y anterior (0): `T` = suma de `importe_total`, `P` = pe
 **Interfaces:**
 - Produces: rama `feature/gerencial-control-analitico` activa en ambos repos.
 
-- [ ] **Step 1: Crear rama en backend**
+- [x] **Step 1: Crear rama en backend**
 
 ```bash
 cd "C:\Users\Administrador\Desktop\LA Gero\Sistema_Preliquidacion\backend_preliquidacion"
 git checkout main && git pull && git checkout -b feature/gerencial-control-analitico
 ```
 
-- [ ] **Step 2: Crear rama en frontend**
+- [x] **Step 2: Crear rama en frontend**
 
 ```bash
 cd "C:\Users\Administrador\Desktop\LA Gero\Sistema_Preliquidacion\frontend_preliquidacion"
 git checkout main && git pull && git checkout -b feature/gerencial-control-analitico
 ```
 
-- [ ] **Step 3: Verificar**
+- [x] **Step 3: Verificar**
 
 Run: `git branch --show-current` en ambos repos.
 Expected: `feature/gerencial-control-analitico` en los dos.
@@ -92,7 +94,7 @@ Expected: `feature/gerencial-control-analitico` en los dos.
 }
 ```
 
-- [ ] **Step 1: Extender el helper `_linea` del test con hsjornal e importe_base**
+- [x] **Step 1: Extender el helper `_linea` del test con hsjornal e importe_base**
 
 En `tests/test_gerencial_kpis.py`, reemplazar la firma y el cuerpo de `_linea` para aceptar los campos nuevos (default None, no rompe ningún test existente):
 
@@ -113,7 +115,7 @@ def _linea(db, preliq, importe, cuil="20-11111111-1", nombre="JUAN",
     return l
 ```
 
-- [ ] **Step 2: Escribir los tests que fallan**
+- [x] **Step 2: Escribir los tests que fallan**
 
 Agregar al final de `tests/test_gerencial_kpis.py`:
 
@@ -185,12 +187,12 @@ def test_indicadores_descomposicion_none_sin_horas_previas(db):
     assert r["variaciones"]["costo_hora_pct"] is None
 ```
 
-- [ ] **Step 3: Correr los tests y verificar que fallan**
+- [x] **Step 3: Correr los tests y verificar que fallan**
 
 Run: `python -m pytest tests/test_gerencial_kpis.py -q -k indicadores`
 Expected: FAIL con `AttributeError: ... no attribute 'indicadores'`.
 
-- [ ] **Step 4: Implementar `_metricas` e `indicadores`**
+- [x] **Step 4: Implementar `_metricas` e `indicadores`**
 
 En `app/services/gerencial_service.py`, después de `_totales` (línea ~126):
 
@@ -272,12 +274,12 @@ En `app/services/gerencial_service.py`, después de `_totales` (línea ~126):
         }
 ```
 
-- [ ] **Step 5: Correr los tests y verificar que pasan**
+- [x] **Step 5: Correr los tests y verificar que pasan**
 
 Run: `python -m pytest tests/test_gerencial_kpis.py -q`
 Expected: PASS todos (los nuevos y los preexistentes).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/services/gerencial_service.py tests/test_gerencial_kpis.py
@@ -309,7 +311,7 @@ git commit -m "feat(gerencial): indicadores de control con descomposición de la
 
 También produce el helper interno `_calcular_desvios(filas, quincenas_periodo, umbral_pct)` donde `filas` es un iterable de tuplas `(quincena, clave, etiqueta, total)`; devuelve `(comparables, sin_historial)` con entradas `{"clave", "etiqueta", "promedio_quincenal", "quincenas_historia", ...}`. `desvios_por_persona` DEBE seguir devolviendo exactamente la misma forma que hoy (claves `cuil`/`nombre`) — los tests existentes lo garantizan.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregar al final de `tests/test_gerencial_kpis.py`:
 
@@ -346,12 +348,12 @@ def test_desvios_cliente_sin_cliente_agrupa(db):
     assert r["clientes"][0]["desvio_pct"] == 0.0
 ```
 
-- [ ] **Step 2: Correr los tests y verificar que fallan**
+- [x] **Step 2: Correr los tests y verificar que fallan**
 
 Run: `python -m pytest tests/test_gerencial_kpis.py -q -k desvios_cliente`
 Expected: FAIL con `AttributeError: ... no attribute 'desvios_por_cliente'`.
 
-- [ ] **Step 3: Refactorizar el cálculo común y agregar el método nuevo**
+- [x] **Step 3: Refactorizar el cálculo común y agregar el método nuevo**
 
 En `gerencial_service.py`, extraer de `desvios_por_persona` (líneas 274-310 actuales) el helper genérico, y reescribir ambos métodos públicos:
 
@@ -479,12 +481,12 @@ Y el método nuevo:
 
 Eliminar del cuerpo viejo de `desvios_por_persona` el código que quedó duplicado (el bucle `por_persona` y el armado de `comparables`/`sin_historial` originales, líneas 274-310).
 
-- [ ] **Step 4: Correr TODOS los tests**
+- [x] **Step 4: Correr TODOS los tests**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS completo. Los tests preexistentes de desvíos por persona validan que el refactor no cambió la respuesta.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/services/gerencial_service.py tests/test_gerencial_kpis.py
@@ -503,7 +505,7 @@ git commit -m "feat(gerencial): desvíos por cliente con ventana histórica comp
 - Consumes: `GerencialService.indicadores` (Task 1), `GerencialService.desvios_por_cliente` (Task 2), helpers `get_service` y `_atrapar_periodo` existentes.
 - Produces: `GET /api/gerencial/indicadores?quincena|mes&empresa` y `GET /api/gerencial/desvios-cliente?quincena|mes&empresa&umbral`, protegidos por el router (roles admin/jefe/gerente).
 
-- [ ] **Step 1: Agregar los endpoints**
+- [x] **Step 1: Agregar los endpoints**
 
 Al final de `app/api/gerencial.py`:
 
@@ -532,16 +534,16 @@ def desvios_cliente(
     return _atrapar_periodo(service.desvios_por_cliente, quincena, mes, empresa, umbral)
 ```
 
-- [ ] **Step 2: Revisar `tests/test_autorizacion_roles.py`**
+- [x] **Step 2: Revisar `tests/test_autorizacion_roles.py`**
 
 Leerlo. Si tiene una lista de rutas gerenciales para probar autorización, agregar `/api/gerencial/indicadores` y `/api/gerencial/desvios-cliente` a esa lista siguiendo el patrón del archivo. Si la cobertura es genérica por router, no tocar nada.
 
-- [ ] **Step 3: Correr TODOS los tests**
+- [x] **Step 3: Correr TODOS los tests**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS completo.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/api/gerencial.py tests/test_autorizacion_roles.py
@@ -560,7 +562,7 @@ git commit -m "feat(gerencial): endpoints de indicadores de control y desvíos p
 - Consumes: endpoints de Task 3.
 - Produces: `obtenerIndicadores(periodo)` y `obtenerDesviosClientes(periodo, umbral)` en `src/services/gerencial.js`; variable `indicadores` (resultado de useQuery) disponible en el cuerpo de `Gerencial()` para las Tasks 5. La query de desvíos-clientes se agrega en Task 6.
 
-- [ ] **Step 1: Agregar las funciones de servicio**
+- [x] **Step 1: Agregar las funciones de servicio**
 
 Al final de `src/services/gerencial.js`:
 
@@ -572,7 +574,7 @@ export const obtenerDesviosClientes = (periodo, umbral) =>
   api.get('/gerencial/desvios-cliente', { params: params({ ...periodo, umbral }) }).then(r => r.data)
 ```
 
-- [ ] **Step 2: Agregar la query y los tiles**
+- [x] **Step 2: Agregar la query y los tiles**
 
 En `Gerencial.jsx`: importar `obtenerIndicadores` en el import de servicios, y junto a las otras queries (después de la de `desvios`, línea ~95):
 
@@ -619,12 +621,12 @@ En la fila KPI (después del tile PERSONAS, línea ~169), agregar dos tiles:
 
 Nota: los deltas usan ▲ rojo / ▼ verde igual que el tile existente (en costos, subir es malo — las clases `deltaUp`/`deltaDown` ya lo resuelven así).
 
-- [ ] **Step 3: Verificar que compila**
+- [x] **Step 3: Verificar que compila**
 
 Run: `npm run build` en el repo frontend.
 Expected: build sin errores.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/services/gerencial.js src/pages/Gerencial.jsx
@@ -643,7 +645,7 @@ git commit -m "feat(gerencial): KPIs de \$/hora jornal y % de adicionales"
 - Consumes: variable `indicadores` de Task 4; componentes/estilos existentes (`styles.panel`, `styles.desvioTrack`, `styles.desvioEjeCentral`, `styles.desvioFill*`, helper `compacto`).
 - Produces: componente `PanelVariacion({ indicadores })` renderizado entre la fila KPI y EVOLUCIÓN POR QUINCENA.
 
-- [ ] **Step 1: Insertar el panel en el layout**
+- [x] **Step 1: Insertar el panel en el layout**
 
 Entre la fila KPI y la sección EVOLUCIÓN (línea ~172):
 
@@ -658,7 +660,7 @@ Entre la fila KPI y la sección EVOLUCIÓN (línea ~172):
       </section>
 ```
 
-- [ ] **Step 2: Agregar el componente al final de `Gerencial.jsx`**
+- [x] **Step 2: Agregar el componente al final de `Gerencial.jsx`**
 
 ```jsx
 // ─── ¿Por qué varió?: descomposición dotación / actividad / precio ──────────
@@ -710,7 +712,7 @@ function PanelVariacion({ indicadores }) {
 }
 ```
 
-- [ ] **Step 3: Agregar los estilos**
+- [x] **Step 3: Agregar los estilos**
 
 Al final de `src/pages/Gerencial.module.css` (copiar la grilla de `filaBarra` existente como referencia de proporciones):
 
@@ -744,12 +746,12 @@ Al final de `src/pages/Gerencial.module.css` (copiar la grilla de `filaBarra` ex
 
 Si `panelSub` hoy solo existe dentro de `panelTituloRow`, verificar que renderice bien suelto (es un `div` con clase propia, debería).
 
-- [ ] **Step 4: Verificar que compila**
+- [x] **Step 4: Verificar que compila**
 
 Run: `npm run build`
 Expected: build sin errores.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/pages/Gerencial.jsx src/pages/Gerencial.module.css
@@ -767,7 +769,7 @@ git commit -m "feat(gerencial): panel de descomposición de la variación (¿por
 - Consumes: `obtenerDesviosClientes` (Task 4), estado `umbral` existente, componente `BarraDesvio` existente, estilos `thNum/tdNum/filaAlerta/...` existentes.
 - Produces: componente `TablaDesviosClientes({ datos })` y su panel.
 
-- [ ] **Step 1: Query nueva**
+- [x] **Step 1: Query nueva**
 
 Importar `obtenerDesviosClientes` y agregar junto a las otras queries:
 
@@ -779,7 +781,7 @@ Importar `obtenerDesviosClientes` y agregar junto a las otras queries:
   })
 ```
 
-- [ ] **Step 2: Panel en el layout**
+- [x] **Step 2: Panel en el layout**
 
 Después de la sección DESVÍOS POR PERSONA (línea ~228), antes de la nota final:
 
@@ -795,7 +797,7 @@ Después de la sección DESVÍOS POR PERSONA (línea ~228), antes de la nota fin
       </section>
 ```
 
-- [ ] **Step 3: Componente al final de `Gerencial.jsx`**
+- [x] **Step 3: Componente al final de `Gerencial.jsx`**
 
 ```jsx
 // ─── Tabla de desvíos por cliente ────────────────────────────────────────────
@@ -870,12 +872,12 @@ function TablaDesviosClientes({ datos }) {
 }
 ```
 
-- [ ] **Step 4: Verificar que compila**
+- [x] **Step 4: Verificar que compila**
 
 Run: `npm run build`
 Expected: build sin errores.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/pages/Gerencial.jsx
@@ -891,12 +893,12 @@ git commit -m "feat(gerencial): tabla de desvíos por cliente"
 **Interfaces:**
 - Consumes: todo lo anterior. Solo LECTURAS contra la base real.
 
-- [ ] **Step 1: Correr toda la suite backend una última vez**
+- [x] **Step 1: Correr toda la suite backend una última vez**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS completo.
 
-- [ ] **Step 2: Probar los endpoints nuevos con datos reales**
+- [ ] **Step 2: Probar los endpoints nuevos con datos reales** — sin registro de ejecución
 
 Levantar el backend local (`uvicorn app.main:app --port 8000` o el comando que documente el README del backend) y, con una quincena real existente (obtenerla de `GET /api/gerencial/quincenas`), pedir:
 - `GET /api/gerencial/indicadores?quincena=<q>` → verificar que `actual.total` coincide con `GET /api/gerencial/resumen?quincena=<q>` (`total`), que `costo_hora ≈ total / horas_jornal`, y que si hay `descomposicion` sus tres montos suman `actual.total − anterior.total` (tolerancia de centavos por redondeo).
@@ -904,11 +906,11 @@ Levantar el backend local (`uvicorn app.main:app --port 8000` o el comando que d
 
 Nota: los endpoints exigen autenticación por rol; usar el mismo mecanismo que usan los tests o un token válido de la app local. Si levantar el backend requiere credenciales que no están disponibles, reportarlo como pendiente en lugar de saltearlo en silencio.
 
-- [ ] **Step 3: Smoke visual del frontend**
+- [ ] **Step 3: Smoke visual del frontend** — sin registro de ejecución
 
 Con el backend local corriendo, `npm run dev` y abrir la vista Gerencial: verificar los 4 tiles KPI, el panel ¿POR QUÉ VARIÓ? con las 3 barras, y la tabla DESVÍOS POR CLIENTE. Cambiar quincena/mes/empresa y confirmar que todo se actualiza sin errores de consola.
 
-- [ ] **Step 4: Push de ambas ramas (sin PR todavía)**
+- [x] **Step 4: Push de ambas ramas (sin PR todavía)**
 
 ```bash
 git push -u origin feature/gerencial-control-analitico   # en cada repo

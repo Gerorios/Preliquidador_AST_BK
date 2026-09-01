@@ -1,6 +1,8 @@
 # Plan de implementación — refactor preliquidación
 
-Consolidado de la sesión de grilling. Cada workstream referencia su ADR. Orden sugerido por dependencias. **Nada de esto está implementado todavía**; es el plan acordado.
+> **DOCUMENTO HISTÓRICO (archivado 2026-09-01).** Todo lo planificado acá está **implementado y en producción**: WS1–WS5 (ver `migrations/ws1…ws5` y ADR-0001 a 0004), WS6 (rediseño visual, repo frontend) y el trabajo posterior continuó hasta ws16. El estado actual del sistema está en `README.md`, las decisiones en `docs/adr/` y el dominio en `CONTEXT.md`. Se conserva solo como registro de la sesión de grilling original.
+
+Consolidado de la sesión de grilling. Cada workstream referencia su ADR. Orden sugerido por dependencias.
 
 ## WS1 — Retirar el modelo viejo de precios (ADR-0001)
 
