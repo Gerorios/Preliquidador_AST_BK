@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import and_, or_, func, case, text as sql_text
+from sqlalchemy import and_, or_, func, case, bindparam, text as sql_text
 
 from app.models.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional,
@@ -146,7 +146,13 @@ class PreliquidacionService:
         quincena = preliq.quincena
 
         filas_campo = self.externa.obtener_tareas_quincena(quincena)
-        claves_campo = {_clave_linea(f): f for f in filas_campo}
+        # Por MULTIPLICIDAD, no por presencia: dos cargas idénticas del campo
+        # son dos claves repetidas y deben ser dos líneas. El diff viejo
+        # comparaba sets de claves y los cambios de cantidad (2→1, 1→2) eran
+        # invisibles: nunca borraba el sobrante ni insertaba el repetido.
+        filas_por_clave = {}
+        for f in filas_campo:
+            filas_por_clave.setdefault(_clave_linea(f), []).append(f)
 
         rows = self.db.execute(sql_text("""
             SELECT id, planilla, fecha_tarea, legajo_campo, nombre_empleado,
@@ -156,7 +162,6 @@ class PreliquidacionService:
             WHERE preliquidacion_id = :pid
         """), {"pid": preliq.id}).fetchall()
 
-        claves_existentes = {}
         ids_por_clave = {}
         for row in rows:
             clave = (
@@ -170,23 +175,49 @@ class PreliquidacionService:
                 str(row[8] or "").strip().upper(),
                 _n(row[9]), _n(row[10]), _n(row[11]), _n(row[12]),
             )
-            claves_existentes[clave] = True
-            ids_por_clave[clave] = row[0]
+            ids_por_clave.setdefault(clave, []).append(row[0])
 
-        claves_a_eliminar = set(ids_por_clave.keys()) - set(claves_campo.keys())
+        # Exceso en la DB → borrar líneas hasta igualar la cantidad del campo,
+        # conservando las que tienen datos manuales (conceptos/ajustes).
+        excesos = {
+            clave: len(ids) - len(filas_por_clave.get(clave, ()))
+            for clave, ids in ids_por_clave.items()
+        }
+        candidatas = [i for clave, ids in ids_por_clave.items()
+                      if excesos[clave] > 0 for i in ids]
+        con_manual = self._ids_con_datos_manuales(candidatas)
+
+        ids_eliminar = []
+        for clave, ids in ids_por_clave.items():
+            if excesos[clave] <= 0:
+                continue
+            sacrificables = sorted((i for i in ids if i not in con_manual), reverse=True)
+            protegidas = sorted((i for i in ids if i in con_manual), reverse=True)
+            ids_eliminar.extend((sacrificables + protegidas)[:excesos[clave]])
+
         eliminadas = 0
-        if claves_a_eliminar:
-            ids_eliminar = tuple(ids_por_clave[c] for c in claves_a_eliminar)
-            self.db.execute(sql_text("DELETE FROM ajuste_manual WHERE linea_id IN :ids"), {"ids": ids_eliminar})
-            self.db.execute(sql_text("DELETE FROM concepto_adicional WHERE linea_id IN :ids"), {"ids": ids_eliminar})
-            self.db.execute(sql_text("DELETE FROM preliquidacion_linea WHERE id IN :ids"), {"ids": ids_eliminar})
+        if ids_eliminar:
+            # bindparam expanding: 'IN :ids' plano solo funcionaba en MySQL
+            # porque pymysql expande tuplas; en SQLite (tests) es SQL inválido.
+            for tabla, col in (("ajuste_manual", "linea_id"),
+                               ("concepto_adicional", "linea_id"),
+                               ("preliquidacion_linea", "id")):
+                self.db.execute(
+                    sql_text(f"DELETE FROM {tabla} WHERE {col} IN :ids")
+                    .bindparams(bindparam("ids", expanding=True)),
+                    {"ids": ids_eliminar},
+                )
             eliminadas = len(ids_eliminar)
 
-        claves_a_insertar = set(claves_campo.keys()) - set(claves_existentes.keys())
+        # Faltante en la DB → insertar tantas filas como falten por clave.
+        filas_nuevas = []
+        for clave, filas in filas_por_clave.items():
+            faltan = len(filas) - len(ids_por_clave.get(clave, ()))
+            if faltan > 0:
+                filas_nuevas.extend(filas[:faltan])
         insertadas = 0
 
-        if claves_a_insertar:
-            filas_nuevas = [claves_campo[c] for c in claves_a_insertar]
+        if filas_nuevas:
             cache = self._construir_cache(quincena)
             indices_duplicados = self.motor.detectar_duplicados(filas_nuevas)
             dias_asturiana = self._contar_dias_asturiana(filas_campo)
@@ -222,9 +253,22 @@ class PreliquidacionService:
             if conceptos_auto:
                 self.db.bulk_save_objects(conceptos_auto)
 
-        sin_cambios = len(claves_existentes) - eliminadas
+        sin_cambios = len(rows) - eliminadas
         self.db.commit()
         return {"preliquidacion_id": preliq.id, "insertadas": insertadas, "eliminadas": eliminadas, "sin_cambios": sin_cambios}
+
+    def _ids_con_datos_manuales(self, linea_ids: list) -> set:
+        """Ids de línea con conceptos manuales o ajustes de auditoría: al
+        borrar el exceso de una clave repetida, estas se sacrifican últimas."""
+        if not linea_ids:
+            return set()
+        stmt = sql_text(
+            "SELECT linea_id FROM concepto_adicional "
+            "WHERE linea_id IN :ids AND ingresado_por IS NOT NULL "
+            "UNION "
+            "SELECT linea_id FROM ajuste_manual WHERE linea_id IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        return {r[0] for r in self.db.execute(stmt, {"ids": linea_ids})}
 
     # ─── Cache en memoria ─────────────────────────────────────────────────────
 
