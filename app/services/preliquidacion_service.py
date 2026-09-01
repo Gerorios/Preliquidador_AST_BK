@@ -9,7 +9,7 @@ from app.models.models import (
     AjusteManual, ConceptoLiquidacion, UnidadBaseConcepto, CategoriaOperario,
 )
 from app.services.consulta_externa import ConsultaExternaService
-from app.services.motor_reglas import MotorReglas
+from app.services.motor_reglas import MotorReglas, normalizar_decimal
 from app.services.sueldos_service import SueldosService
 from app.schemas.schemas import LineaUpdateRequest, ConceptoAdicionalRequest
 
@@ -50,13 +50,9 @@ def tareas_que_pagan_como(tareas_normalizadas) -> list:
     return sorted(base | {a for a, c in TAREAS_ALIAS_PAGO.items() if c in base})
 
 
-def _n(v) -> str:
-    # Half-up sobre Decimal, igual que las columnas DECIMAL(x,2) de MySQL.
-    # El formateo por float redondeaba '12.985' a '12.98' (la DB guarda 12.99)
-    # y la clave nunca coincidía: la línea churneaba en cada actualización.
-    if v is None: return "None"
-    try: return str(Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
-    except Exception: return "None"
+# Normalización canónica compartida con detectar_duplicados (motor_reglas):
+# la clave del diff y el criterio de duplicado deben ver el mismo valor.
+_n = normalizar_decimal
 
 
 def _clave_linea(fila: dict) -> tuple:
@@ -584,9 +580,12 @@ class PreliquidacionService:
         if valor is None:
             return None
         try:
-            return Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            d = Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         except Exception:
             return None
+        if not d.is_finite():
+            return None
+        return abs(d) if d == 0 else d
 
     # ─── Aplicar conceptos ────────────────────────────────────────────────────
 

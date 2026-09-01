@@ -3,6 +3,26 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 
+def normalizar_decimal(v) -> str:
+    """Representación canónica a 2 decimales de un valor de campo, idéntica a
+    lo que la columna DECIMAL(x,2) guarda: half-up (como MySQL), sin cero
+    negativo (MySQL no lo tiene) y 'None' para nulos/no-numéricos/NaN/inf.
+    La usan la clave del diff de actualización y la detección de duplicados:
+    el formateo por float redondeaba '12.985' a '12.98' (MySQL guarda 12.99)
+    y la línea churneaba en cada actualización."""
+    if v is None:
+        return "None"
+    try:
+        d = Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception:
+        return "None"
+    if not d.is_finite():
+        return "None"
+    if d == 0:
+        d = abs(d)
+    return str(d)
+
+
 class MotorReglas:
 
     def __init__(self, db_propia: Session, sueldos_service=None):
@@ -96,11 +116,7 @@ class MotorReglas:
     # ─── Duplicados ───────────────────────────────────────────────────────────
 
     def detectar_duplicados(self, lineas: list[dict]) -> set[int]:
-        def norm(v) -> str:
-            if v is None: return "None"
-            try: return f"{float(str(v)):.2f}"
-            except: return "None"
-
+        norm = normalizar_decimal
         vistos = {}
         duplicados = set()
         for i, linea in enumerate(lineas):

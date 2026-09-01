@@ -282,6 +282,10 @@ def test_valor_con_tres_decimales_no_churnea(db):
     fila["unidades"] = "12.985"
     svc = _svc(db, [fila])
     svc.generar(Q, usuario_id=1)
+    # La columna debe quedar YA cuantizada como MySQL (12.99): sin esto, en
+    # SQLite este test era una tautología (guardaba 12.985 crudo y ambos
+    # lados de la clave coincidían aunque el código estuviera roto).
+    assert _lineas(db)[0].unidades == Decimal("12.99")
     ids_antes = [l.id for l in _lineas(db)]
 
     r = svc.generar(Q, usuario_id=1)
@@ -289,6 +293,27 @@ def test_valor_con_tres_decimales_no_churnea(db):
     assert r["eliminadas"] == 0
     assert r["insertadas"] == 0
     assert [l.id for l in _lineas(db)] == ids_antes
+
+
+def test_no_churnea_contra_columna_redondeada_por_mysql(db):
+    """Simula el dato legacy real: la columna ya tiene el valor que MySQL
+    redondeó (12.99) mientras el campo sigue mandando '12.985'."""
+    _concepto(db)
+    fila = _fila()
+    fila["unidades"] = "12.985"
+    svc = _svc(db, [fila])
+    svc.generar(Q, usuario_id=1)
+    linea = _lineas(db)[0]
+    # fuerza el estado que MySQL dejó en producción
+    db.execute(__import__("sqlalchemy").text(
+        "UPDATE preliquidacion_linea SET unidades = 12.99 WHERE id = :i"
+    ), {"i": linea.id})
+    db.commit()
+
+    r = svc.generar(Q, usuario_id=1)
+
+    assert r["eliminadas"] == 0
+    assert r["insertadas"] == 0
 
 
 def test_normalizacion_redondea_half_up_como_mysql():
@@ -299,6 +324,29 @@ def test_normalizacion_redondea_half_up_como_mysql():
     assert _n(8) == "8.00"
     assert _n(None) == "None"
     assert _n("no numerico") == "None"
+    # MySQL no tiene cero negativo: '-0.001' debe normalizar a '0.00'
+    assert _n("-0.001") == "0.00"
+    # NaN/inf no son valores: mismos 'None' que un no-numérico
+    assert _n(float("nan")) == "None"
+    assert _n(float("inf")) == "None"
+
+
+def test_to_decimal_normaliza_cero_negativo_y_nan(db):
+    svc = PreliquidacionService(db)
+    assert str(svc._to_decimal("-0.001")) == "0.00"
+    assert svc._to_decimal(float("nan")) is None
+    assert svc._to_decimal(None) is None
+
+
+def test_detectar_duplicados_normaliza_igual_que_la_clave():
+    """'12.985' y '12.99' son el mismo valor guardado: deben colapsar como
+    duplicado igual que colapsan en la clave del diff."""
+    from app.services.motor_reglas import MotorReglas
+    base = _fila()
+    f1 = dict(base, unidades="12.985")
+    f2 = dict(base, unidades="12.99")
+    dup = MotorReglas(None, None).detectar_duplicados([f1, f2])
+    assert dup == {0, 1}
 
 
 def test_sin_cambios_no_toca_nada(db):
