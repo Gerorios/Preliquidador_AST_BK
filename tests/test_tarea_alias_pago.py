@@ -199,3 +199,42 @@ def test_cambiar_categoria_recalcula_la_linea_alias(db):
     svc.set_categoria_operario(preliq.id, "20111111119", 4)
     db.refresh(linea)
     assert linea.importe_total == Decimal("2000")  # 8 × 250
+
+
+# ─── API de precios ──────────────────────────────────────────────────────────
+
+from fastapi import HTTPException
+from app.api.precios import crear_concepto, conceptos_faltantes
+from app.schemas.schemas import ConceptoUnifRequest
+
+
+def test_crear_concepto_para_tarea_alias_da_422(db):
+    datos = ConceptoUnifRequest(
+        quincena=date(2026, 5, 1), tarea_nombre=TAREA_ALIAS,
+        codigo=50, precio=Decimal("100"),
+        unidad_base=UnidadBaseConcepto.HSJORNAL,
+    )
+    with pytest.raises(HTTPException) as exc:
+        crear_concepto(datos, db)
+    assert exc.value.status_code == 422
+    assert TAREA_CANONICA in exc.value.detail
+
+
+def test_faltantes_muestra_el_combo_alias_como_canonica(db):
+    preliq = _preliq(db)
+    _linea(db, preliq, TAREA_ALIAS, cliente="CLIENTE A", finca="FINCA 1")
+
+    faltantes = conceptos_faltantes(preliq.quincena, db)
+    assert {(f["tarea_nombre"], f["cliente_nombre"]) for f in faltantes} == {
+        (TAREA_CANONICA, "CLIENTE A")
+    }
+
+
+def test_faltantes_no_lista_el_alias_si_la_canonica_tiene_concepto(db):
+    preliq = _preliq(db)
+    _linea(db, preliq, TAREA_ALIAS, cliente="CLIENTE A", finca="FINCA 1")
+    _concepto(db, preliq.quincena, TAREA_CANONICA, codigo=50,
+              precio=Decimal("100"))
+
+    faltantes = conceptos_faltantes(preliq.quincena, db)
+    assert faltantes == []
