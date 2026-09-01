@@ -674,7 +674,8 @@ class PreliquidacionService:
             ConceptoLiquidacion.quincena == quincena,
             ConceptoLiquidacion.categoria.isnot(None),
         ).distinct().all()
-        return [r[0].strip().upper() for r in rows if r[0]]
+        # ADR-0012: las tareas alias de una tarea de taller también son taller.
+        return tareas_que_pagan_como([r[0].strip().upper() for r in rows if r[0]])
 
     def recalcular_por_categoria(self, quincena: date, cuil: str) -> dict:
         """

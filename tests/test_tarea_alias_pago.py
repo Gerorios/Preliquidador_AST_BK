@@ -169,3 +169,33 @@ def test_editar_concepto_de_la_canonica_recalcula_la_linea_alias(db):
     db.refresh(linea_canon)
     assert linea_alias.importe_total == Decimal("1600")  # 8 × 200
     assert linea_canon.importe_total == Decimal("1600")
+
+
+# ─── Mantenimiento: líneas alias = líneas de taller ─────────────────────────
+
+def test_persona_con_solo_horas_extras_aparece_en_operarios(db):
+    preliq = _preliq(db)
+    _linea(db, preliq, TAREA_ALIAS, cuil="20111111119")
+    _concepto(db, preliq.quincena, TAREA_CANONICA, codigo=50,
+              precio=Decimal("100"), categoria=3)
+
+    ops = PreliquidacionService(db).operarios_mantenimiento(preliq.id)
+    assert [o["cuil"] for o in ops] == ["20111111119"]
+
+
+def test_cambiar_categoria_recalcula_la_linea_alias(db):
+    preliq = _preliq(db)
+    linea = _linea(db, preliq, TAREA_ALIAS, cuil="20111111119")
+    _concepto(db, preliq.quincena, TAREA_CANONICA, codigo=50,
+              precio=Decimal("100"), categoria=3)
+    _concepto(db, preliq.quincena, TAREA_CANONICA, codigo=50,
+              precio=Decimal("250"), categoria=4)
+
+    svc = PreliquidacionService(db)
+    svc.set_categoria_operario(preliq.id, "20111111119", 3)
+    db.refresh(linea)
+    assert linea.importe_total == Decimal("800")   # 8 × 100
+
+    svc.set_categoria_operario(preliq.id, "20111111119", 4)
+    db.refresh(linea)
+    assert linea.importe_total == Decimal("2000")  # 8 × 250
