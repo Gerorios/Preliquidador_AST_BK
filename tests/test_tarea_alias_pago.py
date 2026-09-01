@@ -146,3 +146,26 @@ def test_buscar_conceptos_cache_resuelve_el_alias(db):
     reglas = svc._buscar_conceptos_cache(TAREA_ALIAS, "CLIENTE A", "FINCA 1",
                                          cache, cuil="20111111119")
     assert [r.id for r in reglas] == [c.id]
+
+
+# ─── Impacto reactivo inverso ────────────────────────────────────────────────
+
+def test_editar_concepto_de_la_canonica_recalcula_la_linea_alias(db):
+    preliq = _preliq(db)
+    linea_alias = _linea(db, preliq, TAREA_ALIAS)
+    linea_canon = _linea(db, preliq, TAREA_CANONICA, cuil="20222222227")
+    c = _concepto(db, preliq.quincena, TAREA_CANONICA, codigo=50,
+                  precio=Decimal("100"))
+
+    svc = PreliquidacionService(db)
+    r = svc.recalcular_por_concepto(preliq.quincena, actual=_match(c))
+    assert r["lineas_afectadas"] == 2  # la canónica Y la alias
+
+    c.precio = Decimal("200")
+    db.commit()
+    svc.recalcular_por_concepto(preliq.quincena, actual=_match(c))
+
+    db.refresh(linea_alias)
+    db.refresh(linea_canon)
+    assert linea_alias.importe_total == Decimal("1600")  # 8 × 200
+    assert linea_canon.importe_total == Decimal("1600")
