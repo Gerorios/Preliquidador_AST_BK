@@ -46,7 +46,11 @@ Marca (`reemplaza_comun`, ADR-0009/0011) de cualquier Concepto **no común** (es
 _Avoid_: usarla en un común (no tiene sentido; la marca es de los no-comunes).
 
 **Matching**:
-Regla por la que un concepto aplica a una línea. Cuatro caminos que **suman entre sí**: la tarea sola (comunes), tarea + cliente en cualquier finca (por cliente), tarea + cliente + finca exactos (específicos) y tarea + supervisor (por supervisor). El grupo de pago no participa.
+Regla por la que un concepto aplica a una línea. Cuatro caminos que **suman entre sí**: la tarea sola (comunes), tarea + cliente en cualquier finca (por cliente), tarea + cliente + finca exactos (específicos) y tarea + supervisor (por supervisor). El grupo de pago no participa. Si la tarea de la línea es una Tarea alias de pago, los cuatro caminos se resuelven con su tarea canónica.
+
+**Tarea alias de pago**:
+Tarea del sistema de campo que existe **solo para identificar** un subconjunto de horas de otra tarea (su **tarea canónica**), y que **paga exactamente con el maestro de la canónica** — mismos conceptos, mismas categorías, mismos precios, sin recargo. La línea conserva su nombre real (ese es el propósito: que la liquidación formal vea cuáles horas fueron de ese subconjunto), pero para el maestro de Conceptos la tarea alias **no existe**: no aparece en faltantes y no se le pueden crear conceptos propios. Único caso hoy: `MANTENIMIENTOS MECANICOS HORAS EXTRAS (TALLERES)` → `MANTENIMIENTOS MECANICOS (TALLERES)` (ADR-0012), para desdoblar horas comunes vs extras de taller (ej. 20 hs = 15 comunes + 5 extras).
+_Avoid_: pagarle distinto que a la canónica (si un día hay recargo, es una feature aparte); crearle conceptos propios en el maestro (bloqueado — habría dos fuentes de verdad para la misma hora).
 
 **Unidad base (UM)**:
 Unidad de medida sobre la que impacta un concepto y que determina cómo se calcula su importe: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1`, `jornal_tope1_mas_excedente` o `fijo`. Es la decisión central del liquidador en el maestro concepto.
