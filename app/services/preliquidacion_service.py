@@ -698,18 +698,27 @@ class PreliquidacionService:
     # ─── Impacto reactivo del maestro (ADR-0002) ─────────────────────────────
 
     def _lineas_por_match(self, preliq_id, tarea_nombre, cliente_nombre=None,
-                          finca_nombre=None, supervisor_nombre=None) -> list:
+                          finca_nombre=None, supervisor_nombre=None,
+                          con_conceptos: bool = True) -> list:
         """Líneas de una preliquidación que matchean el alcance de una regla
         (ADR-0011): tarea sola (común), tarea+supervisor (por supervisor),
         tarea+cliente en cualquier finca (por cliente, finca_nombre vacío) o
-        tarea+cliente+finca (específico)."""
+        tarea+cliente+finca (específico).
+
+        `con_conceptos=False` evita el joinedload de los ConceptoAdicional para
+        quien solo necesita contar o inspeccionar las líneas (el filtrado y el
+        resultado son idénticos).
+        """
         t = (tarea_nombre or "").strip().upper()
         # ADR-0012: expandir búsqueda para incluir alias que pagan con esta tarea
         tareas = tareas_que_pagan_como([t])
-        lineas = self.db.query(PreliquidacionLinea).filter(
+        q = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.preliquidacion_id == preliq_id,
             func.upper(func.trim(PreliquidacionLinea.nombre_tarea)).in_(tareas),
-        ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+        )
+        if con_conceptos:
+            q = q.options(joinedload(PreliquidacionLinea.conceptos))
+        lineas = q.all()
 
         if supervisor_nombre:
             sup = supervisor_nombre.strip().upper()

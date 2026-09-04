@@ -12,13 +12,16 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.api.precios import copiar_quincena, crear_concepto, solapamientos_quincena
 from app.core.database import Base
 from app.models.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     CategoriaOperario, UnidadBaseConcepto, TipoConcepto,
 )
+from app.schemas.schemas import ConceptoUnifRequest
+from app.services.preliquidacion_service import TAREAS_ALIAS_PAGO
 from app.services.solapamiento_service import (
-    categorias_compatibles, detectar_solapamiento_candidato,
+    categorias_compatibles, detectar_solapamiento_candidato, listar_solapamientos,
 )
 
 Q = date(2026, 8, 16)
@@ -157,9 +160,6 @@ def test_sin_preliquidacion_generada_alerta_igual_con_cero_lineas(db):
     assert s["lineas_afectadas"] == 0
 
 
-from app.services.solapamiento_service import listar_solapamientos
-
-
 def _candidato_especifico(db, finca, codigo=461, categoria=None):
     return detectar_solapamiento_candidato(
         db, quincena=Q, tarea_nombre=TAREA, cliente_nombre=CLIENTE,
@@ -238,8 +238,8 @@ def test_listar_solapamientos_agrupa_por_tarea_y_cliente(db):
     # Par 1: CITRUSVIL — 2 por cliente + 2 específicas, 1 específica incompatible por categoría
     pc1 = _concepto(db, cliente=CLIENTE, finca=None, codigo=461)
     pc2 = _concepto(db, cliente=CLIENTE, finca=None, codigo=520)
-    e1 = _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
-    e2 = _concepto(db, cliente=CLIENTE, finca="LA RAMADA", codigo=700)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+    _concepto(db, cliente=CLIENTE, finca="LA RAMADA", codigo=700)
     _concepto(db, cliente=CLIENTE, finca="SAN JOSE", codigo=461, categoria=3)  # compatible: pc1 no tiene categoría
     # Par 2: otra tarea, mismo cliente, solo específicas → no aparece
     _concepto(db, tarea="OTRA TAREA", cliente=CLIENTE, finca="EL CEIBAL", codigo=1)
@@ -284,8 +284,64 @@ def test_listar_solapamientos_ordena_por_tarea_y_cliente(db):
     assert [(s["tarea_nombre"], s["cliente_nombre"]) for s in lista] == [("ALFA", "B"), ("ZETA", "A")]
 
 
-from app.schemas.schemas import ConceptoUnifRequest
-from app.api.precios import crear_concepto
+# ─── eje supervisor: nunca es solapamiento; supervisor vacío SÍ es eje cliente ─
+
+def test_candidato_por_supervisor_no_solapa(db):
+    # Ya existen una por cliente y una específica que sí solapan entre sí, pero
+    # el candidato va por el eje supervisor: no participa.
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca=None, codigo=461)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+
+    s = detectar_solapamiento_candidato(
+        db, quincena=Q, tarea_nombre=TAREA, cliente_nombre=None,
+        finca_nombre=None, supervisor_nombre="PEREZ", codigo=461, categoria=None,
+    )
+
+    assert s is None
+
+
+def test_por_cliente_con_supervisor_vacio_cuenta_como_eje_cliente(db):
+    # supervisor_nombre = "" (no NULL) sigue siendo una regla del eje cliente:
+    # matchea y suma, así que debe detectarse el solapamiento.
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca=None, supervisor="", codigo=461)
+
+    s = _candidato_especifico(db, finca="LA NUEVA", codigo=461)
+
+    assert s is not None
+    assert s["direccion"] == "especifico_sobre_por_cliente"
+    assert len(s["reglas_por_cliente"]) == 1
+
+
+# ─── casing y alias de pago ──────────────────────────────────────────────────
+
+def test_fincas_conservan_el_casing_del_maestro(db):
+    # `fincas` es texto para mostrar: respeta cómo está escrita la finca en el
+    # maestro (igual que especificos[].finca_nombre). Las comparaciones
+    # internas siguen siendo normalizadas.
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca=" El Ceibal ", codigo=461)
+
+    s = _candidato_por_cliente(db, codigo=461)
+
+    assert s is not None
+    assert s["fincas"] == ["El Ceibal"]
+
+
+def test_alias_de_pago_cuenta_en_lineas_afectadas(db):
+    # ADR-0012: una línea cargada con el alias paga con el maestro de la tarea
+    # canónica, así que cobra doble igual y debe contarse.
+    alias, canonica = next(iter(TAREAS_ALIAS_PAGO.items()))
+    preliq = _preliq(db)
+    _concepto(db, tarea=canonica, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+    _linea(db, preliq, tarea=alias, finca="EL CEIBAL", cuil="20-1-1")
+    _linea(db, preliq, tarea=canonica, finca="EL CEIBAL", cuil="20-1-2")
+
+    s = _candidato_por_cliente(db, codigo=461, tarea=canonica)
+
+    assert s is not None
+    assert s["lineas_afectadas"] == 2
 
 
 def _req(cliente=CLIENTE, finca=None, codigo=461, categoria=None, confirmar=None):
@@ -361,9 +417,6 @@ def test_post_categorias_distintas_no_disparan_409(db):
 
 def test_confirmar_solapamiento_default_false():
     assert _req().confirmar_solapamiento is False
-
-
-from app.api.precios import solapamientos_quincena, copiar_quincena
 
 
 def test_endpoint_solapamientos_devuelve_lista(db):
