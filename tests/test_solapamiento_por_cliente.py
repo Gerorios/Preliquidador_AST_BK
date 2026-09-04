@@ -282,3 +282,82 @@ def test_listar_solapamientos_ordena_por_tarea_y_cliente(db):
     lista = listar_solapamientos(db, Q)
 
     assert [(s["tarea_nombre"], s["cliente_nombre"]) for s in lista] == [("ALFA", "B"), ("ZETA", "A")]
+
+
+from app.schemas.schemas import ConceptoUnifRequest
+from app.api.precios import crear_concepto
+
+
+def _req(cliente=CLIENTE, finca=None, codigo=461, categoria=None, confirmar=None):
+    kwargs = dict(
+        quincena=Q, tarea_nombre=TAREA, cliente_nombre=cliente, finca_nombre=finca,
+        codigo=codigo, unidad_base=UnidadBaseConcepto.HSJORNAL, precio=Decimal("100"),
+        tipo=TipoConcepto.OTRO, categoria=categoria,
+    )
+    if confirmar is not None:
+        kwargs["confirmar_solapamiento"] = confirmar
+    return ConceptoUnifRequest(**kwargs)
+
+
+# ─── compuerta en el POST ────────────────────────────────────────────────────
+
+def test_post_por_cliente_sobre_especificas_responde_409_y_no_crea(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+    antes = db.query(ConceptoLiquidacion).count()
+
+    with pytest.raises(HTTPException) as exc:
+        crear_concepto(datos=_req(finca=None, codigo=461), db=db)
+
+    assert exc.value.status_code == 409
+    d = exc.value.detail
+    assert d["tipo"] == "solapamiento_por_cliente"
+    assert d["solapamiento"]["fincas"] == ["EL CEIBAL"]
+    assert d["solapamiento"]["codigos_coincidentes"] == [461]
+    assert db.query(ConceptoLiquidacion).count() == antes
+
+
+def test_post_con_confirmar_solapamiento_crea_igual(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+
+    nuevo = crear_concepto(datos=_req(finca=None, codigo=461, confirmar=True), db=db)
+
+    assert nuevo.id is not None
+    assert nuevo.cliente_nombre == CLIENTE and nuevo.finca_nombre is None
+
+
+def test_post_especifico_sobre_por_cliente_responde_409(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca=None, codigo=461)
+
+    with pytest.raises(HTTPException) as exc:
+        crear_concepto(datos=_req(finca="LA NUEVA", codigo=461), db=db)
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["solapamiento"]["direccion"] == "especifico_sobre_por_cliente"
+
+
+def test_post_sin_solapamiento_crea_sin_confirmar(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+
+    # Específica para la finca nueva: el camino correcto, sin 409.
+    nuevo = crear_concepto(datos=_req(finca="LA NUEVA", codigo=461), db=db)
+    assert nuevo.finca_nombre == "LA NUEVA"
+
+    # Común y por supervisor: nunca participan.
+    comun = crear_concepto(datos=_req(cliente=None, finca=None, codigo=999), db=db)
+    assert comun.cliente_nombre is None
+
+
+def test_post_categorias_distintas_no_disparan_409(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461, categoria=3)
+
+    nuevo = crear_concepto(datos=_req(finca=None, codigo=461, categoria=5), db=db)
+    assert nuevo.id is not None
+
+
+def test_confirmar_solapamiento_default_false():
+    assert _req().confirmar_solapamiento is False
