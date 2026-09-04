@@ -11,6 +11,9 @@ from app.services.consulta_externa import ConsultaExternaService
 from app.services.preliquidacion_service import (
     PreliquidacionService, TAREAS_ALIAS_PAGO, tarea_canonica,
 )
+from app.services.solapamiento_service import (
+    detectar_solapamiento_candidato, listar_solapamientos,
+)
 from app.schemas.schemas import (
     ConceptoUnifRequest, ConceptoUnifResponse, ConceptoUnifUpdateRequest,
     MensajeResponse, ConceptoPanelResponse, ConceptoPrecioMasivoRequest,
@@ -296,6 +299,26 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
     cliente_nombre = datos.cliente_nombre.strip() if datos.cliente_nombre else None
     supervisor_nombre = datos.supervisor_nombre.strip() if datos.supervisor_nombre else None
     _validar_cliente_xor_supervisor(cliente_nombre, supervisor_nombre)
+    # Compuerta de solapamiento por cliente. No bloquea: el liquidador puede
+    # confirmar (caso raro "precio por cliente base + plus por finca"). El
+    # detalle viaja en el 409 para que el front muestre fincas, códigos
+    # coincidentes y líneas afectadas.
+    if not datos.confirmar_solapamiento:
+        solapamiento = detectar_solapamiento_candidato(
+            db, quincena=datos.quincena, tarea_nombre=datos.tarea_nombre,
+            cliente_nombre=cliente_nombre,
+            finca_nombre=datos.finca_nombre, supervisor_nombre=supervisor_nombre,
+            codigo=datos.codigo, categoria=datos.categoria,
+        )
+        if solapamiento:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "tipo": "solapamiento_por_cliente",
+                    "mensaje": "Esta regla se va a SUMAR a reglas ya existentes del mismo cliente.",
+                    "solapamiento": solapamiento,
+                },
+            )
     if datos.reemplaza_comun is not None:
         # El liquidador lo mandó explícito (True o False): se respeta tal cual.
         reemplaza_comun = datos.reemplaza_comun
@@ -449,7 +472,29 @@ def copiar_quincena(
             resultado = PreliquidacionService(db).aplicar_conceptos(preliq_destino.id)
             detalle += f" · {resultado['actualizadas']} líneas recalculadas"
 
-    return MensajeResponse(mensaje="Conceptos copiados", detalle=detalle)
+    solapamientos = len(listar_solapamientos(db, quincena_destino))
+    if solapamientos:
+        plural = "s" if solapamientos != 1 else ""
+        detalle += f" · {solapamientos} solapamiento{plural} por cliente"
+
+    return MensajeResponse(
+        mensaje="Conceptos copiados", detalle=detalle,
+        solapamientos_heredados=solapamientos,
+    )
+
+
+@router.get("/conceptos/solapamientos")
+def solapamientos_quincena(
+    quincena: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Solapamientos por cliente vigentes en la quincena (CONTEXT.md): pares
+    tarea+cliente donde conviven una regla por cliente y específicas del
+    mismo cliente con categorías compatibles. Suman por ADR-0011; el
+    liquidador debe controlarlos. Vacío = todo en orden.
+    """
+    return listar_solapamientos(db, quincena)
 
 
 @router.get("/conceptos/faltantes")
