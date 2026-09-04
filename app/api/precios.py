@@ -472,7 +472,29 @@ def copiar_quincena(
             resultado = PreliquidacionService(db).aplicar_conceptos(preliq_destino.id)
             detalle += f" · {resultado['actualizadas']} líneas recalculadas"
 
-    return MensajeResponse(mensaje="Conceptos copiados", detalle=detalle)
+    solapamientos = len(listar_solapamientos(db, quincena_destino))
+    if solapamientos:
+        plural = "s" if solapamientos != 1 else ""
+        detalle += f" · {solapamientos} solapamiento{plural} por cliente"
+
+    return MensajeResponse(
+        mensaje="Conceptos copiados", detalle=detalle,
+        solapamientos_heredados=solapamientos,
+    )
+
+
+@router.get("/conceptos/solapamientos")
+def solapamientos_quincena(
+    quincena: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Solapamientos por cliente vigentes en la quincena (CONTEXT.md): pares
+    tarea+cliente donde conviven una regla por cliente y específicas del
+    mismo cliente con categorías compatibles. Suman por ADR-0011; el
+    liquidador debe controlarlos. Vacío = todo en orden.
+    """
+    return listar_solapamientos(db, quincena)
 
 
 @router.get("/conceptos/faltantes")

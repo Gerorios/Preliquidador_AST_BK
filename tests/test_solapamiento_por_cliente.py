@@ -361,3 +361,39 @@ def test_post_categorias_distintas_no_disparan_409(db):
 
 def test_confirmar_solapamiento_default_false():
     assert _req().confirmar_solapamiento is False
+
+
+from app.api.precios import solapamientos_quincena, copiar_quincena
+
+
+def test_endpoint_solapamientos_devuelve_lista(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca=None, codigo=461)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+
+    lista = solapamientos_quincena(quincena=Q, db=db)
+
+    assert len(lista) == 1
+    assert lista[0]["cliente_nombre"] == CLIENTE
+
+
+def test_copiar_informa_solapamientos_heredados(db):
+    origen = date(2026, 8, 1)
+    _concepto(db, quincena=origen, cliente=CLIENTE, finca=None, codigo=461)
+    _concepto(db, quincena=origen, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+    _concepto(db, quincena=origen, cliente=CLIENTE, finca="LA RAMADA", codigo=461)
+
+    r = copiar_quincena(quincena_origen=origen, quincena_destino=Q, db=db)
+
+    assert r.solapamientos_heredados == 1
+    assert "1 solapamiento" in (r.detalle or "")
+
+
+def test_copiar_sin_solapamientos_informa_cero(db):
+    origen = date(2026, 8, 1)
+    _concepto(db, quincena=origen, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+
+    r = copiar_quincena(quincena_origen=origen, quincena_destino=Q, db=db)
+
+    assert r.solapamientos_heredados == 0
+    assert "solapamiento" not in (r.detalle or "")

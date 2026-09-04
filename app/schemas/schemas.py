@@ -90,6 +90,9 @@ class ConceptoAdicionalRequest(BaseModel):
 class MensajeResponse(BaseModel):
     mensaje: str
     detalle: Optional[str] = None
+    # Solo lo llena copiar_quincena: cantidad de solapamientos por cliente
+    # (CONTEXT.md) que quedaron vigentes en la quincena destino tras copiar.
+    solapamientos_heredados: Optional[int] = None
 
 
 class ValorHoraPulvRequest(BaseModel):
