@@ -48,6 +48,10 @@ _Avoid_: usarla en un común (no tiene sentido; la marca es de los no-comunes).
 **Matching**:
 Regla por la que un concepto aplica a una línea. Cuatro caminos que **suman entre sí**: la tarea sola (comunes), tarea + cliente en cualquier finca (por cliente), tarea + cliente + finca exactos (específicos) y tarea + supervisor (por supervisor). El grupo de pago no participa. Si la tarea de la línea es una Tarea alias de pago, los cuatro caminos se resuelven con su tarea canónica.
 
+**Concepto completo**:
+Vista del maestro por **alcance** (común, por cliente, por finca, por supervisor) de una tarea, con todos los códigos de liquidación que esa tarea tiene en la quincena (la **unión** de los códigos de todos sus alcances). Un alcance del eje cliente está **incompleto** si le falta alguno de esos códigos o si lo tiene sin precio. El alcance por supervisor se muestra pero no se controla: su plus suele ser un solo código a propósito. No existe un catálogo de códigos por tarea; la referencia es lo cargado.
+_Avoid_: "concepto" a secas para este agrupado (Concepto es una regla individual), completitud contra la quincena anterior
+
 **Solapamiento por cliente**:
 Situación en la que, para la misma tarea y quincena, conviven un Concepto por cliente y uno o más Conceptos específicos de **ese mismo cliente**: ambos matchean las líneas de esas fincas y, por ADR-0011, **suman**. No es un error del modelo sino un riesgo de pago doble que el liquidador debe controlar; el sistema lo hace visible al crear (fincas y líneas afectadas) y pide confirmación explícita, sin bloquear. Se agrava cuando las dos reglas comparten el código de liquidación. Dos reglas con Categoría de operario explícita y distinta **no** solapan (pagan a personas distintas); si alguna no tiene categoría o coinciden, sí. No es solapamiento el cruce con el eje supervisor ni el de común vs no-común (gobernado por Reemplaza al común).
 _Avoid_: conflicto, duplicado (el duplicado es el índice único; esto es un solapamiento legítimo pero riesgoso)
