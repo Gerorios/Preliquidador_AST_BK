@@ -155,3 +155,130 @@ def test_sin_preliquidacion_generada_alerta_igual_con_cero_lineas(db):
 
     assert s is not None
     assert s["lineas_afectadas"] == 0
+
+
+from app.services.solapamiento_service import listar_solapamientos
+
+
+def _candidato_especifico(db, finca, codigo=461, categoria=None):
+    return detectar_solapamiento_candidato(
+        db, quincena=Q, tarea_nombre=TAREA, cliente_nombre=CLIENTE,
+        finca_nombre=finca, supervisor_nombre=None, codigo=codigo, categoria=categoria,
+    )
+
+
+# ─── dirección inversa: candidato ESPECÍFICO sobre por cliente existente ─────
+
+def test_especifico_sobre_por_cliente_existente(db):
+    preliq = _preliq(db)
+    pc = _concepto(db, cliente=CLIENTE, finca=None, codigo=461, precio=Decimal("900"))
+    _linea(db, preliq, finca="LA NUEVA", cuil="20-1-1")
+    _linea(db, preliq, finca="LA NUEVA", cuil="20-1-2")
+    _linea(db, preliq, finca="EL CEIBAL", cuil="20-1-3")   # otra finca: no cuenta
+
+    s = _candidato_especifico(db, finca="LA NUEVA", codigo=461)
+
+    assert s is not None
+    assert s["direccion"] == "especifico_sobre_por_cliente"
+    assert [r["id"] for r in s["reglas_por_cliente"]] == [pc.id]
+    assert Decimal(s["reglas_por_cliente"][0]["precio"]) == Decimal("900")
+    assert s["especificos"] == []
+    assert s["fincas"] == ["LA NUEVA"]
+    assert s["codigos_coincidentes"] == [461]
+    assert s["lineas_afectadas"] == 2
+
+
+def test_especifico_sin_por_cliente_no_solapa(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)   # otra específica
+    _concepto(db, codigo=461)                                        # común
+
+    assert _candidato_especifico(db, finca="LA NUEVA") is None
+
+
+# ─── categoría ───────────────────────────────────────────────────────────────
+
+def test_categorias_explicitas_distintas_no_solapan(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461, categoria=3)
+
+    assert _candidato_por_cliente(db, codigo=461, categoria=5) is None
+
+
+def test_categoria_null_contra_explicita_solapa_y_cuenta_solo_esa_categoria(db):
+    preliq = _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461, categoria=3)
+    db.add_all([
+        CategoriaOperario(quincena=Q, cuil="20-1-1", categoria=3),
+        CategoriaOperario(quincena=Q, cuil="20-1-2", categoria=5),
+    ])
+    db.commit()
+    _linea(db, preliq, finca="EL CEIBAL", cuil="20-1-1")   # cat 3: cobra doble
+    _linea(db, preliq, finca="EL CEIBAL", cuil="20-1-2")   # cat 5: la específica no le aplica
+    _linea(db, preliq, finca="EL CEIBAL", cuil="20-1-3")   # sin categoría: la específica no le aplica
+
+    s = _candidato_por_cliente(db, codigo=461, categoria=None)
+
+    assert s is not None
+    assert s["lineas_afectadas"] == 1
+
+
+# ─── listado vigente ─────────────────────────────────────────────────────────
+
+def test_listar_solapamientos_vacio_cuando_no_hay(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+    _concepto(db, cliente="OTRO", finca=None, codigo=461)   # por cliente de OTRO cliente
+
+    assert listar_solapamientos(db, Q) == []
+
+
+def test_listar_solapamientos_agrupa_por_tarea_y_cliente(db):
+    preliq = _preliq(db)
+    # Par 1: CITRUSVIL — 2 por cliente + 2 específicas, 1 específica incompatible por categoría
+    pc1 = _concepto(db, cliente=CLIENTE, finca=None, codigo=461)
+    pc2 = _concepto(db, cliente=CLIENTE, finca=None, codigo=520)
+    e1 = _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461)
+    e2 = _concepto(db, cliente=CLIENTE, finca="LA RAMADA", codigo=700)
+    _concepto(db, cliente=CLIENTE, finca="SAN JOSE", codigo=461, categoria=3)  # compatible: pc1 no tiene categoría
+    # Par 2: otra tarea, mismo cliente, solo específicas → no aparece
+    _concepto(db, tarea="OTRA TAREA", cliente=CLIENTE, finca="EL CEIBAL", codigo=1)
+    _linea(db, preliq, finca="EL CEIBAL", cuil="20-1-1")
+    _linea(db, preliq, finca="LA RAMADA", cuil="20-1-2")
+    _linea(db, preliq, finca="LA NUEVA", cuil="20-1-3")
+
+    lista = listar_solapamientos(db, Q)
+
+    assert len(lista) == 1
+    s = lista[0]
+    assert (s["tarea_nombre"], s["cliente_nombre"]) == (TAREA, CLIENTE)
+    assert s["direccion"] == "por_cliente_sobre_especificos"
+    assert sorted(r["id"] for r in s["reglas_por_cliente"]) == sorted([pc1.id, pc2.id])
+    assert sorted(s["fincas"]) == ["EL CEIBAL", "LA RAMADA", "SAN JOSE"]
+    assert s["codigos_coincidentes"] == [461]
+    assert [e["mismo_codigo"] for e in sorted(s["especificos"], key=lambda e: e["finca_nombre"])] == [True, False, True]
+    assert s["lineas_afectadas"] == 2
+
+
+def test_listar_solapamientos_excluye_especificas_incompatibles_por_categoria(db):
+    _preliq(db)
+    _concepto(db, cliente=CLIENTE, finca=None, codigo=461, categoria=5)
+    _concepto(db, cliente=CLIENTE, finca="EL CEIBAL", codigo=461, categoria=3)   # incompatible
+    _concepto(db, cliente=CLIENTE, finca="LA RAMADA", codigo=461, categoria=5)   # compatible
+
+    lista = listar_solapamientos(db, Q)
+
+    assert len(lista) == 1
+    assert lista[0]["fincas"] == ["LA RAMADA"]
+
+
+def test_listar_solapamientos_ordena_por_tarea_y_cliente(db):
+    _preliq(db)
+    _concepto(db, tarea="ZETA", cliente="A", finca=None, codigo=1)
+    _concepto(db, tarea="ZETA", cliente="A", finca="F", codigo=1)
+    _concepto(db, tarea="ALFA", cliente="B", finca=None, codigo=1)
+    _concepto(db, tarea="ALFA", cliente="B", finca="F", codigo=1)
+
+    lista = listar_solapamientos(db, Q)
+
+    assert [(s["tarea_nombre"], s["cliente_nombre"]) for s in lista] == [("ALFA", "B"), ("ZETA", "A")]

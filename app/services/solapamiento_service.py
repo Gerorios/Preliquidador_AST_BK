@@ -152,3 +152,43 @@ def detectar_solapamiento_candidato(
     return _armar(quincena, tarea_n, cliente_n, DIRECCION_ESPECIFICO,
                   por_cliente=contra, especificos=[],
                   lado_pc_dicts=pc_dicts, lado_esp_dicts=[candidato], db=db)
+
+
+def listar_solapamientos(db, quincena: date) -> list:
+    """Solapamientos por cliente VIGENTES en la quincena: un ítem por par
+    (tarea, cliente) con al menos una regla por cliente y al menos una
+    específica compatible por categoría. Alimenta la franja de aviso de la
+    página de Conceptos y el detalle de la copia entre quincenas."""
+    reglas = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.quincena == quincena,
+        ConceptoLiquidacion.cliente_nombre.isnot(None),
+        ConceptoLiquidacion.supervisor_nombre.is_(None),
+    ).all()
+
+    pares: dict = {}
+    for c in reglas:
+        if not _norm(c.cliente_nombre):
+            continue
+        clave = (_norm(c.tarea_nombre), _norm(c.cliente_nombre))
+        pc, esp = pares.setdefault(clave, ([], []))
+        (esp if (c.finca_nombre or "").strip() else pc).append(c)
+
+    resultado = []
+    for (tarea_n, cliente_n), (por_cliente, especificos) in sorted(pares.items()):
+        if not por_cliente or not especificos:
+            continue
+        compatibles = [
+            e for e in especificos
+            if any(categorias_compatibles(e.categoria, pc.categoria) for pc in por_cliente)
+        ]
+        if not compatibles:
+            continue
+        pc_dicts = [{"categoria": pc.categoria, "codigo": pc.codigo} for pc in por_cliente]
+        esp_dicts = [{"finca_nombre": e.finca_nombre, "categoria": e.categoria, "codigo": e.codigo}
+                     for e in compatibles]
+        resultado.append(_armar(
+            quincena, tarea_n, cliente_n, DIRECCION_POR_CLIENTE,
+            por_cliente=por_cliente, especificos=compatibles,
+            lado_pc_dicts=pc_dicts, lado_esp_dicts=esp_dicts, db=db,
+        ))
+    return resultado
