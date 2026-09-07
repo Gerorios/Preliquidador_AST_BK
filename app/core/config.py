@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        # El .env puede traer variables que no son de la app (p. ej. DB_DEV_*
+        # que usa scripts/refrescar_testing.py). Sin esto pydantic-settings
+        # rechaza el arranque con "Extra inputs are not permitted".
+        extra = "ignore"
 
 
 settings = Settings()
