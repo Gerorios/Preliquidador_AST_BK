@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
-from app.api.auth import get_usuario_actual, requiere_conceptos
+from app.core.auth import get_usuario_actual, requiere_conceptos
 from app.models.models import ConceptoLiquidacion, Preliquidacion
 from app.services.consulta_externa import ConsultaExternaService
 from app.services.preliquidacion_service import (

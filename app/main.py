@@ -62,7 +62,8 @@ app.add_middleware(
 )
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
-from app.api import preliquidacion, precios, auth, export, asistente, gerencial  # noqa: E402
+from app.core import auth, asistente  # noqa: E402
+from app.api import preliquidacion, precios, export, gerencial  # noqa: E402
 app.include_router(auth.router)
 app.include_router(preliquidacion.router)
 app.include_router(precios.router)

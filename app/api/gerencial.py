@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
-from app.api.auth import requiere_rol
+from app.core.auth import requiere_rol
 from app.models.models import Preliquidacion
 from app.services.consulta_externa import ConsultaExternaService
 from app.services.preliquidacion_service import PreliquidacionService

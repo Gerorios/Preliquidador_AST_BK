@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia
-from app.api.auth import requiere_operativo
+from app.core.auth import requiere_operativo
 from app.models.models import Preliquidacion
 from app.services.export_service import generar_export_excel
 

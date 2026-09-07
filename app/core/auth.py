@@ -10,7 +10,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.core.database import get_db_propia
-from app.models.models import Usuario
+from app.core.models import Usuario
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 

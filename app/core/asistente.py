@@ -17,9 +17,9 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.auth import get_usuario_actual
+from app.core.auth import get_usuario_actual
 from app.core.config import settings
-from app.models.models import Usuario
+from app.core.models import Usuario
 
 router = APIRouter(prefix="/api/asistente", tags=["Asistente"])
 

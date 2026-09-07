@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
-from app.api.auth import get_usuario_actual, requiere_operativo
+from app.core.auth import get_usuario_actual, requiere_operativo
 from app.services.preliquidacion_service import PreliquidacionService
 from app.schemas.schemas import (
     PreliquidacionGenerarRequest, PreliquidacionResponse,
