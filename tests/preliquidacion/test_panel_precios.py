@@ -189,4 +189,4 @@ def test_precio_masivo_sin_ids_encontrados_da_404(db):
 # La comparativa común vs especial de estos dos controles se eliminó (Plantas:
 # grilling 2026-08-06; Tancadas: mismo rediseño aplicado 2026-08-21). Ambos
 # valorizan con el pago real; la comparativa por caminos se rearmará aparte.
-# Ver tests/test_control_plantas_jornal.py y tests/test_control_tancadas_jornal.py.
+# Ver test_control_plantas_jornal.py y test_control_tancadas_jornal.py.
