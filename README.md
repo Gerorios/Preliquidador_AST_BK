@@ -82,7 +82,9 @@ app/
 - **Personas mensualizadas**: cobran sueldo mensual fijo; sus líneas se excluyen de toda la Verificación y de los cálculos de mano de obra de la vista gerencial (siguen visibles en Revisión). Lista hardcodeada `EMPLEADOS_MENSUALIZADOS` en `preliquidacion_service.py`.
 - **Vista gerencial**: solo lectura, roles admin/jefe/gerente; agrega mano de obra gastada con comparación vs período anterior, descomposición de la variación (dotación/actividad/precio), desvíos por persona y por cliente contra su media histórica (6 quincenas, mínimo 3).
 
-Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0011). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
+Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0013). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
+
+**Nuevos módulos**: desde 2026-09 el sistema crece por módulos (ADR-0013). La guía para incorporar uno, empezando por Fletes, está en [`docs/modulos/GUIA-MODULOS.md`](docs/modulos/GUIA-MODULOS.md).
 
 ---
 
@@ -252,4 +254,4 @@ Lista completa e interactiva en `/docs`. Resumen:
 - **Tabla `usuarios`**: ya existe en la BD propia; el sistema no la crea ni la modifica.
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
 - **Migraciones**: SQL manual en `migrations/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible.
-- **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción).
+- **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción), `docs/modulos/GUIA-MODULOS.md` (cómo incorporar un módulo).

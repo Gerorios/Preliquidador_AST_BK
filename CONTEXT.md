@@ -2,7 +2,32 @@
 
 Lenguaje ubicuo del sistema que arma la preliquidación de sueldos de cada quincena a partir de las tareas de campo, aplicándoles los conceptos/precios que define el liquidador. Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
 
-## Language
+Desde 2026-09 el sistema pasa a ser un **Sistema** con **Módulos** (ver esas entradas): la preliquidación de sueldos es el primer módulo y el de fletes el segundo. Los términos de abajo, salvo los de la sección "Sistema y módulos", pertenecen al módulo de preliquidación.
+
+## Sistema y módulos
+
+**Sistema**:
+El conjunto que comparten todos los Módulos: usuarios, roles, acceso a las bases externas, la utilidad de Quincena, el menú y el login. Nombre visible a definir (provisorio: "Sistema de gestión La Asturiana"); los nombres internos (repos, base, servicio) siguen diciendo "preliquidacion" y no se renombran.
+_Avoid_: llamar "Preliquidación" al sistema completo — desde 2026-09 eso es el nombre de un módulo.
+
+**Módulo**:
+Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (Preliquidación de sueldos, Fletes). Tiene sus propios datos, pantallas, reglas, tests y panel gerencial, y solo se apoya en el Núcleo compartido. Dos módulos nunca escriben los datos del otro; leerse entre sí solo pasa a través del Núcleo.
+_Avoid_: "sección", "pantalla" (una pantalla es parte de un módulo, no un módulo)
+
+**Núcleo compartido**:
+Lo que el Sistema ofrece a todos los Módulos: autenticación y roles, conexión de solo lectura al sistema de campo y al maestro de sueldos, lectura de Cliente, Finca, Persona/Legajo y Empresa, la utilidad de Quincena, y los componentes visuales comunes (layout, menú, avisos, overlays). Es de lectura para los módulos: ningún módulo escribe en tablas del Núcleo salvo a través de sus servicios. Crece solo cuando dos módulos necesitan lo mismo; lo que usa un solo módulo vive en ese módulo.
+_Avoid_: "utils", "común" (ambiguo con Concepto común)
+
+**Operador (de módulo)**:
+Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, lo que hoy hacen `admin` y `jefe`; en Fletes, quien liquida los fletes). Un operador de un módulo no ve las pantallas operativas de otro módulo.
+
+**Gerente (de módulo)**:
+Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle (en Preliquidación, el maestro de Conceptos completo). Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
+
+**Admin**:
+Rol global del Sistema: ve y opera todos los módulos y administra usuarios y permisos. No es un rol de módulo.
+
+## Language (módulo Preliquidación)
 
 **Quincena**:
 Período de liquidación. Todo el maestro de conceptos está scopeado por quincena: los conceptos de una quincena no afectan a otra.
@@ -106,7 +131,7 @@ Nivel (**1 a 12**) que el liquidador le asigna **por quincena** a un operario de
 _Avoid_: confundir con la categoría de convenio de `nuempleados` (otra cosa, de solo lectura, no manipulable).
 
 **Rol**:
-Nivel de acceso de un usuario del sistema: `admin` y `jefe` operan la preliquidación completa (y también ven la Vista gerencial); `gerente` accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear/editar/eliminar reglas, precios, precio masivo, copiar quincena — igual que admin/jefe), porque el gerente es quien muchas veces decide un cambio de precios. El resto de la preliquidación (Revisión, Verificación, Dashboard, Mantenimiento) le sigue vedado. La restricción se aplica en el backend, no solo en pantalla.
+Nivel de acceso de un usuario del sistema. Hoy son tres globales: `admin` y `jefe` operan la preliquidación completa (y también ven la Vista gerencial); `gerente` accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear/editar/eliminar reglas, precios, precio masivo, copiar quincena — igual que admin/jefe), porque el gerente es quien muchas veces decide un cambio de precios. El resto de la preliquidación (Revisión, Verificación, Dashboard, Mantenimiento) le sigue vedado. La restricción se aplica en el backend, no solo en pantalla. Con la llegada de los Módulos, `jefe` pasa a ser Operador del módulo Preliquidación y `gerente` pasa a ser Gerente de módulo (ver "Sistema y módulos"); `admin` sigue global.
 
 **Vista gerencial**:
 Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).
