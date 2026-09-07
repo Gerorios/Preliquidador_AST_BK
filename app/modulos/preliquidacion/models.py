@@ -174,7 +174,7 @@ class PreliquidacionLinea(Base):
         cascade="all, delete-orphan",
     )
 
-    # WS9 (latencia, DIFERIBLE — ver migrations/ws9_indices_latencia.sql):
+    # WS9 (latencia, DIFERIBLE — ver migrations/preliquidacion/ws9_indices_latencia.sql):
     # índices de solo velocidad, no cambian comportamiento observable.
     __table_args__ = (
         Index(
@@ -217,7 +217,7 @@ class ConceptoAdicional(Base):
     linea            = relationship("PreliquidacionLinea", back_populates="conceptos")
     usuario          = relationship("Usuario")
 
-    # WS9 (latencia, DIFERIBLE — ver migrations/ws9_indices_latencia.sql).
+    # WS9 (latencia, DIFERIBLE — ver migrations/preliquidacion/ws9_indices_latencia.sql).
     __table_args__ = (
         Index("ix_concepto_linea_ingresado", "linea_id", "ingresado_por"),
     )

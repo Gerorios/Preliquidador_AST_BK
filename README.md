@@ -20,7 +20,7 @@ Repositorio hermano (frontend React + Vite): `frontend_preliquidacion` / `Gerori
 | Asistente de ayuda | OpenAI (gpt-4o-mini) — opcional |
 | Tests | pytest (SQLite in-memory) |
 
-> Alembic figura en `requirements.txt` pero **no se usa**: las migraciones son SQL manual versionado en `migrations/` (ws1…ws16 + fix).
+> Alembic figura en `requirements.txt` pero **no se usa**: las migraciones son SQL manual versionado en `migrations/preliquidacion/` (ws1…ws16 + fix).
 
 ---
 
@@ -264,5 +264,5 @@ Lista completa e interactiva en `/docs`. Resumen:
 
 - **Tabla `usuarios`**: ya existe en la BD propia; el sistema no la crea ni la modifica.
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
-- **Migraciones**: SQL manual en `migrations/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible.
+- **Migraciones**: SQL manual en `migrations/preliquidacion/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible. Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
 - **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción), `docs/modulos/GUIA-MODULOS.md` (cómo incorporar un módulo).

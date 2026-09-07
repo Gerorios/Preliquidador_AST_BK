@@ -453,6 +453,6 @@ Lo que quedó sin resolver y quién lo resuelve.
 | `docs/DOCUMENTACION.md` | Dónde vive el proyecto, cómo es el código y la base |
 | `docs/AYUDA.md` | Ayuda de uso del preliquidador, la que consume el asistente |
 | `docs/superpowers/plans/` | Planes de implementación de features anteriores. Sirven como ejemplo de cómo se planifica acá |
-| `migrations/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
+| `migrations/preliquidacion/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
 | `tests/` | 201 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
 | Frontend `README.md` | Stack, estructura y convenciones del front |

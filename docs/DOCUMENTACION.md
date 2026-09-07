@@ -31,7 +31,7 @@ El sistema son **dos repos hermanos**, bajo `.../Sistema_Preliquidacion/`:
 - `schemas/schemas.py` — DTOs Pydantic.
 - `core/` — `config.py` (settings desde `.env`), `database.py` (los 3 engines).
 - `tests/` — pytest (sqlite in-memory). Corren con `python -m pytest -q`.
-- `migrations/` — SQL manual (ver §3). `docs/adr/` — decisiones. `CONTEXT.md` — glosario.
+- `migrations/preliquidacion/` — SQL manual (ver §3). `docs/adr/` — decisiones. `CONTEXT.md` — glosario.
 
 ### Frontend (`frontend_preliquidacion/src/`)
 - `pages/` — `Login`, `Dashboard`, `Conceptos` (maestro + **Panel de precios**), `Revision`, `Verificacion`, `CategoriasOperarios` (mantenimiento), `Gerencial` (tablero del rol gerente), `Historial`. Navegación y rutas filtradas por rol (`ProtectedRoute` + `Layout`); el gerente entra directo a `/gerencial` y solo ve Gerencial + Conceptos.
@@ -69,7 +69,7 @@ El backend usa **tres bases MySQL** (definidas en `.env`, leídas por `app/core/
 - `ajuste_manual` — ajustes manuales.
 - `categoria_operario` — categoría (1–7) por (quincena, CUIL) para mantenimiento.
 
-### Migraciones (`migrations/*.sql`)
+### Migraciones (`migrations/preliquidacion/*.sql`)
 SQL manual, versionado `wsN`. **Todas ya aplicadas en `preliquidacion`.** Estado actual: `ws1`, `ws2`, `ws3`, `ws5`, `ws7`, `ws8`, `ws9`, `ws10` + `fix_trazabilidad_concepto_adicional`. Al montar el sistema en una base **nueva desde cero**, hay que correrlas en orden (las que crean columnas/tablas no son diferibles; `ws9`/`ws10` son índices, diferibles).
 
 ### Identidad de una persona

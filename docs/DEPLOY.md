@@ -35,8 +35,10 @@ ssh -i ~/.ssh/preliquidacion_vps root@179.197.237.196 "cd /home/deploy && rm -rf
 # Rollback: mv frontend frontend_bad && mv frontend_old frontend
 # (Si hay rsync local, equivale a: rsync -az --delete dist/ root@IP:/home/deploy/frontend/)
 
-# Migraciones nuevas (migrations/wsN.sql): correrlas contra la base ANTES o junto
-# con el deploy del código que las necesita.
+# Migraciones nuevas (migrations/preliquidacion/wsN.sql): correrlas contra la base ANTES o junto
+# con el deploy del código que las necesita. Las migraciones de cada módulo viven en
+# migrations/<modulo>/; las nuevas de preliquidación siguen la numeración wsN, las de
+# módulos nuevos empiezan en 001_.
 ```
 
 ## Arquitectura
@@ -168,7 +170,7 @@ Como el front y el back quedan bajo el **mismo dominio** (nginx sirve los dos), 
 
 - **Backend:** `cd ~/backend && git pull && source .venv/bin/activate && pip install -r requirements.txt && sudo systemctl restart preliquidacion`
 - **Frontend:** `npm run build` local + subida con swap de carpeta (ver "Cómo se ejecuta el deploy" arriba) o el `rsync --delete` del paso 4. No requiere reiniciar nada. Nunca copiar encima sin borrar: los assets viejos se acumulan.
-- **Migraciones:** las nuevas (`migrations/wsN.sql`) se corren **una vez** contra la base. Ojo: las que agregan columnas/tablas **no son diferibles** (correr antes/junto con el deploy de esa versión).
+- **Migraciones:** las nuevas (`migrations/preliquidacion/wsN.sql`) se corren **una vez** contra la base. Ojo: las que agregan columnas/tablas **no son diferibles** (correr antes/junto con el deploy de esa versión). Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
 
 ## Checklist de "no tener problemas a futuro"
 
