@@ -23,9 +23,17 @@ Pushear a GitHub **no** toca producción. Producción solo cambia cuando alguien
 # Backend (corte de ~10s):
 ssh root@179.197.237.196 "cd /home/deploy/backend && sudo -u deploy git pull && sudo -u deploy .venv/bin/pip install -q -r requirements.txt && systemctl restart preliquidacion && sleep 5 && curl -s http://127.0.0.1:8000/health"
 
-# Frontend (sin corte) — desde la máquina de desarrollo:
-cd frontend_preliquidacion && npm run build
-scp -r dist/* root@179.197.237.196:/home/deploy/frontend/
+# Frontend (sin corte) — desde la máquina de desarrollo.
+# Se sube a una carpeta nueva y se hace swap: así los bundles viejos (hash de Vite
+# distinto en cada build) NO se acumulan y queda la versión anterior como rollback.
+# NO usar `scp -r dist/* .../frontend/` a secas: suma archivos y nunca borra
+# (el 2026-09-07 había 187 assets acumulados de 11 deploys; se limpió a 24).
+cd frontend_preliquidacion && rm -rf dist && npm run build
+scp -i ~/.ssh/preliquidacion_vps -r dist root@179.197.237.196:/home/deploy/frontend_new
+ssh -i ~/.ssh/preliquidacion_vps root@179.197.237.196 "cd /home/deploy && rm -rf frontend_old && mv frontend frontend_old && mv frontend_new frontend && chown -R deploy:deploy frontend && ls frontend/assets | wc -l"
+# Verificar: md5sum del bundle index-*.js igual en local y VPS; sitio responde 200.
+# Rollback: mv frontend frontend_bad && mv frontend_old frontend
+# (Si hay rsync local, equivale a: rsync -az --delete dist/ root@IP:/home/deploy/frontend/)
 
 # Migraciones nuevas (migrations/wsN.sql): correrlas contra la base ANTES o junto
 # con el deploy del código que las necesita.
@@ -159,7 +167,7 @@ Como el front y el back quedan bajo el **mismo dominio** (nginx sirve los dos), 
 ## Actualizar (deploy de cambios)
 
 - **Backend:** `cd ~/backend && git pull && source .venv/bin/activate && pip install -r requirements.txt && sudo systemctl restart preliquidacion`
-- **Frontend:** `npm run build` local + el `rsync` del paso 4 (no requiere reiniciar nada).
+- **Frontend:** `npm run build` local + subida con swap de carpeta (ver "Cómo se ejecuta el deploy" arriba) o el `rsync --delete` del paso 4. No requiere reiniciar nada. Nunca copiar encima sin borrar: los assets viejos se acumulan.
 - **Migraciones:** las nuevas (`migrations/wsN.sql`) se corren **una vez** contra la base. Ojo: las que agregan columnas/tablas **no son diferibles** (correr antes/junto con el deploy de esa versión).
 
 ## Checklist de "no tener problemas a futuro"
