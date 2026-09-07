@@ -30,30 +30,31 @@ El sistema se conecta a **tres bases MySQL** distintas:
 
 1. **BD propia** (lectura/escritura) — las 7 tablas del preliquidador. La base es compartida con otros sistemas; solo estas tablas le pertenecen. Se crean automáticamente al arrancar (`create_all(checkfirst=True)`), nunca se modifican las existentes.
 2. **BD de sueldos** (solo lectura) — tabla `nuempleados` (~15-19k empleados) para resolver empresa/legajo por CUIL. Se cachea en memoria de proceso (TTL 30 min).
-3. **BD externa de campo** (solo lectura) — tablas `laa_*` / `ast_*` del sistema de carga de tareas. Se consulta con SQL crudo (`app/services/consulta_externa.py`).
+3. **BD externa de campo** (solo lectura) — tablas `laa_*` / `ast_*` del sistema de carga de tareas. Se consulta con SQL crudo (`app/modulos/preliquidacion/services/consulta_externa.py`).
 
 ```
 app/
-├── main.py                  # Entrypoint: lifespan, CORS, routers, /health
-├── core/
-│   ├── config.py            # Settings desde .env (3 bases)
-│   └── database.py          # 3 engines + sessionmakers + Base
-├── api/                     # Routers
-│   ├── auth.py              # /api/auth — login JWT
-│   ├── preliquidacion.py    # /api/preliquidacion — núcleo
-│   ├── precios.py           # /api/precios — maestro de conceptos
-│   ├── gerencial.py         # /api/gerencial — vista gerente (solo lectura)
-│   ├── export.py            # export a Excel
-│   └── asistente.py         # /api/asistente — chat de ayuda (opcional)
-├── models/models.py         # ORM + Enums
-├── schemas/schemas.py       # DTOs Pydantic
-└── services/
-    ├── preliquidacion_service.py  # Motor principal (generación, recálculo reactivo)
-    ├── gerencial_service.py       # Agregaciones e indicadores de la vista gerencial
-    ├── motor_reglas.py            # Cálculo por unidad base, resolución empresa/legajo
-    ├── consulta_externa.py        # Extracción de tareas de campo (SQL crudo)
-    ├── sueldos_service.py         # Maestro de empleados + cache
-    └── export_service.py          # Generación de Excel
+├── main.py                        # arranque, middlewares, registro de routers de cada módulo
+├── core/                          # NÚCLEO COMPARTIDO (ADR-0013)
+│   ├── config.py                  # settings (.env)
+│   ├── database.py                # las 3 conexiones (externa, sueldos, propia) y Base ORM
+│   ├── models.py                  # Usuario, RolUsuario
+│   ├── auth.py                    # login/me/logout, get_usuario_actual, requiere_rol
+│   ├── asistente.py               # chat de ayuda de uso (OpenAI), transversal
+│   └── quincena.py                # calcular_rango_quincena
+└── modulos/
+    └── preliquidacion/            # MÓDULO Preliquidación de sueldos
+        ├── __init__.py            # expone `routers`
+        ├── api/                   # preliquidacion, precios, export, gerencial
+        ├── services/              # preliquidacion_service, motor_reglas, gerencial_service,
+        │                          # consulta_externa, export_service, sueldos_service, solapamiento_service
+        ├── models.py              # modelos del módulo (reexporta Usuario del núcleo)
+        └── schemas.py
+migrations/
+└── preliquidacion/                # ws1…ws16 (15 archivos; no existen ws4 ni ws6) + fix_trazabilidad
+tests/
+├── core/                          # autorización por rol, arranque
+└── preliquidacion/                # el resto (22 archivos)
 ```
 
 ### Modelo de datos propio

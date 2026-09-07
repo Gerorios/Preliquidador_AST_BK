@@ -25,13 +25,14 @@ El sistema son **dos repos hermanos**, bajo `.../Sistema_Preliquidacion/`:
 ## 2. El código
 
 ### Backend (`backend_preliquidacion/app/`)
-- `api/` — endpoints FastAPI: `preliquidacion.py` (generar/listar/líneas/controles/export/mantenimiento), `precios.py` (maestro de conceptos + panel de precios), `gerencial.py` (KPIs de la vista gerencial), `export.py` (Excel), `auth.py` (login + autorización por rol: `requiere_operativo` = admin/jefe, `requiere_conceptos` = admin/jefe/gerente; ver CONTEXT.md, "Rol").
-- `services/` — lógica de negocio: `preliquidacion_service.py` (el motor: matching de conceptos, recálculo reactivo, controles), `motor_reglas.py` (cálculo de cantidad por unidad, empresa/legajo, duplicados), `gerencial_service.py` (KPIs de mano de obra: resumen/evolución/por cliente/por grupo de tareas/desvíos por persona), `consulta_externa.py` (extracción de tareas de la base de campo), `sueldos_service.py` (resolución de empleados contra sueldos), `export_service.py`.
-- `models/models.py` — modelos ORM (tablas propias, §3).
-- `schemas/schemas.py` — DTOs Pydantic.
-- `core/` — `config.py` (settings desde `.env`), `database.py` (los 3 engines).
-- `tests/` — pytest (sqlite in-memory). Corren con `python -m pytest -q`.
-- `migrations/preliquidacion/` — SQL manual (ver §3). `docs/adr/` — decisiones. `CONTEXT.md` — glosario.
+Estructura modular desde el PR 1 de la etapa 0 (ADR-0013): un núcleo compartido en `app/core/` y un módulo por circuito de negocio en `app/modulos/`.
+
+- `core/` — NÚCLEO COMPARTIDO: `config.py` (settings desde `.env`), `database.py` (las 3 conexiones y `Base` del ORM), `models.py` (`Usuario`, `RolUsuario`), `auth.py` (login/me/logout, `get_usuario_actual`, `requiere_rol`), `asistente.py` (chat de ayuda, transversal), `quincena.py` (`calcular_rango_quincena`).
+- `modulos/preliquidacion/` — el único módulo hoy: `__init__.py` (expone `routers`), `api/` (`preliquidacion.py`, `precios.py`, `export.py`, `gerencial.py`; autorización por rol con `requiere_rol` — ver CONTEXT.md, "Rol"), `services/` (`preliquidacion_service.py` el motor: matching de conceptos, recálculo reactivo, controles; `motor_reglas.py` cálculo de cantidad por unidad, empresa/legajo, duplicados; `gerencial_service.py` KPIs de mano de obra; `consulta_externa.py` extracción de tareas de la base de campo; `sueldos_service.py` resolución de empleados contra sueldos; `export_service.py`; `solapamiento_service.py`), `models.py` (modelos del módulo, reexporta `Usuario` del núcleo), `schemas.py` (DTOs Pydantic).
+- `tests/` — pytest (sqlite in-memory), separados en `tests/core/` (autorización por rol, arranque) y `tests/preliquidacion/` (el resto, 22 archivos). Corren con `python -m pytest -q`.
+- `migrations/preliquidacion/` — SQL manual (ver §3), `ws1`…`ws16` (15 archivos; no existen `ws4` ni `ws6`) + `fix_trazabilidad_concepto_adicional.sql`. `docs/adr/` — decisiones. `CONTEXT.md` — glosario.
+
+La guía para agregar un módulo nuevo (empezando por Fletes) está en `docs/modulos/GUIA-MODULOS.md`.
 
 ### Frontend (`frontend_preliquidacion/src/`)
 - `pages/` — `Login`, `Dashboard`, `Conceptos` (maestro + **Panel de precios**), `Revision`, `Verificacion`, `CategoriasOperarios` (mantenimiento), `Gerencial` (tablero del rol gerente), `Historial`. Navegación y rutas filtradas por rol (`ProtectedRoute` + `Layout`); el gerente entra directo a `/gerencial` y solo ve Gerencial + Conceptos.

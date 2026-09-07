@@ -23,7 +23,7 @@ from app.core.models import Usuario
 
 router = APIRouter(prefix="/api/asistente", tags=["Asistente"])
 
-# Raíz del repo backend: app/api/asistente.py → app/ → api/ → raíz
+# Raíz del repo backend: app/core/asistente.py → app/ → core/ → raíz
 _BASE_DIR = Path(__file__).resolve().parents[2]
 
 # Documentación que forma el conocimiento del asistente, en orden.
