@@ -144,6 +144,17 @@ python verificar_conexion.py
 
 Verifica las conexiones, lista las tablas de la BD externa y prueba la query principal. Si falla, ajustar `QUERY_PRINCIPAL` en `app/services/consulta_externa.py`.
 
+### Base de desarrollo (`testing`)
+
+En desarrollo `DB_PROPIA_NAME` apunta a `testing`, no a producción. Para refrescar `testing` con la estructura y los datos actuales de producción:
+
+```bash
+python scripts/refrescar_testing.py                 # estructura + datos, pide confirmación
+python scripts/refrescar_testing.py --solo-estructura
+```
+
+Requiere las credenciales de `testing` en el `.env` (`DB_DEV_*`, ver `.env.example`). Solo toca las tablas del preliquidador; el resto de `testing` queda intacto.
+
 ---
 
 ## Ejecución

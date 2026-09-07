@@ -301,7 +301,7 @@ La regla de esta etapa:
 | Desarrollo (tu máquina) | `testing` | Pitu y Gero, con las credenciales de `testing` |
 | Producción (VPS) | `preliquidacion` | Solo el VPS |
 
-`testing` era la base compartida original del sistema. Puede tener tablas de otros sistemas: **no se hace nunca un drop general**, solo se tocan las tablas del preliquidador y las de fletes. Gero va a dejar un script para refrescar en `testing` la estructura y opcionalmente los datos desde producción, así el ambiente se puede resetear cuando haga falta.
+`testing` era la base compartida original del sistema. Puede tener tablas de otros sistemas: **no se hace nunca un drop general**, solo se tocan las tablas del preliquidador y las de fletes. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas del preliquidador y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cuando existan las tablas `fletes_*`, se agregan a la lista del script.
 
 Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque son de solo lectura. Las consultas que hagas en desarrollo van contra datos reales del sistema de campo: perfecto para validar contra el Excel.
 
@@ -430,7 +430,7 @@ Lo que quedó sin resolver y quién lo resuelve.
 **Para Gero**
 - Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.
 - Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.
-- Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.
+- ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - Nombre visible del sistema. Provisorio: "Sistema de gestión La Asturiana".
 - Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).
 - Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.
