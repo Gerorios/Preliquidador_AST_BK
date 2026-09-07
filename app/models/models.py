@@ -7,6 +7,11 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 import enum
 
+# Usuario y RolUsuario viven en el núcleo (app/core/models.py). Se reexportan
+# acá para que `from app.models.models import Usuario` siga valiendo hasta que
+# Task 3 reescriba los imports.
+from app.core.models import Usuario, RolUsuario  # noqa: F401
+
 
 # ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -18,11 +23,6 @@ class TipoConcepto(str, enum.Enum):
     EXCENTO = "EXCENTO"
     OTRO = "OTRO"
 
-class RolUsuario(str, enum.Enum):
-    ADMIN = "admin"
-    JEFE = "jefe"
-    GERENTE = "gerente"
-
 class UnidadBaseConcepto(str, enum.Enum):
     HSJORNAL    = "hsjornal"
     HSMAQUINA   = "hsmaquina"
@@ -31,21 +31,6 @@ class UnidadBaseConcepto(str, enum.Enum):
     JORNAL_TOPE1 = "jornal_tope1"
     JORNAL_TOPE1_MAS_EXCEDENTE = "jornal_tope1_mas_excedente"
     FIJO        = "fijo"
-
-
-# ─── Usuarios ─────────────────────────────────────────────────────────────────
-
-class Usuario(Base):
-    __tablename__ = "usuarios"
-    __table_args__ = {"extend_existing": True}
-
-    id         = Column(Integer, primary_key=True, autoincrement=True)
-    nombre     = Column(String(100), nullable=False)
-    email      = Column(String(100), unique=True, nullable=False)
-    password   = Column(String(255), nullable=False)
-    rol        = Column(String(20), default='jefe')
-    activo     = Column(Boolean, default=True)
-    creado_en  = Column(DateTime, default=datetime.utcnow)
 
 
 # ─── Maestro unificado de Conceptos de Liquidación ───────────────────────────

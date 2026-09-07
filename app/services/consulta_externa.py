@@ -2,18 +2,11 @@
 Servicio de consulta a la BD externa (solo lectura).
 """
 from datetime import date
-import calendar
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import time
 
-
-def calcular_rango_quincena(quincena: date) -> tuple[date, date]:
-    if quincena.day == 1:
-        return quincena, quincena.replace(day=15)
-    else:
-        ultimo_dia = calendar.monthrange(quincena.year, quincena.month)[1]
-        return quincena.replace(day=16), quincena.replace(day=ultimo_dia)
+from app.core.quincena import calcular_rango_quincena  # noqa: F401 — reexport, la usan otros servicios
 
 
 # Expresión reutilizable para extraer el grupo_pago desde tareas.descripcion
