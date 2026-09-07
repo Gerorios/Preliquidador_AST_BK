@@ -4,6 +4,8 @@
 
 **Qué es este documento**: el contexto de todo lo que ya existe, las decisiones tomadas el 2026-09-07 sobre cómo crece el sistema (ADR-0013), las reglas que un módulo tiene que cumplir para entrar, cómo trabajamos entre varios sobre el mismo código, y lo que hay que preparar antes de escribir la primera línea.
 
+**Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
+
 **Estado**: la estructura modular que se describe acá es la **estructura objetivo**. Al día de hoy el código del preliquidador todavía está organizado por capas técnicas (ver sección 3). El reordenamiento a módulos lo hace Gero en los próximos días, antes de que empiece el código de fletes. Cuando esté hecho, esta guía se actualiza con las rutas reales y una carpeta `fletes/` de molde. Todo lo que no depende del código (secciones 8 a 11) se puede empezar ya.
 
 ---
