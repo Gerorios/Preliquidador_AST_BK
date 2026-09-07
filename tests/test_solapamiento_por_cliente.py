@@ -12,15 +12,15 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.precios import copiar_quincena, crear_concepto, solapamientos_quincena
+from app.modulos.preliquidacion.api.precios import copiar_quincena, crear_concepto, solapamientos_quincena
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     CategoriaOperario, UnidadBaseConcepto, TipoConcepto,
 )
-from app.schemas.schemas import ConceptoUnifRequest
-from app.services.preliquidacion_service import TAREAS_ALIAS_PAGO
-from app.services.solapamiento_service import (
+from app.modulos.preliquidacion.schemas import ConceptoUnifRequest
+from app.modulos.preliquidacion.services.preliquidacion_service import TAREAS_ALIAS_PAGO
+from app.modulos.preliquidacion.services.solapamiento_service import (
     categorias_compatibles, detectar_solapamiento_candidato, listar_solapamientos,
 )
 

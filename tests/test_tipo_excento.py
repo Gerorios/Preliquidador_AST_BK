@@ -4,8 +4,8 @@ Ningún cálculo la distingue; solo verificamos que el enum y los schemas de
 entrada la aceptan."""
 from datetime import date
 
-from app.models.models import TipoConcepto
-from app.schemas.schemas import ConceptoAdicionalRequest, ConceptoUnifRequest
+from app.modulos.preliquidacion.models import TipoConcepto
+from app.modulos.preliquidacion.schemas import ConceptoAdicionalRequest, ConceptoUnifRequest
 
 
 def test_tipo_concepto_excento_value():

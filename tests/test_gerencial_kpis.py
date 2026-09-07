@@ -6,8 +6,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import Preliquidacion, PreliquidacionLinea
-from app.services.gerencial_service import GerencialService, PeriodoInvalidoError
+from app.modulos.preliquidacion.models import Preliquidacion, PreliquidacionLinea
+from app.modulos.preliquidacion.services.gerencial_service import GerencialService, PeriodoInvalidoError
 
 
 @pytest.fixture()
@@ -95,7 +95,7 @@ def test_resumen_quincena_y_variacion(db):
 def test_resumen_excluye_mensualizados(db):
     """La plata de las personas mensualizadas (sueldo fijo, no jornal) no
     entra a ningún cálculo de mano de obra de Gerencial."""
-    from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+    from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
     p = _preliq(db, Q_MAY_1)
     _linea(db, p, 1000, cuil="20-1", nombre="OTRO")
     _linea(db, p, 5000, cuil="20-2", nombre=EMPLEADOS_MENSUALIZADOS[0])
@@ -208,7 +208,7 @@ def test_desvios_persona_contra_su_media(db):
 
 
 def test_desvios_persona_excluye_mensualizados(db):
-    from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+    from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
     p = _preliq(db, Q_MAY_1)
     _linea(db, p, 1000, cuil="20-1", nombre="JUAN")
     _linea(db, p, 9000, cuil="20-2", nombre=EMPLEADOS_MENSUALIZADOS[0])

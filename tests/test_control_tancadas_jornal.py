@@ -6,11 +6,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     ConceptoAdicional, UnidadBaseConcepto, TipoConcepto,
 )
-from app.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
 
 
 @pytest.fixture()
@@ -158,7 +158,7 @@ def test_solo_incluye_lineas_pagadas_por_tancada(db):
 def test_excluye_lineas_de_empleados_mensualizados(db):
     """Las líneas de personas mensualizadas (hardcodeadas en
     EMPLEADOS_MENSUALIZADOS) no entran a este control."""
-    from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+    from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
     preliq = _preliq(db, valor_hora_pulv=Decimal("100"))
     l1 = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
                 tancadas="40", hsjornal="10", hsmaquina="5",

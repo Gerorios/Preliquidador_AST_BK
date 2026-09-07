@@ -6,11 +6,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     UnidadBaseConcepto, TipoConcepto,
 )
-from app.services.preliquidacion_service import (
+from app.modulos.preliquidacion.services.preliquidacion_service import (
     PreliquidacionService, TAREAS_ALIAS_PAGO, tarea_canonica, tareas_que_pagan_como,
 )
 
@@ -204,8 +204,8 @@ def test_cambiar_categoria_recalcula_la_linea_alias(db):
 # ─── API de precios ──────────────────────────────────────────────────────────
 
 from fastapi import HTTPException
-from app.api.precios import crear_concepto, conceptos_faltantes
-from app.schemas.schemas import ConceptoUnifRequest
+from app.modulos.preliquidacion.api.precios import crear_concepto, conceptos_faltantes
+from app.modulos.preliquidacion.schemas import ConceptoUnifRequest
 
 
 def test_crear_concepto_para_tarea_alias_da_422(db):

@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
 from app.core.auth import requiere_rol
-from app.models.models import Preliquidacion
-from app.services.consulta_externa import ConsultaExternaService
-from app.services.preliquidacion_service import PreliquidacionService
-from app.services.gerencial_service import (
+from app.modulos.preliquidacion.models import Preliquidacion
+from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.services.gerencial_service import (
     GerencialService, PeriodoInvalidoError, UMBRAL_DESVIO_DEFAULT,
 )
 

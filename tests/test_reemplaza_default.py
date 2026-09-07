@@ -6,9 +6,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import UnidadBaseConcepto, TipoConcepto
-from app.schemas.schemas import ConceptoUnifRequest
-from app.api.precios import crear_concepto
+from app.modulos.preliquidacion.models import UnidadBaseConcepto, TipoConcepto
+from app.modulos.preliquidacion.schemas import ConceptoUnifRequest
+from app.modulos.preliquidacion.api.precios import crear_concepto
 
 
 @pytest.fixture()

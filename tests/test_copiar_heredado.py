@@ -6,12 +6,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     UnidadBaseConcepto, TipoConcepto,
 )
-from app.api.precios import copiar_quincena, actualizar_concepto
-from app.schemas.schemas import ConceptoUnifUpdateRequest
+from app.modulos.preliquidacion.api.precios import copiar_quincena, actualizar_concepto
+from app.modulos.preliquidacion.schemas import ConceptoUnifUpdateRequest
 
 
 @pytest.fixture()

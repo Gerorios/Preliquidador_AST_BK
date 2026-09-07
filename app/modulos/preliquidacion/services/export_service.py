@@ -6,7 +6,7 @@ from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import PreliquidacionLinea
+from app.modulos.preliquidacion.models import PreliquidacionLinea
 
 
 # ─── Export a Excel de una quincena ───────────────────────────────────────────

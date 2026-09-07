@@ -7,7 +7,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.schemas import (
+from app.modulos.preliquidacion.schemas import (
     CategoriaOperarioRequest,
     ConceptoUnifRequest,
     ConceptoUnifUpdateRequest,

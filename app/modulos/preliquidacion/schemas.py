@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.models.models import TipoConcepto, UnidadBaseConcepto
+from app.modulos.preliquidacion.models import TipoConcepto, UnidadBaseConcepto
 
 
 class PreliquidacionGenerarRequest(BaseModel):

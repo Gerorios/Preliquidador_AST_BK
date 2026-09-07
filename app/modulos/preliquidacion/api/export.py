@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia
 from app.core.auth import requiere_operativo
-from app.models.models import Preliquidacion
-from app.services.export_service import generar_export_excel
+from app.modulos.preliquidacion.models import Preliquidacion
+from app.modulos.preliquidacion.services.export_service import generar_export_excel
 
 # dependencies: la descarga exige sesión válida (el front la pide vía axios
 # con header Authorization, no con un link directo — no rompe nada) y rol

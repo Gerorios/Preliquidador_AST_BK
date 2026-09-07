@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db_propia, get_db_externa, get_db_sueldos
 from app.core.auth import get_usuario_actual
 from app.main import app
-from app.models.models import Preliquidacion
+from app.modulos.preliquidacion.models import Preliquidacion
 
 
 @pytest.fixture()

@@ -6,11 +6,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     ConceptoAdicional, UnidadBaseConcepto, TipoConcepto,
 )
-from app.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
 
 Q = date(2026, 5, 1)
 
@@ -31,7 +31,7 @@ def db():
     session = Session()
     # Con FKs activas, preliquidacion.creado_por y los ids de usuario de los
     # conceptos manuales necesitan un usuario real.
-    from app.models.models import Usuario
+    from app.modulos.preliquidacion.models import Usuario
     session.add(Usuario(id=1, nombre="TEST", email="t@t.com", password="x"))
     session.commit()
     yield session
@@ -204,7 +204,7 @@ def test_quincena_vaciada_borra_todas_las_lineas(db):
 
 
 def test_ajuste_manual_tambien_protege_del_borrado(db):
-    from app.models.models import AjusteManual
+    from app.modulos.preliquidacion.models import AjusteManual
     _concepto(db)
     fila = _fila()
     svc = _svc(db, [fila, dict(fila)])
@@ -317,7 +317,7 @@ def test_no_churnea_contra_columna_redondeada_por_mysql(db):
 
 
 def test_normalizacion_redondea_half_up_como_mysql():
-    from app.services.preliquidacion_service import _n
+    from app.modulos.preliquidacion.services.preliquidacion_service import _n
     assert _n("12.985") == "12.99"   # float lo bajaba a 12.98
     assert _n("12.984") == "12.98"
     assert _n(Decimal("12.985")) == "12.99"
@@ -341,7 +341,7 @@ def test_to_decimal_normaliza_cero_negativo_y_nan(db):
 def test_detectar_duplicados_normaliza_igual_que_la_clave():
     """'12.985' y '12.99' son el mismo valor guardado: deben colapsar como
     duplicado igual que colapsan en la clave del diff."""
-    from app.services.motor_reglas import MotorReglas
+    from app.modulos.preliquidacion.services.motor_reglas import MotorReglas
     base = _fila()
     f1 = dict(base, unidades="12.985")
     f2 = dict(base, unidades="12.99")

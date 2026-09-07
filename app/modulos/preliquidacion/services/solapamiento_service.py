@@ -19,8 +19,8 @@ from typing import Optional
 
 from sqlalchemy import func
 
-from app.models.models import ConceptoLiquidacion, Preliquidacion
-from app.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.models import ConceptoLiquidacion, Preliquidacion
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
 
 DIRECCION_POR_CLIENTE = "por_cliente_sobre_especificos"
 DIRECCION_ESPECIFICO = "especifico_sobre_por_cliente"

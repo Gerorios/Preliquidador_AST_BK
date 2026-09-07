@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.services.motor_reglas import MotorReglas
+from app.modulos.preliquidacion.services.motor_reglas import MotorReglas
 
 
 def _motor():

@@ -20,8 +20,8 @@ from datetime import date
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.models.models import Preliquidacion, PreliquidacionLinea
-from app.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+from app.modulos.preliquidacion.models import Preliquidacion, PreliquidacionLinea
+from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
 
 
 # Desvío por persona (ver CONTEXT.md): últimas 6 quincenas con actividad,

@@ -1,8 +1,8 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.services.motor_reglas import MotorReglas
-from app.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.services.motor_reglas import MotorReglas
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
 
 
 def _svc():

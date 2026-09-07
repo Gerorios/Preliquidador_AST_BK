@@ -4,14 +4,14 @@ from typing import Optional
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import and_, or_, func, case, bindparam, text as sql_text
 
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional,
     AjusteManual, ConceptoLiquidacion, UnidadBaseConcepto, CategoriaOperario,
 )
-from app.services.consulta_externa import ConsultaExternaService
-from app.services.motor_reglas import MotorReglas, normalizar_decimal
-from app.services.sueldos_service import SueldosService
-from app.schemas.schemas import LineaUpdateRequest, ConceptoAdicionalRequest
+from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
+from app.modulos.preliquidacion.services.motor_reglas import MotorReglas, normalizar_decimal
+from app.modulos.preliquidacion.services.sueldos_service import SueldosService
+from app.modulos.preliquidacion.schemas import LineaUpdateRequest, ConceptoAdicionalRequest
 
 
 # Personas mensualizadas (no jornalizadas): sus líneas se excluyen de todas

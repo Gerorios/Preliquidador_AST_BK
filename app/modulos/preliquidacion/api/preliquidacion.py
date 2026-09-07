@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
 from app.core.auth import get_usuario_actual, requiere_operativo
-from app.services.preliquidacion_service import PreliquidacionService
-from app.schemas.schemas import (
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.schemas import (
     PreliquidacionGenerarRequest, PreliquidacionResponse,
     LineaResponse, LineaUpdateRequest,
     ConceptoAdicionalRequest, ConceptoAdicionalResponse,
@@ -67,7 +67,7 @@ def generar(
 def refrescar_sueldos(_=Depends(get_usuario_actual)):
     """Marca el maestro de sueldos (cache de proceso) para recargarse en el
     próximo uso. Útil cuando cambió nuempleados y no se quiere esperar al TTL."""
-    from app.services.sueldos_service import refrescar_cache_sueldos
+    from app.modulos.preliquidacion.services.sueldos_service import refrescar_cache_sueldos
     refrescar_cache_sueldos()
     invalidar_cache_empresas()
     return MensajeResponse(mensaje="Maestro de sueldos marcado para refrescar")

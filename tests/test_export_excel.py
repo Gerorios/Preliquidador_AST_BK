@@ -7,10 +7,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional, TipoConcepto,
 )
-from app.services.export_service import COLUMNAS, generar_export_excel
+from app.modulos.preliquidacion.services.export_service import COLUMNAS, generar_export_excel
 
 
 @pytest.fixture()

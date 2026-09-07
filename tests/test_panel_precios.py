@@ -6,13 +6,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     ConceptoAdicional, UnidadBaseConcepto, TipoConcepto,
 )
-from app.services.preliquidacion_service import PreliquidacionService
-from app.schemas.schemas import ConceptoPrecioMasivoRequest
-from app.api.precios import panel_conceptos, precio_masivo
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.schemas import ConceptoPrecioMasivoRequest
+from app.modulos.preliquidacion.api.precios import panel_conceptos, precio_masivo
 
 
 @pytest.fixture()

@@ -6,15 +6,15 @@ from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
 from app.core.auth import get_usuario_actual, requiere_conceptos
-from app.models.models import ConceptoLiquidacion, Preliquidacion
-from app.services.consulta_externa import ConsultaExternaService
-from app.services.preliquidacion_service import (
+from app.modulos.preliquidacion.models import ConceptoLiquidacion, Preliquidacion
+from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
+from app.modulos.preliquidacion.services.preliquidacion_service import (
     PreliquidacionService, TAREAS_ALIAS_PAGO, tarea_canonica,
 )
-from app.services.solapamiento_service import (
+from app.modulos.preliquidacion.services.solapamiento_service import (
     detectar_solapamiento_candidato, listar_solapamientos,
 )
-from app.schemas.schemas import (
+from app.modulos.preliquidacion.schemas import (
     ConceptoUnifRequest, ConceptoUnifResponse, ConceptoUnifUpdateRequest,
     MensajeResponse, ConceptoPanelResponse, ConceptoPrecioMasivoRequest,
     ConceptoPrecioMasivoResponse,

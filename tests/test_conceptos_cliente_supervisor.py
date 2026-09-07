@@ -13,13 +13,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.models import (
+from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     CategoriaOperario, UnidadBaseConcepto, TipoConcepto,
 )
-from app.schemas.schemas import ConceptoUnifRequest, ConceptoUnifUpdateRequest
-from app.api.precios import crear_concepto, actualizar_concepto, copiar_quincena
-from app.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.schemas import ConceptoUnifRequest, ConceptoUnifUpdateRequest
+from app.modulos.preliquidacion.api.precios import crear_concepto, actualizar_concepto, copiar_quincena
+from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
 
 
 @pytest.fixture()
