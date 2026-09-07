@@ -10,10 +10,6 @@ import enum
 
 # ─── Enums ────────────────────────────────────────────────────────────────────
 
-class SituacionPago(str, enum.Enum):
-    A = "A"
-    B = "B"
-
 class TipoConcepto(str, enum.Enum):
     REMUNERATIVO = "REMUNERATIVO"
     NO_REMUNERATIVO = "NO_REMUNERATIVO"
@@ -48,7 +44,6 @@ class Usuario(Base):
     email      = Column(String(100), unique=True, nullable=False)
     password   = Column(String(255), nullable=False)
     rol        = Column(String(20), default='jefe')
-    contratos  = Column(String(50))
     activo     = Column(Boolean, default=True)
     creado_en  = Column(DateTime, default=datetime.utcnow)
 
@@ -236,7 +231,6 @@ class ConceptoAdicional(Base):
 
     linea            = relationship("PreliquidacionLinea", back_populates="conceptos")
     usuario          = relationship("Usuario")
-    concepto_origen  = relationship("ConceptoLiquidacion")
 
     # WS9 (latencia, DIFERIBLE — ver migrations/ws9_indices_latencia.sql).
     __table_args__ = (
