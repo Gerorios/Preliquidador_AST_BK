@@ -84,7 +84,7 @@ app/
 
 Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0013). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
 
-**Nuevos módulos**: desde 2026-09 el sistema crece por módulos (ADR-0013). La guía para incorporar uno, empezando por Fletes, está en [`docs/modulos/GUIA-MODULOS.md`](docs/modulos/GUIA-MODULOS.md).
+**Nuevos módulos**: desde 2026-09 el sistema crece por módulos (ADR-0013). La guía para incorporar uno, empezando por Fletes, está en [`docs/modulos/GUIA-MODULOS.md`](docs/modulos/GUIA-MODULOS.md). Para dejar una máquina nueva con los dos proyectos corriendo, [`docs/modulos/PUESTA-A-PUNTO.md`](docs/modulos/PUESTA-A-PUNTO.md).
 
 ---
 
