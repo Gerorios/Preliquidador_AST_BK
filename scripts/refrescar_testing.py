@@ -42,6 +42,7 @@ load_dotenv()
 # Cualquier otra tabla que haya en el destino se deja intacta.
 TABLAS = [
     "usuarios",
+    "usuario_modulo",
     "preliquidacion",
     "concepto_liquidacion",
     "preliquidacion_linea",

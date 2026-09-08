@@ -14,7 +14,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from app.core.config import settings
-from app.core.database import verificar_conexiones, engine_propia, Base
+from app.core.database import verificar_conexiones
 from app.core import models as models_core   # noqa: F401 — registra las tablas del núcleo (usuarios)
 from app.modulos.preliquidacion import models  # noqa: F401 — registra los modelos del módulo
 
@@ -34,10 +34,9 @@ async def lifespan(app: FastAPI):
         for err in resultado["errores"]:
             print(f"  ERROR: {err}")
 
-    if resultado["propia"]:
-        # Crea solo las tablas que NO existen — nunca toca las existentes
-        Base.metadata.create_all(bind=engine_propia, checkfirst=True)
-        print("  Tablas BD propia: verificadas")
+    # El esquema lo gobiernan las migraciones SQL (migrations/<modulo>/). No se
+    # crean tablas al arrancar: una tabla que falta es un deploy incompleto y
+    # tiene que fallar ruidosamente, no crearse con lo que diga el modelo.
 
     print("─" * 50)
     yield
