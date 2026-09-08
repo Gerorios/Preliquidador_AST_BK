@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS usuario_modulo (
     UNIQUE KEY uq_usuario_modulo (usuario_id, modulo),
     CONSTRAINT fk_usuario_modulo_usuario
         FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Poblado desde los roles globales viejos (idempotente por la UNIQUE).
 INSERT IGNORE INTO usuario_modulo (usuario_id, modulo, rol)
