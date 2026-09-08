@@ -178,7 +178,7 @@ frontend_preliquidacion/
     │   ├── api.js               # Axios: baseURL /api, Bearer automático, logout en 401
     │   ├── authStore.js         # Sesión (Zustand + persist, clave "auth-asturiana")
     │   ├── permisos.js          # helpers de rol por módulo sobre la sesión
-    │   ├── registroContext.js   # trae GET /api/auth/modulos y lo expone a Inicio y al menú
+    │   ├── registroContext.js   # React.Context + useRegistro(); App.jsx le inyecta el registro estático
     │   ├── layout/               # Layout (sidebar, compone el menú de cada módulo), ProtectedRoute
     │   ├── inicio/                # Inicio.jsx — pantalla de Tarjetas (ver CONTEXT.md, "Inicio")
     │   ├── ui/                   # CargandoContenido, CargandoOverlay, iconos.jsx (íconos por módulo)
@@ -204,7 +204,7 @@ El molde de Fletes ya existe en los dos repos, registrado pero inactivo (ver "M�
 
 **1. Backend — activar y completar.**
 
-- `app/modulos/fletes/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo, así que el frontend le muestra la Tarjeta a quien tenga rol en él.
+- `app/modulos/fletes/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta).
 - `app/modulos/fletes/api/fletes.py` hoy tiene un único endpoint de estado (`GET /api/fletes/` → `{"modulo": "fletes", "estado": "en construcción"}`); ahí se agregan los endpoints reales, o se parte en más archivos dentro de `api/` (ver el patrón de `app/modulos/preliquidacion/api/`).
 - Modelos en `app/modulos/fletes/models.py`, tablas con prefijo `fletes_` (regla 5 de la sección 4.2).
 - Migraciones en `migrations/fletes/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/fletes/LEEME.md`), probadas primero contra `testing`.
@@ -217,6 +217,8 @@ El molde de Fletes ya existe en los dos repos, registrado pero inactivo (ver "M�
 - Agregar páginas en `src/modulos/fletes/pages/` (hoy solo `Inicio.jsx`, la pantalla del molde) y sus rutas.
 - `etiquetasRol` del módulo en `src/modulos/fletes/rutas.jsx` (ver "Etiqueta de rol" en `CONTEXT.md`; el molde ya trae `{operador: "Liquidador de fletes", gerente: "Gerente"}`, ajustar si corresponde).
 - Íconos disponibles para la Tarjeta en `src/core/ui/iconos.jsx`.
+
+Activar Fletes = `activo: True`/`true` en los dos repos; el Inicio no consulta al backend para decidir las tarjetas — lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra `usuario.modulos` de la sesión.
 
 **3. Registro — ya está hecho para Fletes.** `app/modulos/__init__.py` ya tiene `FLETES` en `REGISTRO` y `src/modulos/registro.js` ya tiene su entrada; no hace falta tocarlos para Fletes. Para el **tercer módulo** (y siguientes), agregarlo es una línea en cada uno de esos dos archivos y nada más — el resto de esta sección aplica igual.
 
@@ -239,8 +241,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 1. **Todo el código del módulo vive en `app/modulos/<modulo>/` y `src/modulos/<modulo>/`.** Nada del módulo en otra carpeta.
 2. **Un módulo nunca importa de otro módulo.** Fletes no importa nada de `modulos/preliquidacion/`, ni al revés. Si necesita algo que está en otro módulo, es señal de que eso pertenece al núcleo: se pide, se conversa y se mueve al núcleo en un PR separado.
 3. **Del núcleo se importa lo que el núcleo expone**, no sus internos.
-4. **No se modifican archivos fuera de la carpeta del módulo sin avisar antes.** Los únicos toques fuera son el registro del router en `main.py` y el de las rutas en `App.jsx`. Cualquier cambio al núcleo va en un PR aparte, chico, solo para eso, y lo revisa quien no lo escribió.
-4b. **Un módulo se registra en `app/modulos/__init__.py` y en `src/modulos/registro.js`, y en ningún otro lugar.** El núcleo no conoce módulos por nombre: `app/main.py` recorre `app.modulos.activos()` y `App.jsx`/`Layout.jsx` recorren `src/modulos/registro.js`. Agregar un módulo nuevo es una línea en cada uno de esos dos archivos.
+4. **No se modifican archivos fuera de la carpeta del módulo sin avisar antes.** El único toque fuera es la línea de registro del módulo, y va solo en `app/modulos/__init__.py` y en `src/modulos/registro.js` — el núcleo no conoce módulos por nombre: `app/main.py` recorre `app.modulos.activos()` y `App.jsx`/`Layout.jsx` recorren `src/modulos/registro.js`. Agregar un módulo nuevo es una línea en cada uno de esos dos archivos y nada más. Cualquier otro cambio al núcleo va en un PR aparte, chico, solo para eso, y lo revisa quien no lo escribió.
 
 ### 4.2 Datos
 
@@ -330,8 +331,8 @@ Alta y gestión de usuarios: no hay ABM en la app, se corre a mano con `scripts/
 
 El código interno de un rol de módulo siempre es `operador` o `gerente` (ver arriba); lo que se muestra en pantalla es otra cosa (ver "Etiqueta de rol" en `CONTEXT.md`). Cada módulo define su propio mapeo:
 
-- Backend: `etiquetas_rol` en el `ModuloInfo` del módulo (`app/modulos/<modulo>/__init__.py`), viaja al frontend en `GET /api/auth/modulos`.
-- Frontend: `etiquetasRol` en el `modulo` exportado por `src/modulos/<modulo>/rutas.jsx`, usado por la Tarjeta del Inicio (`src/modulos/registro.js`, función `etiquetaRol`).
+- Backend: `etiquetas_rol` en el `ModuloInfo` del módulo (`app/modulos/<modulo>/__init__.py`), expuesto en `GET /api/auth/modulos` (para la Administración del PR 5).
+- Frontend: `etiquetasRol` en el `modulo` exportado por `src/modulos/<modulo>/rutas.jsx` — es la copia que hoy usa el Inicio, definida independientemente del backend (`src/modulos/registro.js`, función `etiquetaRol`, contra el registro estático de módulos).
 
 Hoy: Preliquidación muestra `operador` como **Preliquidador** y `gerente` como **Gerente**; el molde de Fletes ya trae `operador` como **Liquidador de fletes** y `gerente` como **Gerente** (a confirmar cuando el módulo tenga usuarios reales).
 
