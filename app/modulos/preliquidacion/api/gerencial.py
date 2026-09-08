@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
-from app.core.auth import requiere_rol
+from app.modulos.preliquidacion.permisos import requiere_gerencial
 from app.modulos.preliquidacion.models import Preliquidacion
 from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
 from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
@@ -13,12 +13,12 @@ from app.modulos.preliquidacion.services.gerencial_service import (
     GerencialService, PeriodoInvalidoError, UMBRAL_DESVIO_DEFAULT,
 )
 
-# Vista gerencial: solo lectura, accesible a todos los roles (es el ÚNICO
-# lugar, junto con los GET del maestro de precios, al que llega el gerente).
+# Vista gerencial: solo lectura, reservada a gerente/admin del módulo — el
+# operador NO llega acá (decisión 2026-09-08).
 router = APIRouter(
     prefix="/api/gerencial",
     tags=["Gerencial"],
-    dependencies=[Depends(requiere_rol("admin", "jefe", "gerente"))],
+    dependencies=[Depends(requiere_gerencial)],
 )
 
 

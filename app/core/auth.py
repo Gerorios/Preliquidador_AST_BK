@@ -1,3 +1,6 @@
+"""Autenticación: login, token JWT y el usuario autenticado (get_usuario_actual).
+La autorización por módulo (quién puede operar qué) vive en
+app/core/permisos.py y en permisos.py de cada módulo."""
 import time
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -31,6 +34,7 @@ class UsuarioMe(BaseModel):
     nombre: str
     email: str
     rol: str
+    modulos: dict[str, str]
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -98,33 +102,10 @@ def get_usuario_actual(
         raise credenciales_exc
 
     # Se desliga de la sesión para que sobreviva al cierre de esta request
-    # (los atributos ya están cargados; solo se leen id/nombre/email/rol).
+    # (id/nombre/email/rol/modulos, cargados por selectin).
     db.expunge(usuario)
     _USUARIO_CACHE[user_id] = (usuario, time.monotonic() + _USUARIO_CACHE_TTL)
     return usuario
-
-
-def requiere_rol(*roles: str):
-    """Dependency de autorización: exige que el usuario autenticado tenga
-    alguno de los roles dados. La restricción vive acá (backend), no en el
-    front — un gerente con token válido recibe 403 en lo operativo."""
-    def dependencia(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
-        if usuario.rol not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tenés permiso para esta operación",
-            )
-        return usuario
-    return dependencia
-
-
-# Roles que operan la preliquidación (todo menos la vista gerencial de solo lectura)
-requiere_operativo = requiere_rol("admin", "jefe")
-
-# El gerente opera el maestro de Conceptos completo (alta/baja/edición/precio
-# masivo/copiar) porque es quien muchas veces decide un cambio de precios —
-# ver CONTEXT.md, sección "Rol". El resto de lo operativo le sigue vedado.
-requiere_conceptos = requiere_rol("admin", "jefe", "gerente")
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -147,6 +128,11 @@ def login(
 
     token = crear_token({"sub": usuario.id})
 
+    # Import local: app.core.permisos importa get_usuario_actual de este
+    # módulo a nivel de módulo, así que un import arriba de auth.py crearía
+    # un ciclo.
+    from app.core.permisos import modulos_de
+
     return TokenResponse(
         access_token=token,
         usuario={
@@ -154,17 +140,22 @@ def login(
             "nombre": usuario.nombre,
             "email": usuario.email,
             "rol": usuario.rol,
+            "modulos": modulos_de(usuario),
         }
     )
 
 
 @router.get("/me", response_model=UsuarioMe)
 def me(usuario: Usuario = Depends(get_usuario_actual)):
+    # Import local: ver comentario en login().
+    from app.core.permisos import modulos_de
+
     return UsuarioMe(
         id=usuario.id,
         nombre=usuario.nombre,
         email=usuario.email,
         rol=usuario.rol,
+        modulos=modulos_de(usuario),
     )
 
 
