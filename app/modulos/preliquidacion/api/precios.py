@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
-from app.core.auth import get_usuario_actual, requiere_conceptos
+from app.core.auth import get_usuario_actual
+from app.modulos.preliquidacion.permisos import requiere_conceptos
 from app.modulos.preliquidacion.models import ConceptoLiquidacion, Preliquidacion
 from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
 from app.modulos.preliquidacion.services.preliquidacion_service import (
@@ -54,8 +55,8 @@ def _validar_tarea_no_alias(tarea_nombre: str):
 
 # dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
 # Los GET quedan accesibles a todo rol (todos ven el maestro); las mutaciones
-# agregan requiere_conceptos endpoint por endpoint — admin/jefe/gerente, ya
-# que el gerente opera el maestro de Conceptos completo (decide precios).
+# agregan requiere_conceptos endpoint por endpoint — admin/operador/gerente,
+# ya que el gerente opera el maestro de Conceptos completo (decide precios).
 router = APIRouter(
     prefix="/api/precios",
     tags=["Precios"],

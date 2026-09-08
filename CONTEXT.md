@@ -19,7 +19,7 @@ Lo que el Sistema ofrece a todos los Módulos: autenticación y roles, conexión
 _Avoid_: "utils", "común" (ambiguo con Concepto común)
 
 **Operador (de módulo)**:
-Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, lo que hoy hacen `admin` y `jefe`; en Fletes, quien liquida los fletes). Un operador de un módulo no ve las pantallas operativas de otro módulo.
+Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador — no ve el panel Gerencial; en Fletes, quien liquida los fletes). Un operador de un módulo no ve las pantallas operativas de otro módulo.
 
 **Gerente (de módulo)**:
 Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle (en Preliquidación, el maestro de Conceptos completo). Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
@@ -131,7 +131,8 @@ Nivel (**1 a 12**) que el liquidador le asigna **por quincena** a un operario de
 _Avoid_: confundir con la categoría de convenio de `nuempleados` (otra cosa, de solo lectura, no manipulable).
 
 **Rol**:
-Nivel de acceso de un usuario del sistema. Hoy son tres globales: `admin` y `jefe` operan la preliquidación completa (y también ven la Vista gerencial); `gerente` accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear/editar/eliminar reglas, precios, precio masivo, copiar quincena — igual que admin/jefe), porque el gerente es quien muchas veces decide un cambio de precios. El resto de la preliquidación (Revisión, Verificación, Dashboard, Mantenimiento) le sigue vedado. La restricción se aplica en el backend, no solo en pantalla. Con la llegada de los Módulos, `jefe` pasa a ser Operador del módulo Preliquidación y `gerente` pasa a ser Gerente de módulo (ver "Sistema y módulos"); `admin` sigue global.
+Nivel de acceso de un usuario del sistema. `admin` es un rol **global** (tabla `usuarios`) y ve y opera todo, en todos los módulos. Por cada módulo, un usuario puede tener rol `operador` o `gerente` (tabla `usuario_modulo`, uno por usuario y módulo). En Preliquidación, el `operador` (el liquidador) opera la preliquidación completa (Revisión, Verificación, Dashboard, Mantenimiento) pero **no** ve la Vista gerencial; el `gerente` accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear/editar/eliminar reglas, precios, precio masivo, copiar quincena), porque es quien muchas veces decide un cambio de precios, pero no al resto de la preliquidación. La restricción se aplica en el backend, no solo en pantalla (ver "Sistema y módulos").
+_Avoid_: jefe (rol anterior a 2026-09, hoy = operador de Preliquidación)
 
 **Vista gerencial**:
 Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).

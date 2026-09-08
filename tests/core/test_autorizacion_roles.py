@@ -1,8 +1,12 @@
-# Autorización por rol: el gerente llega a /api/gerencial y opera el maestro
-# de Conceptos completo (/api/precios/conceptos...), porque es quien decide
-# los cambios de precios; el resto de lo operativo (preliquidación, export)
-# le sigue devolviendo 403. La restricción vive en el backend
-# (requiere_rol / requiere_operativo / requiere_conceptos), no en el front.
+# Autorización por módulo (ADR-0013): usuarios.rol es global ('admin' ve y
+# opera todo); el resto depende de usuario_modulo (rol 'operador' o 'gerente'
+# en el módulo). El gerente de preliquidación llega a /api/gerencial y opera
+# el maestro de Conceptos completo (/api/precios/conceptos...), porque es
+# quien decide los cambios de precios; el resto de lo operativo
+# (preliquidación, export) le sigue devolviendo 403. El operador NO accede a
+# la vista gerencial (decisión 2026-09-08). La restricción vive en el
+# backend (app/core/permisos.py + app/modulos/preliquidacion/permisos.py),
+# no en el front.
 
 from datetime import date
 from types import SimpleNamespace
@@ -35,8 +39,11 @@ def db():
     session.close()
 
 
-def _cliente_con_rol(db, rol: str) -> TestClient:
-    usuario = SimpleNamespace(id=1, nombre="Test", email="t@t.com", rol=rol, activo=True)
+def _cliente(db, rol: str = "usuario", **modulos: str) -> TestClient:
+    usuario = SimpleNamespace(
+        id=1, nombre="Test", email="t@t.com", rol=rol, activo=True,
+        modulos=[SimpleNamespace(modulo=m, rol=r) for m, r in modulos.items()],
+    )
     app.dependency_overrides[get_usuario_actual] = lambda: usuario
     app.dependency_overrides[get_db_propia] = lambda: db
     # Los controles gerenciales construyen PreliquidacionService, que declara
@@ -56,22 +63,33 @@ def limpiar_overrides():
 # ─── Gerente ──────────────────────────────────────────────────────────────────
 
 def test_gerente_no_accede_a_preliquidacion(db):
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
     r = cliente.get("/api/preliquidacion/")
     assert r.status_code == 403
 
 
 def test_gerente_no_exporta_excel(db):
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
     r = cliente.get("/api/preliquidacion/1/export-excel")
     assert r.status_code == 403
 
 
 def test_gerente_muta_el_maestro_de_conceptos(db):
     # El gerente decide cambios de precios: opera el maestro de Conceptos
-    # completo, igual que admin/jefe. Ninguna de estas debe dar 403 — el
+    # completo, igual que admin/operador. Ninguna de estas debe dar 403 — el
     # status varía según validación de payload/existencia del recurso.
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
+    assert cliente.post("/api/precios/conceptos", json={}).status_code != 403
+    assert cliente.patch("/api/precios/conceptos/1", json={}).status_code != 403
+    assert cliente.delete("/api/precios/conceptos/1").status_code != 403
+    assert cliente.post("/api/precios/conceptos/copiar", json={}).status_code != 403
+    assert cliente.patch("/api/precios/conceptos/precio-masivo", json={}).status_code != 403
+
+
+def test_operador_muta_el_maestro_de_conceptos(db):
+    # requiere_conceptos = requiere_modulo(MODULO, "operador", "gerente"):
+    # el operador también opera el maestro completo, no solo el gerente.
+    cliente = _cliente(db, preliquidacion="operador")
     assert cliente.post("/api/precios/conceptos", json={}).status_code != 403
     assert cliente.patch("/api/precios/conceptos/1", json={}).status_code != 403
     assert cliente.delete("/api/precios/conceptos/1").status_code != 403
@@ -80,35 +98,47 @@ def test_gerente_muta_el_maestro_de_conceptos(db):
 
 
 def test_gerente_ve_el_maestro_en_lectura(db):
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
     r = cliente.get("/api/precios/conceptos", params={"quincena": "2026-05-01"})
     assert r.status_code == 200
 
 
 def test_gerente_accede_a_vista_gerencial(db):
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
     r = cliente.get("/api/gerencial/quincenas")
     assert r.status_code == 200
     assert r.json() == []
 
 
-# ─── Jefe / admin ─────────────────────────────────────────────────────────────
+# ─── Admin / operador ─────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("rol", ["admin", "jefe"])
-def test_operativo_accede_a_preliquidacion(db, rol):
-    cliente = _cliente_con_rol(db, rol)
+def test_admin_accede_a_preliquidacion(db):
+    cliente = _cliente(db, rol="admin")
     r = cliente.get("/api/preliquidacion/")
     assert r.status_code == 200
 
 
-@pytest.mark.parametrize("rol", ["admin", "jefe"])
-def test_operativo_accede_a_vista_gerencial(db, rol):
-    cliente = _cliente_con_rol(db, rol)
+def test_operador_accede_a_preliquidacion(db):
+    cliente = _cliente(db, preliquidacion="operador")
+    r = cliente.get("/api/preliquidacion/")
+    assert r.status_code == 200
+
+
+def test_admin_accede_a_vista_gerencial(db):
+    cliente = _cliente(db, rol="admin")
     assert cliente.get("/api/gerencial/quincenas").status_code == 200
 
 
+def test_operador_no_accede_a_vista_gerencial(db):
+    # Decisión 2026-09-08: el operador opera la preliquidación pero NO ve
+    # el panel gerencial — eso queda reservado a gerente/admin.
+    cliente = _cliente(db, preliquidacion="operador")
+    r = cliente.get("/api/gerencial/quincenas")
+    assert r.status_code == 403
+
+
 def test_gerencial_periodo_invalido_da_400(db):
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
     r = cliente.get("/api/gerencial/resumen")  # sin quincena ni mes
     assert r.status_code == 400
 
@@ -118,7 +148,7 @@ def test_gerente_ve_controles_de_pago(db):
     # gerencial por quincena (solo lectura, sin el PATCH del valor hora).
     db.add(Preliquidacion(quincena=date(2026, 5, 1), creado_por=1))
     db.commit()
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
     for ruta in ("control-plantas", "control-tancadas"):
         r = cliente.get(f"/api/gerencial/{ruta}", params={"quincena": "2026-05-01"})
         assert r.status_code == 200, ruta
@@ -126,7 +156,7 @@ def test_gerente_ve_controles_de_pago(db):
 
 
 def test_gerencial_control_quincena_inexistente_da_400(db):
-    cliente = _cliente_con_rol(db, "gerente")
+    cliente = _cliente(db, preliquidacion="gerente")
     r = cliente.get("/api/gerencial/control-plantas", params={"quincena": "2030-01-01"})
     assert r.status_code == 400
 
@@ -136,3 +166,14 @@ def test_sin_token_da_401(db):
     cliente = TestClient(app)
     assert cliente.get("/api/gerencial/quincenas").status_code == 401
     assert cliente.get("/api/preliquidacion/").status_code == 401
+
+
+def test_usuario_sin_modulos_recibe_403_en_todo(db):
+    cliente = _cliente(db)
+    assert cliente.get("/api/preliquidacion/").status_code == 403
+    assert cliente.get("/api/gerencial/quincenas").status_code == 403
+    assert cliente.post("/api/precios/conceptos", json={}).status_code == 403
+    # La lectura del maestro exige solo un token válido (get_usuario_actual),
+    # no un módulo — comportamiento idéntico al de antes de esta reforma.
+    r = cliente.get("/api/precios/conceptos", params={"quincena": "2026-05-01"})
+    assert r.status_code == 200
