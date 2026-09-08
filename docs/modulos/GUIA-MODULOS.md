@@ -6,7 +6,7 @@
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: el backend ya está en la estructura modular (PR 1 de la etapa 0, 2026-09). El frontend se reordena en el PR 2, los permisos por módulo llegan en el PR 3 y la carpeta `fletes/` de molde en el PR 4. Todo lo que no depende del código (secciones 8 a 11) se puede empezar ya.
+**Estado**: el backend (PR 1) y el frontend (PR 2) ya están en la estructura modular. Los permisos por módulo llegan en el PR 3 y la carpeta `fletes/` de molde en el PR 4. Todo lo que no depende del código (secciones 8 a 11) se puede empezar ya.
 
 ---
 
@@ -164,19 +164,26 @@ backend_preliquidacion/
         ├── GUIA-MODULOS.md           # este archivo
         └── fletes/                   # CONTEXT-fletes.md, plan, ayuda de uso
 
-frontend_preliquidacion/               # objetivo, se reordena en el PR 2
+frontend_preliquidacion/
 └── src/
-    ├── main.jsx  App.jsx  index.css
-    ├── core/                         # NÚCLEO COMPARTIDO
-    │   ├── api.js                    # axios con interceptores
-    │   ├── authStore.js
-    │   ├── layout/                   # Layout, menú por módulo, ProtectedRoute
-    │   └── ui/                       # CargandoOverlay, CargandoContenido, InputBusqueda, ...
+    ├── main.jsx                 # Entrada; providers (React Query, Router, Toaster)
+    ├── App.jsx                  # Compone las rutas de cada módulo + redirecciones
+    ├── index.css                # Estilos globales + design tokens
+    ├── assets/                  # Logos La Asturiana
+    ├── core/                    # NÚCLEO COMPARTIDO (ADR-0013)
+    │   ├── api.js               # Axios: baseURL /api, Bearer automático, logout en 401
+    │   ├── authStore.js         # Sesión (Zustand + persist, clave "auth-asturiana")
+    │   ├── layout/               # Layout (sidebar, compone el menú de cada módulo), ProtectedRoute
+    │   ├── ui/                   # CargandoContenido, CargandoOverlay
+    │   ├── asistente/            # AsistenteChat + asistenteApi (ayuda de uso, transversal)
+    │   └── pages/Login.jsx
     └── modulos/
-        ├── preliquidacion/
-        │   ├── rutas.jsx             # sus <Route> y entradas de menú
-        │   ├── pages/  components/  services/
-        └── fletes/
+        ├── preliquidacion/       # MÓDULO Preliquidación de sueldos
+        │   ├── rutas.jsx         # rutas, menú y redirecciones del módulo (lo único que el núcleo conoce)
+        │   ├── pages/            # Dashboard, Revision, Verificacion, Conceptos, CategoriasOperarios, Gerencial, PanelPorConcepto
+        │   ├── components/       # PanelLinea, FiltrosBar, AlertasBanner, ControlesJornal, InputBusqueda
+        │   └── services/         # preliquidacion.js, gerencial.js
+        └── fletes/               # (se crea en el PR 4)
             ├── rutas.jsx
             ├── pages/
             ├── components/
@@ -227,6 +234,8 @@ Fletes agrega su propio `from app.modulos.fletes import routers as routers_flete
 - `tests/core/test_autorizacion_roles.py` — cómo se arma un `TestClient` sobre `app.main.app` en los tests, con `app.dependency_overrides` para `get_usuario_actual`, `get_db_propia`, `get_db_externa` y `get_db_sueldos` apuntando a una sqlite en memoria (función `_cliente_con_rol`, líneas 38-47).
 
 **Recordatorio**: nunca importar de `app.modulos.preliquidacion`; nunca escribir en las bases Externa o Sueldos.
+
+**Frontend.** Del núcleo se importa: `src/core/api.js` (cliente HTTP con token), `src/core/authStore.js` (sesión), `src/core/layout/ProtectedRoute.jsx` (guardia de rutas), `src/core/ui/CargandoContenido.jsx` y `CargandoOverlay.jsx` (feedback). Un módulo se registra con su `rutas.jsx` exportando `rutas`, `nav` y `redirecciones` (ver `src/modulos/preliquidacion/rutas.jsx` como ejemplo real) y sumando esas listas en `src/App.jsx` y `src/core/layout/Layout.jsx`. Las rutas del módulo van bajo su prefijo: `/fletes/...`. Archivos que crea el módulo Fletes en `src/modulos/fletes/`: `rutas.jsx`, `pages/`, `components/`, `services/fletes.js`. Nunca importar de `src/modulos/preliquidacion/`.
 
 ---
 
@@ -471,12 +480,12 @@ Lo que quedó sin resolver y quién lo resuelve.
 - Confirmar si las consultas del Power Query se pueden exportar tal cual o hay que reconstruirlas.
 
 **Para Gero**
-- ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.~~ Backend hecho (PR 1, 2026-09-07); frontend en el PR 2.
+- ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
 - Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - Nombre visible del sistema. Provisorio: "Sistema de gestión La Asturiana".
 - Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).
-- ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07); el frontend se actualiza en el PR 2.
+- ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07) y para el frontend (PR 2, 2026-09-08).
 
 **Para conversar entre los dos**
 - Si fletes necesita algún dato de preliquidación o viceversa. Hoy la respuesta es "no comparten nada de escritura". Si aparece un caso real, se diseña en el núcleo.
