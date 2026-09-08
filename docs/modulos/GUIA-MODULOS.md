@@ -6,7 +6,7 @@
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: el backend (PR 1) y el frontend (PR 2) ya están en la estructura modular. Los permisos por módulo llegan en el PR 3 y la carpeta `fletes/` de molde en el PR 4. Todo lo que no depende del código (secciones 8 a 11) se puede empezar ya.
+**Estado**: la etapa 0 está completa salvo la pantalla de Administración (PR 5). El molde de Fletes existe en ambos repos, inactivo.
 
 ---
 
@@ -127,42 +127,46 @@ Funciona, pero al agregar un segundo módulo no habría forma de saber qué arch
 ```
 backend_preliquidacion/
 ├── app/
-│   ├── main.py                       # registra los routers de cada módulo
+│   ├── main.py                       # arranque; registra auth, los routers de activos() y asistente
 │   ├── core/                         # NÚCLEO COMPARTIDO
 │   │   ├── config.py                 # settings
 │   │   ├── database.py               # las 3 conexiones y los get_db_*
-│   │   ├── models.py                 # Usuario, RolUsuario
-│   │   ├── auth.py                   # usuario actual, requiere_rol
-│   │   │                             # (permisos.py con requiere_modulo llega en el PR 3;
-│   │   │                             #  lecturas/ se crea cuando el primer módulo nuevo lo necesite)
+│   │   ├── models.py                 # Usuario, RolUsuario, UsuarioModulo
+│   │   ├── auth.py                   # usuario actual, login/me/logout
+│   │   ├── permisos.py               # MODULOS, ROLES_MODULO, requiere_modulo
+│   │   ├── modulos.py                # ModuloInfo (clave, nombre, descripcion, activo,
+│   │   │                             #   routers, etiquetas_rol, panel_gerencial) — ADR-0013
 │   │   ├── asistente.py              # chat de ayuda, transversal
 │   │   └── quincena.py               # calcular_rango_quincena y afines
 │   └── modulos/
-│       ├── preliquidacion/           # todo el sistema original, ya movido acá
-│       │   ├── __init__.py           # expone `routers`
+│       ├── __init__.py               # REGISTRO = (PRELIQUIDACION, FLETES); activos(); claves()
+│       ├── preliquidacion/           # MÓDULO Preliquidación de sueldos (activo=True)
+│       │   ├── __init__.py           # arma MODULO: ModuloInfo(...)
+│       │   ├── permisos.py
 │       │   ├── api/                  # preliquidacion, precios, export, gerencial
 │       │   ├── models.py
 │       │   ├── schemas.py
 │       │   └── services/             # incluye consulta_externa.py
-│       └── fletes/                   # EL MÓDULO NUEVO (se crea en el PR 4)
-│           ├── __init__.py
-│           ├── router.py             # APIRouter(prefix="/api/fletes", tags=["Fletes"])
-│           ├── models.py             # tablas fletes_*
+│       └── fletes/                   # MÓDULO Fletes (molde, inactivo — activo=False)
+│           ├── __init__.py           # arma MODULO: ModuloInfo(...)
+│           ├── permisos.py
+│           ├── api/fletes.py         # APIRouter(prefix="/api/fletes", tags=["Fletes"]) — un endpoint de estado
+│           ├── models.py             # tablas fletes_* (aún sin ninguna)
 │           ├── schemas.py
 │           ├── services/
 │           └── consulta_externa.py   # las consultas del Excel, en SQL parametrizado
 ├── migrations/
 │   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
-│   └── fletes/                       # 001_crear_tablas.sql, 002_...sql
+│   └── fletes/                       # (molde, inactivo) LEEME.md; 001_crear_tablas.sql cuando arranque
 ├── tests/
 │   ├── core/                         # autorización por rol, arranque
 │   ├── preliquidacion/               # el resto (22 archivos)
-│   └── fletes/
+│   └── fletes/                       # (molde, inactivo) test_molde.py
 └── docs/
     ├── adr/                          # decisiones de todo el sistema
     └── modulos/
         ├── GUIA-MODULOS.md           # este archivo
-        └── fletes/                   # CONTEXT-fletes.md, plan, ayuda de uso
+        └── fletes/                   # (molde, inactivo) CONTEXT-fletes.md; plan y ayuda de uso, después
 
 frontend_preliquidacion/
 └── src/
@@ -173,70 +177,56 @@ frontend_preliquidacion/
     ├── core/                    # NÚCLEO COMPARTIDO (ADR-0013)
     │   ├── api.js               # Axios: baseURL /api, Bearer automático, logout en 401
     │   ├── authStore.js         # Sesión (Zustand + persist, clave "auth-asturiana")
+    │   ├── permisos.js          # helpers de rol por módulo sobre la sesión
+    │   ├── registroContext.js   # trae GET /api/auth/modulos y lo expone a Inicio y al menú
     │   ├── layout/               # Layout (sidebar, compone el menú de cada módulo), ProtectedRoute
-    │   ├── ui/                   # CargandoContenido, CargandoOverlay
+    │   ├── inicio/                # Inicio.jsx — pantalla de Tarjetas (ver CONTEXT.md, "Inicio")
+    │   ├── ui/                   # CargandoContenido, CargandoOverlay, iconos.jsx (íconos por módulo)
     │   ├── asistente/            # AsistenteChat + asistenteApi (ayuda de uso, transversal)
     │   └── pages/Login.jsx
     └── modulos/
+        ├── registro.js           # REGISTRO de módulos del frontend; agregar un módulo = una línea acá
         ├── preliquidacion/       # MÓDULO Preliquidación de sueldos
         │   ├── rutas.jsx         # rutas, menú y redirecciones del módulo (lo único que el núcleo conoce)
         │   ├── pages/            # Dashboard, Revision, Verificacion, Conceptos, CategoriasOperarios, Gerencial, PanelPorConcepto
         │   ├── components/       # PanelLinea, FiltrosBar, AlertasBanner, ControlesJornal, InputBusqueda
         │   └── services/         # preliquidacion.js, gerencial.js
-        └── fletes/               # (se crea en el PR 4)
-            ├── rutas.jsx
-            ├── pages/
-            ├── components/
-            └── services/fletes.js    # llamadas a /api/fletes
+        └── fletes/               # (PR 4, frontend) molde, inactivo
+            ├── rutas.jsx         # activo: false
+            └── pages/Inicio.jsx  # única pantalla del molde
 ```
 
-Cada módulo se registra en dos lugares y nada más: `main.py` incluye su router, y `App.jsx` incluye sus rutas y entradas de menú. Todo lo demás del módulo vive adentro de su carpeta.
+Cada módulo se registra en dos lugares y nada más: `app/modulos/__init__.py` incluye su `MODULO`, y `src/modulos/registro.js` incluye su entrada. `app/main.py` y `App.jsx` no conocen módulos por nombre: recorren el registro. Todo lo demás del módulo vive adentro de su carpeta.
 
-### 3.3 Punto de partida para el módulo Fletes
+### 3.3 Cómo activar y completar el molde de Fletes
 
-**Qué importar del núcleo** (`app/core/`), y de dónde:
+El molde de Fletes ya existe en los dos repos, registrado pero inactivo (ver "Módulo activo" en `CONTEXT.md`). Esto es lo que hay que tocar para que deje de ser un molde:
 
-- `from app.core.database import get_db_propia, get_db_externa, get_db_sueldos` — las 3 sesiones, inyectadas por request con `Depends(...)`.
-- `from app.core.auth import get_usuario_actual` — usuario autenticado del request.
-- `from app.core.permisos import requiere_modulo` — dependencia de autorización por módulo: `Depends(requiere_modulo("fletes", "operador"))` o `"gerente"`. El admin global siempre pasa.
-- `from app.core.models import Usuario` — el modelo de usuario del núcleo.
-- `from app.core.quincena import calcular_rango_quincena` — si fletes liquida por quincena.
-- `from app.core.config import settings` — settings desde `.env`.
+**1. Backend — activar y completar.**
 
-**El patrón de registro**: el módulo expone una lista `routers` en su `__init__.py` (ver `app/modulos/preliquidacion/__init__.py`) y `app/main.py` los registra con un bucle:
+- `app/modulos/fletes/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo, así que el frontend le muestra la Tarjeta a quien tenga rol en él.
+- `app/modulos/fletes/api/fletes.py` hoy tiene un único endpoint de estado (`GET /api/fletes/` → `{"modulo": "fletes", "estado": "en construcción"}`); ahí se agregan los endpoints reales, o se parte en más archivos dentro de `api/` (ver el patrón de `app/modulos/preliquidacion/api/`).
+- Modelos en `app/modulos/fletes/models.py`, tablas con prefijo `fletes_` (regla 5 de la sección 4.2).
+- Migraciones en `migrations/fletes/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/fletes/LEEME.md`), probadas primero contra `testing`.
+- Tests en `tests/fletes/` (hoy solo `test_molde.py`, que confirma que el módulo compila inactivo).
+- Glosario del dominio en `docs/modulos/fletes/CONTEXT-fletes.md`: ya tiene el cuestionario de la sección 8.1 de esta guía: responderlo ahí antes de diseñar el modelo.
 
-```python
-from app.modulos.preliquidacion import routers as routers_preliquidacion  # noqa: E402
+**2. Frontend — activar y completar.**
 
-app.include_router(auth.router)
-for r in routers_preliquidacion:
-    app.include_router(r)
-app.include_router(asistente.router)
+- `src/modulos/fletes/rutas.jsx`: cambiar `activo: false` a `activo: true`.
+- Agregar páginas en `src/modulos/fletes/pages/` (hoy solo `Inicio.jsx`, la pantalla del molde) y sus rutas.
+- `etiquetasRol` del módulo en `src/modulos/fletes/rutas.jsx` (ver "Etiqueta de rol" en `CONTEXT.md`; el molde ya trae `{operador: "Liquidador de fletes", gerente: "Gerente"}`, ajustar si corresponde).
+- Íconos disponibles para la Tarjeta en `src/core/ui/iconos.jsx`.
+
+**3. Registro — ya está hecho para Fletes.** `app/modulos/__init__.py` ya tiene `FLETES` en `REGISTRO` y `src/modulos/registro.js` ya tiene su entrada; no hace falta tocarlos para Fletes. Para el **tercer módulo** (y siguientes), agregarlo es una línea en cada uno de esos dos archivos y nada más — el resto de esta sección aplica igual.
+
+**4. Permisos.** `app/core/permisos.py` → `MODULOS = ("preliquidacion", "fletes")` ya incluye Fletes. Para dar de alta a una persona en el módulo:
+
+```bash
+python scripts/asignar_modulo.py --email liq@x.com --modulo fletes --rol operador
 ```
 
-Fletes agrega su propio `from app.modulos.fletes import routers as routers_fletes` y su propio bucle (o se suma al mismo patrón); es el único toque de `main.py` que le corresponde.
-
-**Checklist de archivos que Pitu crea en `app/modulos/fletes/`** (la carpeta se crea en el PR 4; hasta entonces no crearla):
-
-- `__init__.py` — expone `routers`.
-- `router.py`, o `api/` con varios archivos — cada router con `APIRouter(prefix="/api/fletes", tags=["Fletes"])`.
-- `models.py` — tablas `fletes_*`, con `from app.core.database import Base`.
-- `schemas.py` — DTOs Pydantic.
-- `services/` — la lógica de negocio del módulo.
-- `consulta_externa.py` — SQL crudo con `text()` y parámetros nombrados, solo lectura contra la base externa.
-- `migrations/fletes/001_*.sql` — primera migración del módulo.
-- `tests/fletes/__init__.py` + `test_*.py` — tests del módulo.
-- `docs/modulos/fletes/CONTEXT-fletes.md` — glosario del dominio de fletes.
-
-**Ejemplos reales para imitar**:
-
-- `app/modulos/preliquidacion/__init__.py` — cómo se arma `routers`.
-- `app/modulos/preliquidacion/api/gerencial.py` — un router chico, con la dependencia de rol a nivel router (`APIRouter(prefix="/api/gerencial", tags=["Gerencial"], dependencies=[Depends(requiere_gerencial)])`, donde `requiere_gerencial` es `requiere_modulo("preliquidacion", "gerente")` de `app/modulos/preliquidacion/permisos.py`), en vez de repetirla en cada endpoint.
-- `tests/core/test_autorizacion_roles.py` — cómo se arma un `TestClient` sobre `app.main.app` en los tests, con `app.dependency_overrides` para `get_usuario_actual`, `get_db_propia`, `get_db_externa` y `get_db_sueldos` apuntando a una sqlite en memoria (función `_cliente`, líneas 42-52).
-
-**Recordatorio**: nunca importar de `app.modulos.preliquidacion`; nunca escribir en las bases Externa o Sueldos.
-
-**Frontend.** Del núcleo se importa: `src/core/api.js` (cliente HTTP con token), `src/core/authStore.js` (sesión), `src/core/layout/ProtectedRoute.jsx` (guardia de rutas), `src/core/ui/CargandoContenido.jsx` y `CargandoOverlay.jsx` (feedback). Un módulo se registra con su `rutas.jsx` exportando `rutas`, `nav` y `redirecciones` (ver `src/modulos/preliquidacion/rutas.jsx` como ejemplo real) y sumando esas listas en `src/App.jsx` y `src/core/layout/Layout.jsx`. Las rutas del módulo van bajo su prefijo: `/fletes/...`. Archivos que crea el módulo Fletes en `src/modulos/fletes/`: `rutas.jsx`, `pages/`, `components/`, `services/fletes.js`. Nunca importar de `src/modulos/preliquidacion/`.
+**Recordatorio**: nunca importar de `app.modulos.preliquidacion` (ni desde el frontend, de `src/modulos/preliquidacion/`); nunca escribir en las bases Externa o Sueldos.
 
 ---
 
@@ -250,6 +240,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 2. **Un módulo nunca importa de otro módulo.** Fletes no importa nada de `modulos/preliquidacion/`, ni al revés. Si necesita algo que está en otro módulo, es señal de que eso pertenece al núcleo: se pide, se conversa y se mueve al núcleo en un PR separado.
 3. **Del núcleo se importa lo que el núcleo expone**, no sus internos.
 4. **No se modifican archivos fuera de la carpeta del módulo sin avisar antes.** Los únicos toques fuera son el registro del router en `main.py` y el de las rutas en `App.jsx`. Cualquier cambio al núcleo va en un PR aparte, chico, solo para eso, y lo revisa quien no lo escribió.
+4b. **Un módulo se registra en `app/modulos/__init__.py` y en `src/modulos/registro.js`, y en ningún otro lugar.** El núcleo no conoce módulos por nombre: `app/main.py` recorre `app.modulos.activos()` y `App.jsx`/`Layout.jsx` recorren `src/modulos/registro.js`. Agregar un módulo nuevo es una línea en cada uno de esos dos archivos.
 
 ### 4.2 Datos
 
@@ -334,6 +325,15 @@ requiere_gerencial = requiere_modulo(MODULO, "gerente")
 Lo que fletes tiene que hacer: definir su propio `app/modulos/fletes/permisos.py` con `requiere_modulo("fletes", ...)` sobre las dependencias que necesite, usarlas en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito de fletes necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
 
 Alta y gestión de usuarios: no hay ABM en la app, se corre a mano con `scripts/crear_usuario.py` (crea o actualiza un usuario y opcionalmente sus módulos) y `scripts/asignar_modulo.py` (asigna, cambia, quita o lista el rol de un usuario en un módulo puntual).
+
+### Etiquetas de rol
+
+El código interno de un rol de módulo siempre es `operador` o `gerente` (ver arriba); lo que se muestra en pantalla es otra cosa (ver "Etiqueta de rol" en `CONTEXT.md`). Cada módulo define su propio mapeo:
+
+- Backend: `etiquetas_rol` en el `ModuloInfo` del módulo (`app/modulos/<modulo>/__init__.py`), viaja al frontend en `GET /api/auth/modulos`.
+- Frontend: `etiquetasRol` en el `modulo` exportado por `src/modulos/<modulo>/rutas.jsx`, usado por la Tarjeta del Inicio (`src/modulos/registro.js`, función `etiquetaRol`).
+
+Hoy: Preliquidación muestra `operador` como **Preliquidador** y `gerente` como **Gerente**; el molde de Fletes ya trae `operador` como **Liquidador de fletes** y `gerente` como **Gerente** (a confirmar cuando el módulo tenga usuarios reales).
 
 ---
 
@@ -462,7 +462,7 @@ No es un cronograma, es un orden que reduce riesgo: primero lo que se puede vali
 
 | Etapa | Qué | Quién | Se puede empezar |
 |---|---|---|---|
-| 0 | Reordenar el sistema a módulos, permisos por módulo, carpeta `fletes/` de molde, base `testing` lista | Gero | Ya |
+| 0 | Reordenar el sistema a módulos, permisos por módulo, carpeta `fletes/` de molde, base `testing` lista | Gero | **Hecha** (falta solo la pantalla de Administración, PR 5) |
 | 1 | Cuestionario de dominio, inventario del Excel, glosario `CONTEXT-fletes.md`, pantallas, plan | Pitu | Ya, en paralelo con 0 |
 | 2 | Consultas al sistema de campo en SQL parametrizado dentro del módulo, con tests que fijan lo que devuelven. Validación: mismos números que el Excel para un período conocido | Pitu | Cuando termine 0 |
 | 3 | Primera pantalla de solo lectura: el listado de viajes del período con filtros. Sin cálculos todavía. Sirve para que el usuario real vea los datos en el sistema y confirme que están bien | Pitu | Después de 2 |
@@ -507,9 +507,11 @@ Lo que quedó sin resolver y quién lo resuelve.
 - ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
 - ~~Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.~~ Hecho (PR 3 de la etapa 0, 2026-09-08).
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
-- Nombre visible del sistema. Provisorio: "Sistema de gestión La Asturiana".
+- ~~Nombre visible del sistema.~~ Decidido: "Sistema de gestión La Asturiana" (ver CONTEXT.md, "Sistema").
 - ~~Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).~~ Se sacó (PR 3 de la etapa 0, 2026-09-08); el esquema es 100% migraciones SQL.
 - ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07) y para el frontend (PR 2, 2026-09-08).
+- ~~Molde del módulo Fletes (`app/modulos/fletes/`, `src/modulos/fletes/`), inactivo, con permisos, un endpoint de estado, migraciones y tests propios.~~ Hecho (PR 4 de la etapa 0, 2026-09-08).
+- ~~Registro de módulos (`app/modulos/__init__.py`, `src/modulos/registro.js`) y pantalla de Inicio con Tarjetas.~~ Hecho (PR 4 de la etapa 0, 2026-09-08).
 
 **Para conversar entre los dos**
 - Si fletes necesita algún dato de preliquidación o viceversa. Hoy la respuesta es "no comparten nada de escritura". Si aparece un caso real, se diseña en el núcleo.

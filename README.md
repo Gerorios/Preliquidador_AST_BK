@@ -1,6 +1,6 @@
-# Sistema de Preliquidación — Backend — La Asturiana SRL
+# Sistema de gestión La Asturiana — Backend
 
-API REST que genera la **preliquidación de sueldos por quincena**: extrae las tareas de campo cargadas en el sistema operativo (BD externa), resuelve empresa y legajo de cada persona contra el maestro de sueldos, valoriza cada línea según el maestro de conceptos/precios definido por el liquidador y produce el Excel que alimenta la liquidación formal.
+API REST del Sistema de gestión La Asturiana SRL (ADR-0013). El primer módulo, **Preliquidación**, genera la **preliquidación de sueldos por quincena**: extrae las tareas de campo cargadas en el sistema operativo (BD externa), resuelve empresa y legajo de cada persona contra el maestro de sueldos, valoriza cada línea según el maestro de conceptos/precios definido por el liquidador y produce el Excel que alimenta la liquidación formal.
 
 Repositorio hermano (frontend React + Vite): `frontend_preliquidacion` / `Gerorios/Preliquidador_AST_FT`.
 
@@ -34,29 +34,41 @@ El sistema se conecta a **tres bases MySQL** distintas:
 
 ```
 app/
-├── main.py                        # arranque, middlewares, registro de routers de cada módulo
+├── main.py                        # arranque, middlewares; registra auth, los routers de activos() y asistente
 ├── core/                          # NÚCLEO COMPARTIDO (ADR-0013)
 │   ├── config.py                  # settings (.env)
 │   ├── database.py                # las 3 conexiones (externa, sueldos, propia) y Base ORM
 │   ├── models.py                  # Usuario, RolUsuario, UsuarioModulo
 │   ├── auth.py                    # login/me/logout, get_usuario_actual
 │   ├── permisos.py                # MODULOS, ROLES_MODULO, modulos_de, tiene_permiso, requiere_modulo
+│   ├── modulos.py                 # ModuloInfo (clave, nombre, descripcion, activo, routers, etiquetas_rol, panel_gerencial)
 │   ├── asistente.py               # chat de ayuda de uso (OpenAI), transversal
 │   └── quincena.py                # calcular_rango_quincena
 └── modulos/
-    └── preliquidacion/            # MÓDULO Preliquidación de sueldos
-        ├── __init__.py            # expone `routers`
-        ├── api/                   # preliquidacion, precios, export, gerencial
-        ├── services/              # preliquidacion_service, motor_reglas, gerencial_service,
-        │                          # consulta_externa, export_service, sueldos_service, solapamiento_service
-        ├── models.py              # modelos del módulo (reexporta Usuario del núcleo)
-        └── schemas.py
+    ├── __init__.py                # REGISTRO = (PRELIQUIDACION, FLETES); activos(); claves()
+    ├── preliquidacion/            # MÓDULO Preliquidación de sueldos (activo)
+    │   ├── __init__.py            # arma MODULO: ModuloInfo(...), expone `routers`
+    │   ├── api/                   # preliquidacion, precios, export, gerencial
+    │   ├── services/              # preliquidacion_service, motor_reglas, gerencial_service,
+    │   │                          # consulta_externa, export_service, sueldos_service, solapamiento_service
+    │   ├── models.py              # modelos del módulo (reexporta Usuario del núcleo)
+    │   └── schemas.py
+    └── fletes/                    # MÓDULO Fletes (molde, inactivo)
+        ├── __init__.py            # arma MODULO: ModuloInfo(activo=False, ...)
+        ├── permisos.py
+        ├── api/fletes.py          # un endpoint de estado
+        ├── models.py              # tablas fletes_* (aún ninguna)
+        ├── schemas.py
+        ├── services/
+        └── consulta_externa.py
 migrations/
 ├── core/                           # 000_usuarios, 001_usuario_modulo
-└── preliquidacion/                # 000_esquema_base + ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
+├── preliquidacion/                # 000_esquema_base + ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
+└── fletes/                        # molde, inactivo (LEEME.md)
 tests/
 ├── core/                          # autorización por rol, arranque
-└── preliquidacion/                # el resto (22 archivos)
+├── preliquidacion/                # el resto (22 archivos)
+└── fletes/                        # molde, inactivo (test_molde.py)
 ```
 
 ### Modelo de datos propio
@@ -180,7 +192,7 @@ python scripts/asignar_modulo.py --email liq@x.com --modulo preliquidacion --qui
 uvicorn app.main:app --reload
 ```
 
-- API: http://localhost:8000
+- API: http://localhost:8000 → `GET /` devuelve `{"sistema": "Sistema de gestión La Asturiana", "version": "1.0.0", "modulos": [...]}` (las claves de los módulos activos)
 - Documentación interactiva (Swagger): http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
@@ -208,6 +220,7 @@ Lista completa e interactiva en `/docs`. Resumen:
 | POST | `/login` | Login OAuth2 password → JWT |
 | GET | `/me` | Usuario autenticado |
 | POST | `/logout` | Logout (stateless) |
+| GET | `/modulos` | Módulos activos del sistema (público con sesión), para el Inicio y la Administración |
 
 ### Preliquidación (`/api/preliquidacion`)
 | Método | Ruta | Descripción |
