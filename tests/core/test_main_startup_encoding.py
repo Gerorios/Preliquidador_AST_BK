@@ -25,7 +25,8 @@ def test_prints_de_lifespan_no_crashean_con_stdout_no_utf8():
         cwd=".",
         capture_output=True,
         text=True,
-        timeout=20,
+        # el arranque en frío importa toda la app; bajo carga superaba 20 s
+        timeout=60,
     )
     assert resultado.returncode == 0, (
         f"stdout: {resultado.stdout}\nstderr: {resultado.stderr}"

@@ -20,7 +20,7 @@ Repositorio hermano (frontend React + Vite): `frontend_preliquidacion` / `Gerori
 | Asistente de ayuda | OpenAI (gpt-4o-mini) — opcional |
 | Tests | pytest (SQLite in-memory) |
 
-> Alembic figura en `requirements.txt` pero **no se usa**: las migraciones son SQL manual versionado en `migrations/preliquidacion/` (ws1…ws16 + fix).
+> Alembic figura en `requirements.txt` pero **no se usa**: las migraciones son SQL manual versionado en `migrations/core/` y `migrations/preliquidacion/` (ws1…ws16 + fix).
 
 ---
 
@@ -38,8 +38,9 @@ app/
 ├── core/                          # NÚCLEO COMPARTIDO (ADR-0013)
 │   ├── config.py                  # settings (.env)
 │   ├── database.py                # las 3 conexiones (externa, sueldos, propia) y Base ORM
-│   ├── models.py                  # Usuario, RolUsuario
-│   ├── auth.py                    # login/me/logout, get_usuario_actual, requiere_rol
+│   ├── models.py                  # Usuario, RolUsuario, UsuarioModulo
+│   ├── auth.py                    # login/me/logout, get_usuario_actual
+│   ├── permisos.py                # MODULOS, ROLES_MODULO, modulos_de, tiene_permiso, requiere_modulo
 │   ├── asistente.py               # chat de ayuda de uso (OpenAI), transversal
 │   └── quincena.py                # calcular_rango_quincena
 └── modulos/
@@ -51,7 +52,8 @@ app/
         ├── models.py              # modelos del módulo (reexporta Usuario del núcleo)
         └── schemas.py
 migrations/
-└── preliquidacion/                # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
+├── core/                           # 000_usuarios, 001_usuario_modulo
+└── preliquidacion/                # 000_esquema_base + ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
 tests/
 ├── core/                          # autorización por rol, arranque
 └── preliquidacion/                # el resto (22 archivos)
@@ -81,7 +83,7 @@ tests/
 - **Tarea alias de pago** (ADR-0012): `MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)` existe solo para identificar horas de guardia de taller; paga automáticamente con el maestro de `MANTENIMIENTOS MECANICOS (TALLERES)` (mismas categorías y precios, sin recargo). No aparece en faltantes ni admite conceptos propios; la línea conserva su nombre real en Revisión y en el Excel.
 - **Controles de razonabilidad**: Plantas vs Jornal (precio desde el pago real; %Dif contra el jornal tractorista = valor hora cargado por quincena × 8) y Tancadas vs Jornal (tancada ida y vuelta → /2; recargo pulverización ×1,3, ADR-0007). Excesos: >13 hs, >35 tancadas, >6.000 plantas por empleado/día.
 - **Personas mensualizadas**: cobran sueldo mensual fijo; sus líneas se excluyen de toda la Verificación y de los cálculos de mano de obra de la vista gerencial (siguen visibles en Revisión). Lista hardcodeada `EMPLEADOS_MENSUALIZADOS` en `preliquidacion_service.py`.
-- **Vista gerencial**: solo lectura, roles admin/jefe/gerente; agrega mano de obra gastada con comparación vs período anterior, descomposición de la variación (dotación/actividad/precio), desvíos por persona y por cliente contra su media histórica (6 quincenas, mínimo 3).
+- **Vista gerencial**: solo lectura; acceden el admin global y quien tenga rol `gerente` en el módulo `preliquidacion`; agrega mano de obra gastada con comparación vs período anterior, descomposición de la variación (dotación/actividad/precio), desvíos por persona y por cliente contra su media histórica (6 quincenas, mínimo 3).
 
 Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0013). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
 
@@ -155,6 +157,18 @@ python scripts/refrescar_testing.py --solo-estructura
 ```
 
 Requiere las credenciales de `testing` en el `.env` (`DB_DEV_*`, ver `.env.example`). Solo toca las tablas del preliquidador; el resto de `testing` queda intacto.
+
+### Usuarios y módulos
+
+```bash
+python scripts/crear_usuario.py --nombre "Nombre Apellido" --email liq@x.com --password "..." \
+    --modulo preliquidacion:operador
+python scripts/asignar_modulo.py --email liq@x.com --modulo preliquidacion --rol gerente
+python scripts/asignar_modulo.py --email liq@x.com --listar
+python scripts/asignar_modulo.py --email liq@x.com --modulo preliquidacion --quitar
+```
+
+`crear_usuario.py` da de alta o actualiza un usuario (rol global `admin`/`usuario`) y puede fijar sus módulos de una; `asignar_modulo.py` asigna, cambia, quita o lista el rol de un usuario ya existente en un módulo puntual (`operador`/`gerente`), sin tocar el resto de sus datos. No hay ABM de usuarios en la app: se corren a mano contra la base que apunte el `.env` (`DB_PROPIA_*`).
 
 ---
 
@@ -239,7 +253,7 @@ Lista completa e interactiva en `/docs`. Resumen:
 | PATCH | `/conceptos/precio-masivo` | Precio masivo (+ recálculo batcheado) |
 | POST | `/conceptos/copiar` | Copia conceptos entre quincenas (marca heredado) |
 
-### Vista gerencial (`/api/gerencial`) — solo lectura, roles admin/jefe/gerente
+### Vista gerencial (`/api/gerencial`) — solo lectura; admin global o rol `gerente` en el módulo `preliquidacion`
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/quincenas` | Quincenas con preliquidación (selector de período) |
@@ -265,5 +279,5 @@ Lista completa e interactiva en `/docs`. Resumen:
 
 - **Tabla `usuarios`**: ya existe en la BD propia; el sistema no la crea ni la modifica.
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
-- **Migraciones**: SQL manual en `migrations/preliquidacion/` (orden: ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad). ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible. Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
+- **Migraciones**: SQL manual versionado, organizado por carpeta. `migrations/core/` (núcleo, compartido por todos los módulos): `000_usuarios.sql`, `001_usuario_modulo.sql`. `migrations/preliquidacion/`: `000_esquema_base.sql` (tiene FK a `usuarios`) y luego ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad. ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible. En una base nueva, el orden es `core/000` → `preliquidacion/000` → `core/001` → las `ws` que falten según el estado. Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
 - **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción), `docs/modulos/GUIA-MODULOS.md` (cómo incorporar un módulo).

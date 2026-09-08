@@ -35,8 +35,9 @@ ssh -i ~/.ssh/preliquidacion_vps root@179.197.237.196 "cd /home/deploy && rm -rf
 # Rollback: mv frontend frontend_bad && mv frontend_old frontend
 # (Si hay rsync local, equivale a: rsync -az --delete dist/ root@IP:/home/deploy/frontend/)
 
-# Migraciones nuevas (migrations/preliquidacion/wsN.sql): correrlas contra la base ANTES o junto
-# con el deploy del código que las necesita. Las migraciones de cada módulo viven en
+# Migraciones nuevas (migrations/core/NNN o migrations/<modulo>/…): correrlas contra la base
+# ANTES o junto con el deploy del código que las necesita. Las del núcleo viven en
+# migrations/core/ y siguen la numeración NNN_; las de cada módulo viven en
 # migrations/<modulo>/; las nuevas de preliquidación siguen la numeración wsN, las de
 # módulos nuevos empiezan en 001_.
 ```
@@ -170,7 +171,7 @@ Como el front y el back quedan bajo el **mismo dominio** (nginx sirve los dos), 
 
 - **Backend:** `cd ~/backend && git pull && source .venv/bin/activate && pip install -r requirements.txt && sudo systemctl restart preliquidacion`
 - **Frontend:** `npm run build` local + subida con swap de carpeta (ver "Cómo se ejecuta el deploy" arriba) o el `rsync --delete` del paso 4. No requiere reiniciar nada. Nunca copiar encima sin borrar: los assets viejos se acumulan.
-- **Migraciones:** las nuevas (`migrations/preliquidacion/wsN.sql`) se corren **una vez** contra la base. Ojo: las que agregan columnas/tablas **no son diferibles** (correr antes/junto con el deploy de esa versión). Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
+- **Migraciones:** las nuevas (`migrations/core/NNN_*.sql` o `migrations/preliquidacion/wsN.sql`) se corren **una vez** contra la base. Ojo: las que agregan columnas/tablas **no son diferibles** (correr antes/junto con el deploy de esa versión). Las migraciones del núcleo viven en `migrations/core/`; las de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`. En una base **nueva desde cero**, el orden es `core/000_usuarios.sql` → `preliquidacion/000_esquema_base.sql` (tiene FK a `usuarios`) → `core/001_usuario_modulo.sql` → las `preliquidacion/ws*.sql` que falten.
 
 ## Checklist de "no tener problemas a futuro"
 

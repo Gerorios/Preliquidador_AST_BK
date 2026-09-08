@@ -197,7 +197,8 @@ Cada módulo se registra en dos lugares y nada más: `main.py` incluye su router
 **Qué importar del núcleo** (`app/core/`), y de dónde:
 
 - `from app.core.database import get_db_propia, get_db_externa, get_db_sueldos` — las 3 sesiones, inyectadas por request con `Depends(...)`.
-- `from app.core.auth import get_usuario_actual, requiere_rol` — hoy la restricción es por rol global (`admin`, `jefe`, `gerente`); `requiere_modulo("fletes", ...)` llega en el PR 3, cuando exista la tabla `usuario_modulo`. Hasta entonces, un endpoint de fletes se protege igual que uno de preliquidación, con `requiere_rol`.
+- `from app.core.auth import get_usuario_actual` — usuario autenticado del request.
+- `from app.core.permisos import requiere_modulo` — dependencia de autorización por módulo: `Depends(requiere_modulo("fletes", "operador"))` o `"gerente"`. El admin global siempre pasa.
 - `from app.core.models import Usuario` — el modelo de usuario del núcleo.
 - `from app.core.quincena import calcular_rango_quincena` — si fletes liquida por quincena.
 - `from app.core.config import settings` — settings desde `.env`.
@@ -230,7 +231,7 @@ Fletes agrega su propio `from app.modulos.fletes import routers as routers_flete
 **Ejemplos reales para imitar**:
 
 - `app/modulos/preliquidacion/__init__.py` — cómo se arma `routers`.
-- `app/modulos/preliquidacion/api/gerencial.py` — un router chico, con la dependencia de rol a nivel router (`APIRouter(prefix="/api/gerencial", tags=["Gerencial"], dependencies=[Depends(requiere_rol("admin", "jefe", "gerente"))])`, líneas 18-22), en vez de repetirla en cada endpoint.
+- `app/modulos/preliquidacion/api/gerencial.py` — un router chico, con la dependencia de rol a nivel router (`APIRouter(prefix="/api/gerencial", tags=["Gerencial"], dependencies=[Depends(requiere_gerencial)])`, donde `requiere_gerencial` es `requiere_modulo("preliquidacion", "gerente")` de `app/modulos/preliquidacion/permisos.py`), en vez de repetirla en cada endpoint.
 - `tests/core/test_autorizacion_roles.py` — cómo se arma un `TestClient` sobre `app.main.app` en los tests, con `app.dependency_overrides` para `get_usuario_actual`, `get_db_propia`, `get_db_externa` y `get_db_sueldos` apuntando a una sqlite en memoria (función `_cliente_con_rol`, líneas 38-47).
 
 **Recordatorio**: nunca importar de `app.modulos.preliquidacion`; nunca escribir en las bases Externa o Sueldos.
@@ -256,7 +257,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 6. **Un módulo escribe solo en sus tablas.** Nunca en tablas de otro módulo ni en las del núcleo (`usuarios`, `usuario_modulo`) salvo a través de los servicios del núcleo.
 7. **Las bases Externa y Sueldos son de solo lectura, siempre.** Ni un `INSERT`, ni un `UPDATE`, ni una tabla temporal. Si el módulo necesita guardar algo derivado de esos datos, lo guarda en sus propias tablas en la base Propia.
 8. **Las consultas a bases externas son SQL crudo con parámetros** (`text()` de SQLAlchemy con `:parametro`), nunca strings concatenados. No se mapean tablas ajenas con el ORM. Van en `consulta_externa.py` del módulo.
-9. **Nada de escribir sobre la base con el ORM en `create_all`.** Hoy `main.py` hace `create_all(checkfirst=True)` al arrancar y eso crea tablas nuevas si no existen. Es cómodo en desarrollo, pero **la fuente de verdad del esquema es la migración SQL**, no el modelo. Toda tabla o columna nueva tiene su archivo en `migrations/<modulo>/`.
+9. **Nada de escribir sobre la base con el ORM en `create_all`.** `main.py` no lo hace más (se sacó en el PR 3 de la etapa 0, 2026-09-08): **la fuente de verdad del esquema es la migración SQL**, no el modelo. Toda tabla o columna nueva tiene su archivo en `migrations/<modulo>/`.
 
 ### 4.3 Migraciones
 
@@ -296,20 +297,43 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 ## 5. Usuarios, roles y permisos
 
-### Hoy
+### Cómo funciona (desde el PR 3 de la etapa 0)
 
-Tabla `usuarios` con un rol global por usuario: `admin`, `jefe` o `gerente`. El backend restringe cada endpoint con `requiere_rol(...)`. El frontend filtra el menú y las rutas por rol.
-
-### Con módulos (llega en el PR 3 de la etapa 0)
-
-- `admin` sigue siendo **global**: ve y opera todo, administra usuarios y permisos.
-- Aparece la tabla `usuario_modulo (usuario_id, modulo, rol)` con rol `operador` o `gerente` **por módulo**.
-- El **operador** de un módulo opera ese circuito completo y no ve las pantallas operativas de otro módulo. El liquidador de fletes no ve la preliquidación de sueldos, y el de sueldos no ve fletes.
-- El **gerente** de un módulo ve el panel gerencial de ese módulo. Una persona gerente de los dos módulos ve el analítico de ambos.
-- Los usuarios actuales migran a preliquidación con su rol de hoy (`jefe` pasa a `operador`, `gerente` sigue `gerente`).
+- `usuarios.rol` es **global**: `admin` ve y opera todo, en todos los módulos, y administra usuarios y permisos; `usuario` depende de sus módulos.
+- La tabla `usuario_modulo (usuario_id, modulo, rol)` da, por módulo, el rol `operador` o `gerente`. Una fila por usuario y módulo; el admin no tiene filas porque es global.
+- El **operador** de un módulo opera ese circuito completo y no ve las pantallas operativas de otro módulo. El liquidador de fletes no ve la preliquidación de sueldos, y el de sueldos no ve fletes. En Preliquidación, el operador (liquidador) no ve el panel Gerencial.
+- El **gerente** de un módulo ve el panel gerencial de ese módulo y lo que el módulo decida abrirle (en Preliquidación, además, el maestro de Conceptos completo). Una persona gerente de los dos módulos ve el analítico de ambos.
 - El menú muestra solo los módulos a los que el usuario tiene acceso. Si tiene uno solo, entra directo ahí.
+- El login (`POST /api/auth/login`) y `GET /api/auth/me` devuelven, junto con `id`/`nombre`/`email`/`rol`, el campo `modulos` con el rol por módulo:
 
-Lo que fletes tiene que hacer: usar `requiere_modulo("fletes", ...)` en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito de fletes necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
+```json
+{
+  "id": 5, "nombre": "Ana Pérez", "email": "ana@x.com", "rol": "usuario",
+  "modulos": {"preliquidacion": "operador"}
+}
+```
+
+- Cada módulo define sus dependencias concretas sobre `requiere_modulo` del núcleo (`app/core/permisos.py`). Ejemplo real, `app/modulos/preliquidacion/permisos.py`:
+
+```python
+from app.core.permisos import requiere_modulo
+
+MODULO = "preliquidacion"
+
+# Opera la preliquidación completa: admin y operador (liquidador).
+requiere_operativo = requiere_modulo(MODULO, "operador")
+
+# El gerente opera el maestro de Conceptos completo; el resto de lo
+# operativo le sigue vedado.
+requiere_conceptos = requiere_modulo(MODULO, "operador", "gerente")
+
+# Panel gerencial: gerente y admin. El operador NO.
+requiere_gerencial = requiere_modulo(MODULO, "gerente")
+```
+
+Lo que fletes tiene que hacer: definir su propio `app/modulos/fletes/permisos.py` con `requiere_modulo("fletes", ...)` sobre las dependencias que necesite, usarlas en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito de fletes necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
+
+Alta y gestión de usuarios: no hay ABM en la app, se corre a mano con `scripts/crear_usuario.py` (crea o actualiza un usuario y opcionalmente sus módulos) y `scripts/asignar_modulo.py` (asigna, cambia, quita o lista el rol de un usuario en un módulo puntual).
 
 ---
 
@@ -481,10 +505,10 @@ Lo que quedó sin resolver y quién lo resuelve.
 
 **Para Gero**
 - ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
-- Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.
+- ~~Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.~~ Hecho (PR 3 de la etapa 0, 2026-09-08).
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - Nombre visible del sistema. Provisorio: "Sistema de gestión La Asturiana".
-- Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).
+- ~~Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).~~ Se sacó (PR 3 de la etapa 0, 2026-09-08); el esquema es 100% migraciones SQL.
 - ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07) y para el frontend (PR 2, 2026-09-08).
 
 **Para conversar entre los dos**
