@@ -1,0 +1,583 @@
+from datetime import date
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+
+from app.core.database import get_db_propia, get_db_externa
+from app.core.auth import get_usuario_actual, requiere_conceptos
+from app.modulos.preliquidacion.models import ConceptoLiquidacion, Preliquidacion
+from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
+from app.modulos.preliquidacion.services.preliquidacion_service import (
+    PreliquidacionService, TAREAS_ALIAS_PAGO, tarea_canonica,
+)
+from app.modulos.preliquidacion.services.solapamiento_service import (
+    detectar_solapamiento_candidato, listar_solapamientos,
+)
+from app.modulos.preliquidacion.schemas import (
+    ConceptoUnifRequest, ConceptoUnifResponse, ConceptoUnifUpdateRequest,
+    MensajeResponse, ConceptoPanelResponse, ConceptoPrecioMasivoRequest,
+    ConceptoPrecioMasivoResponse,
+)
+
+
+def _match(concepto: ConceptoLiquidacion) -> dict:
+    return {
+        "tarea_nombre": concepto.tarea_nombre,
+        "cliente_nombre": concepto.cliente_nombre,
+        "finca_nombre": concepto.finca_nombre,
+        "supervisor_nombre": concepto.supervisor_nombre,
+    }
+
+
+def _validar_cliente_xor_supervisor(cliente_nombre, supervisor_nombre):
+    """ADR-0011: un concepto tiene cliente(±finca) O supervisor, nunca ambos."""
+    if cliente_nombre and supervisor_nombre:
+        raise HTTPException(
+            status_code=422,
+            detail="Un concepto no puede tener cliente y supervisor a la vez: "
+                   "cargá cliente (± finca) O supervisor, no ambos.",
+        )
+
+
+def _validar_tarea_no_alias(tarea_nombre: str):
+    """ADR-0012: una tarea alias de pago no existe para el maestro."""
+    t = (tarea_nombre or "").strip().upper()
+    canonica = tarea_canonica(t)
+    if canonica != t:
+        raise HTTPException(
+            status_code=422,
+            detail=f"La tarea '{t}' es solo para identificar horas: paga "
+                   f"automáticamente con los conceptos de '{canonica}'. "
+                   f"Cargá el concepto en esa tarea.",
+        )
+
+# dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
+# Los GET quedan accesibles a todo rol (todos ven el maestro); las mutaciones
+# agregan requiere_conceptos endpoint por endpoint — admin/jefe/gerente, ya
+# que el gerente opera el maestro de Conceptos completo (decide precios).
+router = APIRouter(
+    prefix="/api/precios",
+    tags=["Precios"],
+    dependencies=[Depends(get_usuario_actual)],
+)
+
+
+# ─── Catálogos externos ───────────────────────────────────────────────────────
+
+@router.get("/maestro/clientes")
+def listar_clientes(db_externa: Session = Depends(get_db_externa)):
+    return ConsultaExternaService(db_externa).obtener_clientes()
+
+
+@router.get("/maestro/fincas")
+def listar_fincas(cliente: str = Query(...), db_externa: Session = Depends(get_db_externa)):
+    return ConsultaExternaService(db_externa).obtener_fincas(cliente)
+
+
+@router.get("/maestro/tareas")
+def listar_tareas(db_externa: Session = Depends(get_db_externa)):
+    tareas = ConsultaExternaService(db_externa).obtener_tareas()
+    # ADR-0012: las tareas alias de pago no existen para el maestro.
+    return [
+        t for t in tareas
+        if str(t.get("nombre", "")).strip().upper() not in TAREAS_ALIAS_PAGO
+    ]
+
+
+@router.get("/grupos-pago")
+def listar_grupos_pago(db_externa: Session = Depends(get_db_externa)):
+    resultado = db_externa.execute(text("""
+        SELECT DISTINCT
+            TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(ta.descripcion, ';', 2), ';', -1)) AS grupo_pago
+        FROM laa_tareas ta
+        WHERE ta.estado <> 9
+          AND ta.descripcion IS NOT NULL
+          AND ta.descripcion <> ''
+        ORDER BY grupo_pago
+    """))
+    return [fila[0] for fila in resultado.fetchall() if fila[0]]
+
+
+# ─── Maestro unificado de Conceptos de Liquidación ───────────────────────────
+#
+# 4 caminos de matching (ADR-0011), todos SUMAN entre sí:
+#   COMÚN          (sin cliente ni supervisor) → todas las líneas con esa tarea
+#   POR CLIENTE    (cliente sin finca)         → esa tarea+cliente, cualquier finca
+#   ESPECÍFICO     (cliente+finca)             → tarea+cliente+finca exactos
+#   POR SUPERVISOR (supervisor_nombre)         → esa tarea con ese supervisor
+# El tilde reemplaza_comun de cualquier regla no-común apaga SOLO los comunes.
+
+@router.get("/conceptos/quincenas")
+def listar_quincenas(db: Session = Depends(get_db_propia)):
+    from sqlalchemy import distinct
+    rows = db.query(distinct(ConceptoLiquidacion.quincena)).order_by(
+        ConceptoLiquidacion.quincena.desc()
+    ).all()
+    return [str(r[0]) for r in rows]
+
+
+@router.get("/conceptos/supervisores")
+def listar_supervisores(
+    quincena: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Nombres de supervisor distintos (no nulos/no vacíos) de las líneas de la
+    preliquidación de esa quincena, ordenados — para el combo de "concepto
+    por supervisor" (ADR-0011).
+    """
+    rows = db.execute(text("""
+        SELECT DISTINCT TRIM(pl.nombre_supervisor) AS supervisor
+        FROM preliquidacion_linea pl
+        INNER JOIN preliquidacion p ON p.id = pl.preliquidacion_id
+        WHERE p.quincena = :quincena
+          AND pl.nombre_supervisor IS NOT NULL
+          AND TRIM(pl.nombre_supervisor) <> ''
+        ORDER BY supervisor
+    """), {"quincena": quincena}).fetchall()
+    return [r[0] for r in rows]
+
+
+@router.get("/conceptos", response_model=list[ConceptoUnifResponse])
+def listar_conceptos(
+    quincena: Optional[date] = Query(None),
+    scope: Optional[str] = Query(None),   # 'comun' | 'cliente' | 'finca' | 'supervisor' | 'especifico' (legado = cliente+finca juntos)
+    tarea: Optional[str] = Query(None),
+    db: Session = Depends(get_db_propia),
+):
+    q = db.query(ConceptoLiquidacion)
+    if quincena:
+        q = q.filter(ConceptoLiquidacion.quincena == quincena)
+    if scope == "comun":
+        # Común = sin cliente NI supervisor (un concepto por supervisor también
+        # tiene cliente NULL, pero no es común — ADR-0011).
+        q = q.filter(
+            ConceptoLiquidacion.cliente_nombre.is_(None),
+            ConceptoLiquidacion.supervisor_nombre.is_(None),
+        )
+    elif scope == "cliente":
+        # Por cliente: cliente cargado sin finca (aplica a todas las fincas).
+        q = q.filter(
+            ConceptoLiquidacion.cliente_nombre.isnot(None),
+            ConceptoLiquidacion.finca_nombre.is_(None),
+        )
+    elif scope == "finca":
+        # Específico histórico: tarea+cliente+finca exactos.
+        q = q.filter(
+            ConceptoLiquidacion.cliente_nombre.isnot(None),
+            ConceptoLiquidacion.finca_nombre.isnot(None),
+        )
+    elif scope == "supervisor":
+        q = q.filter(ConceptoLiquidacion.supervisor_nombre.isnot(None))
+    elif scope == "especifico":
+        q = q.filter(ConceptoLiquidacion.cliente_nombre.isnot(None))
+    if tarea:
+        q = q.filter(ConceptoLiquidacion.tarea_nombre.ilike(f"%{tarea}%"))
+    return q.order_by(
+        ConceptoLiquidacion.tarea_nombre,
+        ConceptoLiquidacion.cliente_nombre,
+        ConceptoLiquidacion.finca_nombre,
+        ConceptoLiquidacion.codigo,
+    ).all()
+
+
+@router.get("/conceptos/panel", response_model=list[ConceptoPanelResponse])
+def panel_conceptos(
+    quincena: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Todos los conceptos (comunes Y específicos) de una quincena, planos, con
+    el precio que tenían en la quincena inmediatamente anterior que tuviera
+    conceptos cargados — para comparar de un vistazo. `precio_anterior` es
+    None si no hay una quincena anterior con conceptos o si esa clave no
+    existía en ella.
+    """
+    conceptos = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.quincena == quincena
+    ).order_by(
+        ConceptoLiquidacion.tarea_nombre,
+        ConceptoLiquidacion.cliente_nombre,
+        ConceptoLiquidacion.finca_nombre,
+        ConceptoLiquidacion.codigo,
+    ).all()
+
+    def _clave(c):
+        return (c.tarea_nombre, c.codigo, c.cliente_nombre, c.finca_nombre,
+                c.categoria, c.supervisor_nombre)
+
+    precio_anterior_por_clave = {}
+    if conceptos:
+        # Un solo round-trip: la quincena anterior se resuelve como subquery
+        # (antes eran dos queries secuenciales contra la base remota).
+        from sqlalchemy import func
+        subq_quincena_anterior = db.query(
+            func.max(ConceptoLiquidacion.quincena)
+        ).filter(ConceptoLiquidacion.quincena < quincena).scalar_subquery()
+        anteriores = db.query(ConceptoLiquidacion).filter(
+            ConceptoLiquidacion.quincena == subq_quincena_anterior
+        ).all()
+        precio_anterior_por_clave = {_clave(c): c.precio for c in anteriores}
+
+    resultado = []
+    for c in conceptos:
+        resultado.append(ConceptoPanelResponse(
+            id=c.id,
+            tarea_nombre=c.tarea_nombre,
+            codigo=c.codigo,
+            cliente_nombre=c.cliente_nombre,
+            finca_nombre=c.finca_nombre,
+            categoria=c.categoria,
+            supervisor_nombre=c.supervisor_nombre,
+            unidad_base=c.unidad_base,
+            tipo=c.tipo,
+            precio=c.precio,
+            heredado=c.heredado,
+            reemplaza_comun=c.reemplaza_comun,
+            precio_anterior=precio_anterior_por_clave.get(_clave(c)),
+        ))
+    return resultado
+
+
+@router.patch("/conceptos/precio-masivo", response_model=ConceptoPrecioMasivoResponse,
+              dependencies=[Depends(requiere_conceptos)])
+def precio_masivo(
+    datos: ConceptoPrecioMasivoRequest,
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Setea el mismo precio a varios conceptos de una (o más) quincenas, saca
+    la marca `heredado` (confirma el precio, ADR-0004) y dispara UN
+    recálculo reactivo batcheado de todas las líneas afectadas — no un
+    recalcular_por_concepto por cada id.
+    """
+    conceptos = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.id.in_(datos.ids)
+    ).all()
+    if not conceptos:
+        raise HTTPException(status_code=404, detail="No se encontraron conceptos con esos ids")
+
+    for c in conceptos:
+        c.precio = datos.precio
+        c.heredado = False
+    db.commit()
+
+    service = PreliquidacionService(db)
+    por_quincena: dict = {}
+    for c in conceptos:
+        por_quincena.setdefault(c.quincena, []).append(c)
+
+    lineas_afectadas = 0
+    for quincena, confs in por_quincena.items():
+        preliq = db.query(Preliquidacion).filter(
+            Preliquidacion.quincena == quincena
+        ).first()
+        if not preliq:
+            continue
+        vistas = {}
+        for c in confs:
+            for linea in service._lineas_por_match(
+                preliq.id, c.tarea_nombre, c.cliente_nombre, c.finca_nombre,
+                c.supervisor_nombre,
+            ):
+                vistas[linea.id] = linea
+        lineas = list(vistas.values())
+        if lineas:
+            service._aplicar_conceptos_a_lineas(quincena, lineas)
+        lineas_afectadas += len(lineas)
+
+    return ConceptoPrecioMasivoResponse(
+        actualizados=len(conceptos), lineas_afectadas=lineas_afectadas,
+    )
+
+
+@router.post("/conceptos", response_model=ConceptoUnifResponse,
+             dependencies=[Depends(requiere_conceptos)])
+def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_propia)):
+    _validar_tarea_no_alias(datos.tarea_nombre)
+    cliente_nombre = datos.cliente_nombre.strip() if datos.cliente_nombre else None
+    supervisor_nombre = datos.supervisor_nombre.strip() if datos.supervisor_nombre else None
+    _validar_cliente_xor_supervisor(cliente_nombre, supervisor_nombre)
+    # Compuerta de solapamiento por cliente. No bloquea: el liquidador puede
+    # confirmar (caso raro "precio por cliente base + plus por finca"). El
+    # detalle viaja en el 409 para que el front muestre fincas, códigos
+    # coincidentes y líneas afectadas.
+    if not datos.confirmar_solapamiento:
+        solapamiento = detectar_solapamiento_candidato(
+            db, quincena=datos.quincena, tarea_nombre=datos.tarea_nombre,
+            cliente_nombre=cliente_nombre,
+            finca_nombre=datos.finca_nombre, supervisor_nombre=supervisor_nombre,
+            codigo=datos.codigo, categoria=datos.categoria,
+        )
+        if solapamiento:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "tipo": "solapamiento_por_cliente",
+                    "mensaje": "Esta regla se va a SUMAR a reglas ya existentes del mismo cliente.",
+                    "solapamiento": solapamiento,
+                },
+            )
+    if datos.reemplaza_comun is not None:
+        # El liquidador lo mandó explícito (True o False): se respeta tal cual.
+        reemplaza_comun = datos.reemplaza_comun
+    else:
+        # No lo mandó: default nace en True para cualquier camino NO común
+        # (específico, por cliente o por supervisor — ADR-0011, opt-out) y
+        # False para comunes (sin cambios respecto de antes).
+        reemplaza_comun = cliente_nombre is not None or supervisor_nombre is not None
+
+    nuevo = ConceptoLiquidacion(
+        quincena=datos.quincena,
+        tarea_nombre=datos.tarea_nombre.strip(),
+        cliente_nombre=cliente_nombre,
+        finca_nombre=datos.finca_nombre.strip() if datos.finca_nombre else None,
+        supervisor_nombre=supervisor_nombre,
+        codigo=datos.codigo,
+        unidad_base=datos.unidad_base,
+        precio=datos.precio,
+        tipo=datos.tipo,
+        categoria=datos.categoria,
+        reemplaza_comun=reemplaza_comun,
+    )
+    db.add(nuevo)
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"No se pudo guardar: {e}")
+    db.refresh(nuevo)
+
+    PreliquidacionService(db).recalcular_por_concepto(nuevo.quincena, actual=_match(nuevo))
+    return nuevo
+
+
+@router.patch("/conceptos/{concepto_id}", response_model=ConceptoUnifResponse,
+              dependencies=[Depends(requiere_conceptos)])
+def actualizar_concepto(
+    concepto_id: int,
+    datos: ConceptoUnifUpdateRequest,
+    db: Session = Depends(get_db_propia),
+):
+    concepto = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.id == concepto_id
+    ).first()
+    if not concepto:
+        raise HTTPException(status_code=404, detail="Concepto no encontrado")
+
+    anterior = _match(concepto)
+    campos = datos.model_dump(exclude_unset=True)
+    for campo, valor in campos.items():
+        setattr(concepto, campo, valor)
+    # ADR-0011: el estado resultante no puede quedar con cliente Y supervisor.
+    try:
+        _validar_cliente_xor_supervisor(concepto.cliente_nombre, concepto.supervisor_nombre)
+    except HTTPException:
+        db.rollback()
+        raise
+    if "precio" in campos:
+        concepto.heredado = False  # confirmar el precio limpia la marca (ADR-0004)
+    db.commit()
+    db.refresh(concepto)
+
+    PreliquidacionService(db).recalcular_por_concepto(
+        concepto.quincena, actual=_match(concepto), anterior=anterior
+    )
+    return concepto
+
+
+@router.delete("/conceptos/{concepto_id}", response_model=MensajeResponse,
+               dependencies=[Depends(requiere_conceptos)])
+def eliminar_concepto(concepto_id: int, db: Session = Depends(get_db_propia)):
+    concepto = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.id == concepto_id
+    ).first()
+    if not concepto:
+        raise HTTPException(status_code=404, detail="Concepto no encontrado")
+
+    quincena, match = concepto.quincena, _match(concepto)
+    db.delete(concepto)
+    db.commit()
+
+    PreliquidacionService(db).recalcular_por_concepto(quincena, actual=match)
+    return MensajeResponse(mensaje="Concepto eliminado")
+
+
+@router.post("/conceptos/copiar", response_model=MensajeResponse,
+             dependencies=[Depends(requiere_conceptos)])
+def copiar_quincena(
+    quincena_origen: date = Query(...),
+    quincena_destino: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """Copia todos los conceptos de una quincena a otra. Omite los que ya existen."""
+    origen = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.quincena == quincena_origen
+    ).all()
+    if not origen:
+        raise HTTPException(status_code=404, detail=f"No hay conceptos para {quincena_origen}")
+
+    # Antes: un SELECT de existencia por cada concepto origen (N+1). Ahora:
+    # traemos todos los conceptos ya existentes en el destino en una sola
+    # query y armamos la misma clave de comparación en memoria (incluye
+    # categoria, igual que el filtro `and_` original).
+    existentes_destino = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.quincena == quincena_destino
+    ).all()
+
+    def _clave(c):
+        return (
+            c.tarea_nombre, c.cliente_nombre, c.finca_nombre,
+            c.codigo, c.categoria, c.supervisor_nombre,
+        )
+
+    claves_existentes = {_clave(c) for c in existentes_destino}
+
+    copiados = omitidos = 0
+    nuevos = []
+    for c in origen:
+        if _clave(c) in claves_existentes:
+            omitidos += 1
+            continue
+        nuevos.append(ConceptoLiquidacion(
+            quincena=quincena_destino,
+            tarea_nombre=c.tarea_nombre,
+            cliente_nombre=c.cliente_nombre,
+            finca_nombre=c.finca_nombre,
+            supervisor_nombre=c.supervisor_nombre,
+            codigo=c.codigo,
+            unidad_base=c.unidad_base,
+            precio=c.precio,
+            tipo=c.tipo,
+            categoria=c.categoria,
+            reemplaza_comun=c.reemplaza_comun,
+            heredado=True,
+        ))
+        copiados += 1
+
+    if nuevos:
+        db.bulk_save_objects(nuevos)
+    db.commit()
+
+    detalle = f"{copiados} copiados · {omitidos} ya existían"
+
+    # Auto-aplica al destino (ADR-0004): si ya hay una preliquidación generada
+    # para esa quincena, recalculamos toda la quincena con el maestro actualizado.
+    if copiados:
+        preliq_destino = db.query(Preliquidacion).filter(
+            Preliquidacion.quincena == quincena_destino
+        ).first()
+        if preliq_destino:
+            resultado = PreliquidacionService(db).aplicar_conceptos(preliq_destino.id)
+            detalle += f" · {resultado['actualizadas']} líneas recalculadas"
+
+    solapamientos = len(listar_solapamientos(db, quincena_destino))
+    if solapamientos:
+        plural = "s" if solapamientos != 1 else ""
+        detalle += f" · {solapamientos} solapamiento{plural} por cliente"
+
+    return MensajeResponse(
+        mensaje="Conceptos copiados", detalle=detalle,
+        solapamientos_heredados=solapamientos,
+    )
+
+
+@router.get("/conceptos/solapamientos")
+def solapamientos_quincena(
+    quincena: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Solapamientos por cliente vigentes en la quincena (CONTEXT.md): pares
+    tarea+cliente donde conviven una regla por cliente y específicas del
+    mismo cliente con categorías compatibles. Suman por ADR-0011; el
+    liquidador debe controlarlos. Vacío = todo en orden.
+    """
+    return listar_solapamientos(db, quincena)
+
+
+@router.get("/conceptos/faltantes")
+def conceptos_faltantes(
+    quincena: date = Query(...),
+    db: Session = Depends(get_db_propia),
+):
+    """
+    Combinaciones tarea+cliente+finca de la quincena que no tienen todavía
+    un concepto COMPLETO cargado (con código Y precio, por cualquiera de los
+    4 caminos de matching — ADR-0011). Un concepto con código pero sin precio
+    no cuenta como completo.
+    """
+    # ADR-0012: las líneas de una tarea alias faltan/matchean como su canónica.
+    casos = " ".join(
+        f"WHEN UPPER(TRIM(pl.nombre_tarea)) = :alias_{i} THEN :canon_{i}"
+        for i in range(len(TAREAS_ALIAS_PAGO))
+    )
+    tarea_pago = f"CASE {casos} ELSE pl.nombre_tarea END" if casos else "pl.nombre_tarea"
+    params = {"quincena": quincena}
+    for i, (alias, canon) in enumerate(sorted(TAREAS_ALIAS_PAGO.items())):
+        params[f"alias_{i}"] = alias
+        params[f"canon_{i}"] = canon
+
+    rows = db.execute(text(f"""
+        SELECT DISTINCT
+            {tarea_pago} AS nombre_tarea,
+            pl.nombre_cliente,
+            pl.nombre_finca
+        FROM preliquidacion_linea pl
+        INNER JOIN preliquidacion p ON p.id = pl.preliquidacion_id
+        WHERE p.quincena = :quincena
+          AND NOT EXISTS (
+              SELECT 1 FROM concepto_liquidacion cl
+              WHERE cl.quincena = :quincena
+                AND UPPER(TRIM(cl.tarea_nombre)) = UPPER(TRIM({tarea_pago}))
+                AND cl.codigo IS NOT NULL
+                AND cl.precio IS NOT NULL
+                AND (
+                    (cl.cliente_nombre IS NULL AND cl.supervisor_nombre IS NULL)
+                    OR (cl.cliente_nombre = pl.nombre_cliente
+                        AND (cl.finca_nombre IS NULL
+                             OR cl.finca_nombre = pl.nombre_finca))
+                    OR (cl.supervisor_nombre IS NOT NULL
+                        AND UPPER(TRIM(cl.supervisor_nombre)) =
+                            UPPER(TRIM(COALESCE(pl.nombre_supervisor, ''))))
+                )
+          )
+        ORDER BY nombre_tarea, pl.nombre_cliente, pl.nombre_finca
+    """), params).fetchall()
+
+    return [
+        {"tarea_nombre": r[0], "cliente_nombre": r[1], "finca_nombre": r[2]}
+        for r in rows
+    ]
+
+
+@router.get("/conceptos/buscar")
+def buscar_conceptos_para_combo(
+    q: str = "",
+    quincena: Optional[date] = Query(None),
+    db: Session = Depends(get_db_propia),
+):
+    """Búsqueda de códigos para el combo del PanelLinea."""
+    query = db.query(ConceptoLiquidacion).filter(
+        ConceptoLiquidacion.codigo.isnot(None)
+    )
+    if quincena:
+        query = query.filter(ConceptoLiquidacion.quincena == quincena)
+    if q and q.strip().isdigit():
+        query = query.filter(ConceptoLiquidacion.codigo == int(q.strip()))
+    elif q:
+        query = query.filter(ConceptoLiquidacion.tipo.ilike(f"%{q}%"))
+
+    filas = query.order_by(ConceptoLiquidacion.codigo).limit(200).all()
+    vistos = set()
+    resultado = []
+    for c in filas:
+        if c.codigo in vistos:
+            continue
+        vistos.add(c.codigo)
+        resultado.append({
+            "codigo": c.codigo,
+            "tipo": c.tipo.value if hasattr(c.tipo, "value") else c.tipo,
+        })
+    return resultado

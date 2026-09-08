@@ -15,7 +15,8 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from app.core.config import settings
 from app.core.database import verificar_conexiones, engine_propia, Base
-from app.models import models  # noqa: F401 — registra todos los modelos
+from app.core import models as models_core   # noqa: F401 — registra las tablas del núcleo (usuarios)
+from app.modulos.preliquidacion import models  # noqa: F401 — registra los modelos del módulo
 
 
 @asynccontextmanager
@@ -62,13 +63,13 @@ app.add_middleware(
 )
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
-from app.api import preliquidacion, precios, auth, export, asistente, gerencial  # noqa: E402
+from app.core import auth, asistente  # noqa: E402
+from app.modulos.preliquidacion import routers as routers_preliquidacion  # noqa: E402
+
 app.include_router(auth.router)
-app.include_router(preliquidacion.router)
-app.include_router(precios.router)
-app.include_router(export.router)
+for r in routers_preliquidacion:
+    app.include_router(r)
 app.include_router(asistente.router)
-app.include_router(gerencial.router)
 
 
 @app.get("/")

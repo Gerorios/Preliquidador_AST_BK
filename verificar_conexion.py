@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.core.database import engine_externa, engine_propia, SessionExterna
-from app.services.consulta_externa import ConsultaExternaService
+from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
 from sqlalchemy import text
 
 

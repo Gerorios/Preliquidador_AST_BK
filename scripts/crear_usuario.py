@@ -14,8 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.database import SessionPropia  # noqa: E402
-from app.models.models import Usuario, RolUsuario  # noqa: E402
-from app.api.auth import pwd_context  # noqa: E402
+from app.core.models import Usuario, RolUsuario  # noqa: E402
+from app.core.auth import pwd_context  # noqa: E402
 
 
 def main() -> int:

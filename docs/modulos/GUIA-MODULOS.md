@@ -6,7 +6,7 @@
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: la estructura modular que se describe acá es la **estructura objetivo**. Al día de hoy el código del preliquidador todavía está organizado por capas técnicas (ver sección 3). El reordenamiento a módulos lo hace Gero en los próximos días, antes de que empiece el código de fletes. Cuando esté hecho, esta guía se actualiza con las rutas reales y una carpeta `fletes/` de molde. Todo lo que no depende del código (secciones 8 a 11) se puede empezar ya.
+**Estado**: el backend ya está en la estructura modular (PR 1 de la etapa 0, 2026-09). El frontend se reordena en el PR 2, los permisos por módulo llegan en el PR 3 y la carpeta `fletes/` de molde en el PR 4. Todo lo que no depende del código (secciones 8 a 11) se puede empezar ya.
 
 ---
 
@@ -94,7 +94,7 @@ Un VPS en Hostinger con Ubuntu, nginx adelante sirviendo el frontend estático y
 
 ## 3. Estructura del código
 
-### 3.1 Cómo está hoy (organización por capas)
+### 3.1 Cómo estaba hasta el 2026-09 (organización por capas)
 
 ```
 backend_preliquidacion/
@@ -122,7 +122,7 @@ frontend_preliquidacion/
 
 Funciona, pero al agregar un segundo módulo no habría forma de saber qué archivo pertenece a qué circuito.
 
-### 3.2 Cómo va a quedar (organización por módulos)
+### 3.2 Cómo está ahora (organización por módulos)
 
 ```
 backend_preliquidacion/
@@ -131,20 +131,20 @@ backend_preliquidacion/
 │   ├── core/                         # NÚCLEO COMPARTIDO
 │   │   ├── config.py                 # settings
 │   │   ├── database.py               # las 3 conexiones y los get_db_*
-│   │   ├── auth.py                   # usuario actual, requiere_modulo(...)
-│   │   ├── permisos.py               # tabla usuario_modulo y su lógica
-│   │   ├── quincena.py               # calcular_rango_quincena y afines
-│   │   └── lecturas/                 # lecturas comunes del sistema de campo y sueldos
-│   │       ├── clientes_fincas.py
-│   │       └── personas_legajos.py
+│   │   ├── models.py                 # Usuario, RolUsuario
+│   │   ├── auth.py                   # usuario actual, requiere_rol
+│   │   │                             # (permisos.py con requiere_modulo llega en el PR 3;
+│   │   │                             #  lecturas/ se crea cuando el primer módulo nuevo lo necesite)
+│   │   ├── asistente.py              # chat de ayuda, transversal
+│   │   └── quincena.py               # calcular_rango_quincena y afines
 │   └── modulos/
-│       ├── preliquidacion/           # lo que hoy es todo el sistema, movido acá
-│       │   ├── router.py             # (o api/ con varios archivos)
+│       ├── preliquidacion/           # todo el sistema original, ya movido acá
+│       │   ├── __init__.py           # expone `routers`
+│       │   ├── api/                  # preliquidacion, precios, export, gerencial
 │       │   ├── models.py
 │       │   ├── schemas.py
-│       │   ├── services/
-│       │   └── consulta_externa.py
-│       └── fletes/                   # EL MÓDULO NUEVO
+│       │   └── services/             # incluye consulta_externa.py
+│       └── fletes/                   # EL MÓDULO NUEVO (se crea en el PR 4)
 │           ├── __init__.py
 │           ├── router.py             # APIRouter(prefix="/api/fletes", tags=["Fletes"])
 │           ├── models.py             # tablas fletes_*
@@ -152,11 +152,11 @@ backend_preliquidacion/
 │           ├── services/
 │           └── consulta_externa.py   # las consultas del Excel, en SQL parametrizado
 ├── migrations/
-│   ├── preliquidacion/               # los ws1..ws16 actuales, movidos
+│   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
 │   └── fletes/                       # 001_crear_tablas.sql, 002_...sql
 ├── tests/
-│   ├── core/
-│   ├── preliquidacion/
+│   ├── core/                         # autorización por rol, arranque
+│   ├── preliquidacion/               # el resto (22 archivos)
 │   └── fletes/
 └── docs/
     ├── adr/                          # decisiones de todo el sistema
@@ -164,7 +164,7 @@ backend_preliquidacion/
         ├── GUIA-MODULOS.md           # este archivo
         └── fletes/                   # CONTEXT-fletes.md, plan, ayuda de uso
 
-frontend_preliquidacion/
+frontend_preliquidacion/               # objetivo, se reordena en el PR 2
 └── src/
     ├── main.jsx  App.jsx  index.css
     ├── core/                         # NÚCLEO COMPARTIDO
@@ -184,6 +184,49 @@ frontend_preliquidacion/
 ```
 
 Cada módulo se registra en dos lugares y nada más: `main.py` incluye su router, y `App.jsx` incluye sus rutas y entradas de menú. Todo lo demás del módulo vive adentro de su carpeta.
+
+### 3.3 Punto de partida para el módulo Fletes
+
+**Qué importar del núcleo** (`app/core/`), y de dónde:
+
+- `from app.core.database import get_db_propia, get_db_externa, get_db_sueldos` — las 3 sesiones, inyectadas por request con `Depends(...)`.
+- `from app.core.auth import get_usuario_actual, requiere_rol` — hoy la restricción es por rol global (`admin`, `jefe`, `gerente`); `requiere_modulo("fletes", ...)` llega en el PR 3, cuando exista la tabla `usuario_modulo`. Hasta entonces, un endpoint de fletes se protege igual que uno de preliquidación, con `requiere_rol`.
+- `from app.core.models import Usuario` — el modelo de usuario del núcleo.
+- `from app.core.quincena import calcular_rango_quincena` — si fletes liquida por quincena.
+- `from app.core.config import settings` — settings desde `.env`.
+
+**El patrón de registro**: el módulo expone una lista `routers` en su `__init__.py` (ver `app/modulos/preliquidacion/__init__.py`) y `app/main.py` los registra con un bucle:
+
+```python
+from app.modulos.preliquidacion import routers as routers_preliquidacion  # noqa: E402
+
+app.include_router(auth.router)
+for r in routers_preliquidacion:
+    app.include_router(r)
+app.include_router(asistente.router)
+```
+
+Fletes agrega su propio `from app.modulos.fletes import routers as routers_fletes` y su propio bucle (o se suma al mismo patrón); es el único toque de `main.py` que le corresponde.
+
+**Checklist de archivos que Pitu crea en `app/modulos/fletes/`** (la carpeta se crea en el PR 4; hasta entonces no crearla):
+
+- `__init__.py` — expone `routers`.
+- `router.py`, o `api/` con varios archivos — cada router con `APIRouter(prefix="/api/fletes", tags=["Fletes"])`.
+- `models.py` — tablas `fletes_*`, con `from app.core.database import Base`.
+- `schemas.py` — DTOs Pydantic.
+- `services/` — la lógica de negocio del módulo.
+- `consulta_externa.py` — SQL crudo con `text()` y parámetros nombrados, solo lectura contra la base externa.
+- `migrations/fletes/001_*.sql` — primera migración del módulo.
+- `tests/fletes/__init__.py` + `test_*.py` — tests del módulo.
+- `docs/modulos/fletes/CONTEXT-fletes.md` — glosario del dominio de fletes.
+
+**Ejemplos reales para imitar**:
+
+- `app/modulos/preliquidacion/__init__.py` — cómo se arma `routers`.
+- `app/modulos/preliquidacion/api/gerencial.py` — un router chico, con la dependencia de rol a nivel router (`APIRouter(prefix="/api/gerencial", tags=["Gerencial"], dependencies=[Depends(requiere_rol("admin", "jefe", "gerente"))])`, líneas 18-22), en vez de repetirla en cada endpoint.
+- `tests/core/test_autorizacion_roles.py` — cómo se arma un `TestClient` sobre `app.main.app` en los tests, con `app.dependency_overrides` para `get_usuario_actual`, `get_db_propia`, `get_db_externa` y `get_db_sueldos` apuntando a una sqlite en memoria (función `_cliente_con_rol`, líneas 38-47).
+
+**Recordatorio**: nunca importar de `app.modulos.preliquidacion`; nunca escribir en las bases Externa o Sueldos.
 
 ---
 
@@ -248,7 +291,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 Tabla `usuarios` con un rol global por usuario: `admin`, `jefe` o `gerente`. El backend restringe cada endpoint con `requiere_rol(...)`. El frontend filtra el menú y las rutas por rol.
 
-### Con módulos (lo que va a construir Gero en el reordenamiento)
+### Con módulos (llega en el PR 3 de la etapa 0)
 
 - `admin` sigue siendo **global**: ve y opera todo, administra usuarios y permisos.
 - Aparece la tabla `usuario_modulo (usuario_id, modulo, rol)` con rol `operador` o `gerente` **por módulo**.
@@ -428,12 +471,12 @@ Lo que quedó sin resolver y quién lo resuelve.
 - Confirmar si las consultas del Power Query se pueden exportar tal cual o hay que reconstruirlas.
 
 **Para Gero**
-- Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.
+- ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.~~ Backend hecho (PR 1, 2026-09-07); frontend en el PR 2.
 - Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - Nombre visible del sistema. Provisorio: "Sistema de gestión La Asturiana".
 - Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).
-- Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.
+- ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07); el frontend se actualiza en el PR 2.
 
 **Para conversar entre los dos**
 - Si fletes necesita algún dato de preliquidación o viceversa. Hoy la respuesta es "no comparten nada de escritura". Si aparece un caso real, se diseña en el núcleo.
@@ -453,6 +496,6 @@ Lo que quedó sin resolver y quién lo resuelve.
 | `docs/DOCUMENTACION.md` | Dónde vive el proyecto, cómo es el código y la base |
 | `docs/AYUDA.md` | Ayuda de uso del preliquidador, la que consume el asistente |
 | `docs/superpowers/plans/` | Planes de implementación de features anteriores. Sirven como ejemplo de cómo se planifica acá |
-| `migrations/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
+| `migrations/preliquidacion/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
 | `tests/` | 201 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
 | Frontend `README.md` | Stack, estructura y convenciones del front |
