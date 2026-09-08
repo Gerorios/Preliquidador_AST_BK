@@ -192,7 +192,7 @@ python scripts/asignar_modulo.py --email liq@x.com --modulo preliquidacion --qui
 uvicorn app.main:app --reload
 ```
 
-- API: http://localhost:8000 → `GET /` devuelve `{"sistema": "Sistema de gestión La Asturiana", "version": "1.0.0", "modulos": [...]}` (las claves de los módulos activos)
+- API: http://localhost:8000 → `GET /` devuelve `{"sistema": "Sistema de gestión La Asturiana", "version": "1.0.0"}`
 - Documentación interactiva (Swagger): http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
@@ -220,7 +220,7 @@ Lista completa e interactiva en `/docs`. Resumen:
 | POST | `/login` | Login OAuth2 password → JWT |
 | GET | `/me` | Usuario autenticado |
 | POST | `/logout` | Logout (stateless) |
-| GET | `/modulos` | Módulos activos del sistema (público con sesión), para el Inicio y la Administración |
+| GET | `/modulos` | Módulos activos del sistema (requiere sesión; sin rol de módulo), para el Inicio y la Administración |
 
 ### Preliquidación (`/api/preliquidacion`)
 | Método | Ruta | Descripción |

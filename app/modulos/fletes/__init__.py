@@ -10,4 +10,5 @@ MODULO = ModuloInfo(
     activo=False, routers=tuple(routers),
     etiquetas_rol={"operador": "Liquidador de fletes", "gerente": "Gerente"},
     panel_gerencial=False,
+    modelos="app.modulos.fletes.models",
 )

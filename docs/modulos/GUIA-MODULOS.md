@@ -135,7 +135,7 @@ backend_preliquidacion/
 │   │   ├── auth.py                   # usuario actual, login/me/logout
 │   │   ├── permisos.py               # MODULOS, ROLES_MODULO, requiere_modulo
 │   │   ├── modulos.py                # ModuloInfo (clave, nombre, descripcion, activo,
-│   │   │                             #   routers, etiquetas_rol, panel_gerencial) — ADR-0013
+│   │   │                             #   routers, etiquetas_rol, panel_gerencial, modelos) — ADR-0013
 │   │   ├── asistente.py              # chat de ayuda, transversal
 │   │   └── quincena.py               # calcular_rango_quincena y afines
 │   └── modulos/
@@ -204,7 +204,7 @@ El molde de Fletes ya existe en los dos repos, registrado pero inactivo (ver "M�
 
 **1. Backend — activar y completar.**
 
-- `app/modulos/fletes/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta).
+- `app/modulos/fletes/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta). Los modelos del módulo se registran con el campo `modelos` de `ModuloInfo`; el arranque los importa y con eso el chequeo de tablas faltantes de `/health` cubre al módulo.
 - `app/modulos/fletes/api/fletes.py` hoy tiene un único endpoint de estado (`GET /api/fletes/` → `{"modulo": "fletes", "estado": "en construcción"}`); ahí se agregan los endpoints reales, o se parte en más archivos dentro de `api/` (ver el patrón de `app/modulos/preliquidacion/api/`).
 - Modelos en `app/modulos/fletes/models.py`, tablas con prefijo `fletes_` (regla 5 de la sección 4.2).
 - Migraciones en `migrations/fletes/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/fletes/LEEME.md`), probadas primero contra `testing`.

@@ -13,12 +13,21 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+import importlib
+
 from sqlalchemy import inspect
 
 from app.core.config import settings
 from app.core.database import verificar_conexiones, engine_propia, Base
 from app.core import models as models_core   # noqa: F401 — registra las tablas del núcleo (usuarios)
-from app.modulos.preliquidacion import models  # noqa: F401 — registra los modelos del módulo
+from app.modulos import activos
+
+# Registra los modelos de cada módulo activo (ADR-0013): el núcleo no importa
+# módulos por nombre, recorre el registro. Los inactivos no aportan tablas al
+# chequeo de tablas faltantes de más abajo.
+for _modulo in activos():
+    if _modulo.modelos:
+        importlib.import_module(_modulo.modelos)
 
 
 @asynccontextmanager
@@ -77,7 +86,6 @@ app.add_middleware(
 from app.core import auth, asistente  # noqa: E402
 from app.core.auth import get_usuario_actual  # noqa: E402
 from app.core.models import Usuario  # noqa: E402
-from app.modulos import activos  # noqa: E402
 
 app.include_router(auth.router)
 for modulo in activos():
@@ -88,10 +96,10 @@ app.include_router(asistente.router)
 
 @app.get("/")
 def root():
-    return {"sistema": "Sistema de gestión La Asturiana", "version": "1.0.0", "modulos": [m.clave for m in activos()]}
+    return {"sistema": "Sistema de gestión La Asturiana", "version": "1.0.0"}
 
 
-@app.get("/api/auth/modulos")
+@app.get("/api/auth/modulos", tags=["Auth"])
 def modulos_activos(usuario: Usuario = Depends(get_usuario_actual)):
     """Módulos activos del sistema, para el Inicio y la Administración."""
     return [m.publico() for m in activos()]

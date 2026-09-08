@@ -1,11 +1,15 @@
 """Registro de módulos (ADR-0013, PR 4): un objeto por módulo, el núcleo consume la lista."""
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 from types import SimpleNamespace
 
 from app.core.modulos import ModuloInfo
+from app.core.database import Base
 from app.core.permisos import MODULOS
 from app.core.auth import get_usuario_actual
 from app.modulos import REGISTRO, activos, claves
+from app import main as app_main
 from app.main import app
 
 
@@ -37,9 +41,20 @@ def test_endpoint_modulos_devuelve_solo_activos():
     try:
         r = TestClient(app).get("/api/auth/modulos")
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_usuario_actual, None)
     assert r.status_code == 200
     claves_resp = [m["clave"] for m in r.json()]
     assert claves_resp == [m.clave for m in activos()]
     assert "fletes" not in claves_resp
     assert r.json()[0]["etiquetas_rol"]["operador"] == "Preliquidador"
+
+
+def test_modelos_de_activos_registrados():
+    assert "usuarios" in Base.metadata.tables
+    assert "preliquidacion_linea" in Base.metadata.tables
+
+
+def test_main_no_importa_modulos_por_nombre():
+    contenido = Path(app_main.__file__).read_text(encoding="utf-8")
+    assert "app.modulos.preliquidacion" not in contenido
+    assert "app.modulos.fletes" not in contenido

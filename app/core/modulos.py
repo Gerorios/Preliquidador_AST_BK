@@ -13,6 +13,10 @@ class ModuloInfo:
     routers: tuple = ()
     etiquetas_rol: dict = field(default_factory=dict)
     panel_gerencial: bool = False
+    modelos: str = ""
+    """Ruta importable del módulo de modelos (p. ej. "app.modulos.preliquidacion.models").
+    Se importa al arrancar para registrar sus tablas en Base.metadata (chequeo de tablas
+    faltantes)."""
 
     def publico(self) -> dict:
         """Lo que se expone por la API (sin routers)."""
