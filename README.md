@@ -51,7 +51,7 @@ app/
         ├── models.py              # modelos del módulo (reexporta Usuario del núcleo)
         └── schemas.py
 migrations/
-└── preliquidacion/                # ws1…ws16 (15 archivos; no existen ws4 ni ws6) + fix_trazabilidad
+└── preliquidacion/                # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
 tests/
 ├── core/                          # autorización por rol, arranque
 └── preliquidacion/                # el resto (22 archivos)
@@ -143,7 +143,7 @@ ASISTENTE_MODELO=gpt-4o-mini
 python verificar_conexion.py
 ```
 
-Verifica las conexiones, lista las tablas de la BD externa y prueba la query principal. Si falla, ajustar `QUERY_PRINCIPAL` en `app/services/consulta_externa.py`.
+Verifica las conexiones, lista las tablas de la BD externa y prueba la query principal. Si falla, ajustar `QUERY_PRINCIPAL` en `app/modulos/preliquidacion/services/consulta_externa.py`.
 
 ### Base de desarrollo (`testing`)
 

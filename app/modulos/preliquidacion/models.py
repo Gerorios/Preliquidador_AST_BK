@@ -7,9 +7,10 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 import enum
 
-# Usuario y RolUsuario viven en el núcleo (app/core/models.py). Se reexportan
-# acá para que `from app.modulos.preliquidacion.models import Usuario` siga valiendo hasta que
-# Task 3 reescriba los imports.
+# Usuario y RolUsuario viven en el núcleo (app/core/models.py). Se reexportan acá
+# a propósito y de forma permanente: los modelos de este módulo tienen
+# ForeignKey("usuarios.id") y relationship("Usuario"), que SQLAlchemy resuelve por
+# nombre, así que importar este módulo tiene que registrar Usuario primero. No borrar.
 from app.core.models import Usuario, RolUsuario  # noqa: F401
 
 

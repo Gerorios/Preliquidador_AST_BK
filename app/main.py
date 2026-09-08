@@ -15,7 +15,8 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from app.core.config import settings
 from app.core.database import verificar_conexiones, engine_propia, Base
-from app.modulos.preliquidacion import models  # noqa: F401 — registra todos los modelos (incluye Usuario vía reexport)
+from app.core import models as models_core   # noqa: F401 — registra las tablas del núcleo (usuarios)
+from app.modulos.preliquidacion import models  # noqa: F401 — registra los modelos del módulo
 
 
 @asynccontextmanager

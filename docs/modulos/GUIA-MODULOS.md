@@ -152,7 +152,7 @@ backend_preliquidacion/
 │           ├── services/
 │           └── consulta_externa.py   # las consultas del Excel, en SQL parametrizado
 ├── migrations/
-│   ├── preliquidacion/               # ws1…ws16 (15 archivos; no existen ws4 ni ws6) + fix_trazabilidad
+│   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
 │   └── fletes/                       # 001_crear_tablas.sql, 002_...sql
 ├── tests/
 │   ├── core/                         # autorización por rol, arranque
@@ -476,7 +476,7 @@ Lo que quedó sin resolver y quién lo resuelve.
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - Nombre visible del sistema. Provisorio: "Sistema de gestión La Asturiana".
 - Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).
-- Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.
+- ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07); el frontend se actualiza en el PR 2.
 
 **Para conversar entre los dos**
 - Si fletes necesita algún dato de preliquidación o viceversa. Hoy la respuesta es "no comparten nada de escritura". Si aparece un caso real, se diseña en el núcleo.
