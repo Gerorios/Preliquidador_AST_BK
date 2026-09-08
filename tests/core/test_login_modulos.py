@@ -19,7 +19,8 @@ def db():
     u = Usuario(nombre="Liq", email="liq@t.com", password=pwd_context.hash("x"), rol="usuario", activo=True)
     u.modulos.append(UsuarioModulo(modulo="preliquidacion", rol="operador"))
     a = Usuario(nombre="Adm", email="adm@t.com", password=pwd_context.hash("x"), rol="admin", activo=True)
-    s.add_all([u, a]); s.commit()
+    i = Usuario(nombre="Inact", email="inact@t.com", password=pwd_context.hash("x"), rol="usuario", activo=False)
+    s.add_all([u, a, i]); s.commit()
     app.dependency_overrides[get_db_propia] = lambda: s
     yield s
     app.dependency_overrides.clear(); s.close()
@@ -50,3 +51,10 @@ def test_me_devuelve_modulos(db):
     r = c.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     assert r.json()["modulos"] == {"preliquidacion": "operador"}
+
+
+def test_usuario_inactivo_no_loguea(db):
+    r = TestClient(app).post(
+        "/api/auth/login", data={"username": "inact@t.com", "password": "x"}
+    )
+    assert r.status_code == 401

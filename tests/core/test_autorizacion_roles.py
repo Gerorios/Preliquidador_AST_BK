@@ -76,9 +76,20 @@ def test_gerente_no_exporta_excel(db):
 
 def test_gerente_muta_el_maestro_de_conceptos(db):
     # El gerente decide cambios de precios: opera el maestro de Conceptos
-    # completo, igual que admin/jefe. Ninguna de estas debe dar 403 — el
+    # completo, igual que admin/operador. Ninguna de estas debe dar 403 — el
     # status varía según validación de payload/existencia del recurso.
     cliente = _cliente(db, preliquidacion="gerente")
+    assert cliente.post("/api/precios/conceptos", json={}).status_code != 403
+    assert cliente.patch("/api/precios/conceptos/1", json={}).status_code != 403
+    assert cliente.delete("/api/precios/conceptos/1").status_code != 403
+    assert cliente.post("/api/precios/conceptos/copiar", json={}).status_code != 403
+    assert cliente.patch("/api/precios/conceptos/precio-masivo", json={}).status_code != 403
+
+
+def test_operador_muta_el_maestro_de_conceptos(db):
+    # requiere_conceptos = requiere_modulo(MODULO, "operador", "gerente"):
+    # el operador también opera el maestro completo, no solo el gerente.
+    cliente = _cliente(db, preliquidacion="operador")
     assert cliente.post("/api/precios/conceptos", json={}).status_code != 403
     assert cliente.patch("/api/precios/conceptos/1", json={}).status_code != 403
     assert cliente.delete("/api/precios/conceptos/1").status_code != 403
@@ -99,7 +110,7 @@ def test_gerente_accede_a_vista_gerencial(db):
     assert r.json() == []
 
 
-# ─── Jefe / admin ─────────────────────────────────────────────────────────────
+# ─── Admin / operador ─────────────────────────────────────────────────────────
 
 def test_admin_accede_a_preliquidacion(db):
     cliente = _cliente(db, rol="admin")

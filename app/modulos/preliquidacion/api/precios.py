@@ -55,8 +55,8 @@ def _validar_tarea_no_alias(tarea_nombre: str):
 
 # dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
 # Los GET quedan accesibles a todo rol (todos ven el maestro); las mutaciones
-# agregan requiere_conceptos endpoint por endpoint — admin/jefe/gerente, ya
-# que el gerente opera el maestro de Conceptos completo (decide precios).
+# agregan requiere_conceptos endpoint por endpoint — admin/operador/gerente,
+# ya que el gerente opera el maestro de Conceptos completo (decide precios).
 router = APIRouter(
     prefix="/api/precios",
     tags=["Precios"],
