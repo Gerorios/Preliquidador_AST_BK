@@ -212,6 +212,7 @@ npm run build            # frontend, sin errores
 | `npm run dev` levanta en otro puerto | El 5173 está ocupado | Cerrar la otra instancia; el proxy y el CORS esperan el 5173 |
 | Los tests fallan justo después de clonar | Faltan dependencias de desarrollo | `pip install -r requirements-dev.txt`, no solo `requirements.txt` |
 | PowerShell no deja activar el venv | Política de ejecución | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| El asistente de ayuda responde 502 "Connection error" en local, el resto anda | Un antivirus con inspección HTTPS (Avast "análisis HTTPS", y similares) reemite los certificados; Python no confía en su raíz aunque el navegador sí | Desactivar la inspección HTTPS del antivirus (Avast: Protección, Escudos principales, Escudo web, "Habilitar análisis HTTPS"). No es un problema del código ni pasa en producción |
 
 ---
 
