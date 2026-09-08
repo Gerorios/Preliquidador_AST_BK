@@ -39,6 +39,6 @@ def test_modulos_no_se_importan_entre_si():
         for a in mod.rglob("*.py"):
             for imp, _level in _imports(a):
                 partes = imp.split(".")
-                if imp.startswith("app.modulos.") and partes[2] != mod.name:
+                if imp == "app.modulos" or (imp.startswith("app.modulos.") and partes[2] != mod.name):
                     violaciones.append(f"{a.relative_to(RAIZ)}: {imp}")
     assert violaciones == [], "\n".join(violaciones)

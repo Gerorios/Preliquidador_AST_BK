@@ -7,8 +7,12 @@ Desde 2026-09 el sistema pasa a ser un **Sistema** con **Módulos** (ver esas en
 ## Sistema y módulos
 
 **Sistema**:
-El conjunto que comparten todos los Módulos: usuarios, roles, acceso a las bases externas, la utilidad de Quincena, el menú y el login. Nombre visible a definir (provisorio: "Sistema de gestión La Asturiana"); los nombres internos (repos, base, servicio) siguen diciendo "preliquidacion" y no se renombran.
+El conjunto que comparten todos los Módulos: usuarios, roles, acceso a las bases externas, la utilidad de Quincena, el menú y el login. El nombre visible es "Sistema de gestión La Asturiana"; los nombres internos (repos, base, servicio) siguen diciendo "preliquidacion" y no se renombran.
 _Avoid_: llamar "Preliquidación" al sistema completo — desde 2026-09 eso es el nombre de un módulo.
+
+**Inicio**:
+La pantalla a la que llega toda persona al entrar al Sistema: una Tarjeta por cada Módulo al que tiene acceso, más una tarjeta de Gerencial si es gerente o admin en algún módulo con panel gerencial. Se pasa siempre por Inicio, aunque la persona tenga acceso a un solo módulo.
+_Avoid_: confundir con el "Inicio" del módulo Preliquidación (el Dashboard de quincenas, otra pantalla).
 
 **Módulo**:
 Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (Preliquidación de sueldos, Fletes). Tiene sus propios datos, pantallas, reglas, tests y panel gerencial, y solo se apoya en el Núcleo compartido. Dos módulos nunca escriben los datos del otro; leerse entre sí solo pasa a través del Núcleo.
@@ -19,13 +23,23 @@ Lo que el Sistema ofrece a todos los Módulos: autenticación y roles, conexión
 _Avoid_: "utils", "común" (ambiguo con Concepto común)
 
 **Operador (de módulo)**:
-Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador — no ve el panel Gerencial; en Fletes, quien liquida los fletes). Un operador de un módulo no ve las pantallas operativas de otro módulo.
+Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador — no ve el panel Gerencial; en Fletes, quien liquida los fletes). Un operador de un módulo no ve las pantallas operativas de otro módulo. En Preliquidación se muestra como Preliquidador (ver Etiqueta de rol).
 
 **Gerente (de módulo)**:
 Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle (en Preliquidación, el maestro de Conceptos completo). Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
 
 **Admin**:
 Rol global del Sistema: ve y opera todos los módulos y administra usuarios y permisos. No es un rol de módulo.
+
+**Tarjeta**:
+La entrada a un Módulo (o a Gerencial) desde el Inicio: ícono, nombre, una línea de descripción y la Etiqueta de rol de la persona en ese módulo. Solo se muestra si el módulo está activo y la persona tiene rol en él (el admin las ve todas).
+
+**Módulo activo**:
+Un módulo registrado puede estar inactivo: su código existe (rutas, modelos, permisos), pero el núcleo no monta sus rutas ni su API ni muestra su Tarjeta en el Inicio. Fletes nace inactivo y se activa cuando tenga su primera pantalla real.
+
+**Etiqueta de rol**:
+El nombre visible que cada módulo le da a sus roles de módulo. El código interno siempre es `operador`/`gerente`; en Preliquidación el operador se muestra como **Preliquidador**.
+_Avoid_: usar "operador" en pantalla.
 
 ## Language (módulo Preliquidación)
 

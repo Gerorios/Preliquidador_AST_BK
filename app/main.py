@@ -1,6 +1,6 @@
 import sys
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -13,18 +13,27 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+import importlib
+
 from sqlalchemy import inspect
 
 from app.core.config import settings
 from app.core.database import verificar_conexiones, engine_propia, Base
 from app.core import models as models_core   # noqa: F401 — registra las tablas del núcleo (usuarios)
-from app.modulos.preliquidacion import models  # noqa: F401 — registra los modelos del módulo
+from app.modulos import activos
+
+# Registra los modelos de cada módulo activo (ADR-0013): el núcleo no importa
+# módulos por nombre, recorre el registro. Los inactivos no aportan tablas al
+# chequeo de tablas faltantes de más abajo.
+for _modulo in activos():
+    if _modulo.modelos:
+        importlib.import_module(_modulo.modelos)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("─" * 50)
-    print("  Sistema de Preliquidación — La Asturiana SRL")
+    print("  Sistema de gestión — La Asturiana SRL")
     print("─" * 50)
 
     resultado = verificar_conexiones()
@@ -56,7 +65,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Sistema de Preliquidación — La Asturiana SRL",
+    title="Sistema de gestión — La Asturiana SRL",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -75,17 +84,25 @@ app.add_middleware(
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 from app.core import auth, asistente  # noqa: E402
-from app.modulos.preliquidacion import routers as routers_preliquidacion  # noqa: E402
+from app.core.auth import get_usuario_actual  # noqa: E402
+from app.core.models import Usuario  # noqa: E402
 
 app.include_router(auth.router)
-for r in routers_preliquidacion:
-    app.include_router(r)
+for modulo in activos():
+    for r in modulo.routers:
+        app.include_router(r)
 app.include_router(asistente.router)
 
 
 @app.get("/")
 def root():
-    return {"sistema": "Preliquidación La Asturiana", "version": "1.0.0"}
+    return {"sistema": "Sistema de gestión La Asturiana", "version": "1.0.0"}
+
+
+@app.get("/api/auth/modulos", tags=["Auth"])
+def modulos_activos(usuario: Usuario = Depends(get_usuario_actual)):
+    """Módulos activos del sistema, para el Inicio y la Administración."""
+    return [m.publico() for m in activos()]
 
 
 @app.get("/api/preliquidacion/generar/status")
