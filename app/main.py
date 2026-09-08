@@ -1,6 +1,6 @@
 import sys
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -24,7 +24,7 @@ from app.modulos.preliquidacion import models  # noqa: F401 — registra los mod
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("─" * 50)
-    print("  Sistema de Preliquidación — La Asturiana SRL")
+    print("  Sistema de gestión — La Asturiana SRL")
     print("─" * 50)
 
     resultado = verificar_conexiones()
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Sistema de Preliquidación — La Asturiana SRL",
+    title="Sistema de gestión — La Asturiana SRL",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -75,17 +75,26 @@ app.add_middleware(
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 from app.core import auth, asistente  # noqa: E402
-from app.modulos.preliquidacion import routers as routers_preliquidacion  # noqa: E402
+from app.core.auth import get_usuario_actual  # noqa: E402
+from app.core.models import Usuario  # noqa: E402
+from app.modulos import activos  # noqa: E402
 
 app.include_router(auth.router)
-for r in routers_preliquidacion:
-    app.include_router(r)
+for modulo in activos():
+    for r in modulo.routers:
+        app.include_router(r)
 app.include_router(asistente.router)
 
 
 @app.get("/")
 def root():
-    return {"sistema": "Preliquidación La Asturiana", "version": "1.0.0"}
+    return {"sistema": "Sistema de gestión La Asturiana", "version": "1.0.0", "modulos": [m.clave for m in activos()]}
+
+
+@app.get("/api/auth/modulos")
+def modulos_activos(usuario: Usuario = Depends(get_usuario_actual)):
+    """Módulos activos del sistema, para el Inicio y la Administración."""
+    return [m.publico() for m in activos()]
 
 
 @app.get("/api/preliquidacion/generar/status")
