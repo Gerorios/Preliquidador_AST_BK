@@ -72,7 +72,7 @@ El backend usa **tres bases MySQL** (definidas en `.env`, leídas por `app/core/
 - `categoria_operario` — categoría (1–7) por (quincena, CUIL) para mantenimiento.
 
 ### Migraciones (`migrations/core/*.sql` y `migrations/preliquidacion/*.sql`)
-SQL manual, versionado por carpeta. **Todas ya aplicadas en `preliquidacion`.**
+SQL manual, versionado por carpeta. **Todas ya aplicadas en `preliquidacion`, salvo `ws12` (vistas Power BI, pendiente).**
 
 `migrations/core/` (núcleo, compartido por todos los módulos):
 - `000_usuarios.sql` — tabla `usuarios` versionada (existía desde antes del sistema; esta migración la deja documentada como esquema base).
@@ -89,7 +89,7 @@ SQL manual, versionado por carpeta. **Todas ya aplicadas en `preliquidacion`.**
 - `ws9` — índices de latencia (diferible, optimización de lecturas).
 - `ws10` — sargabilidad del recálculo reactivo (diferible, optimización de lecturas).
 - `ws11` — reemplaza común: el concepto específico descarta los comunes.
-- `ws12` — vistas de reporting para Power BI.
+- `ws12` — vistas de reporting para Power BI. **Pendiente de aplicar.**
 - `ws13` — unidad base `jornal_tope1_mas_excedente` (ADR-0010).
 - `ws14` — tipo de concepto `EXCENTO`.
 - `ws15` — conceptos por cliente y por supervisor (ADR-0011).

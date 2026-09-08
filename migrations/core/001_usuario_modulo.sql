@@ -23,7 +23,12 @@ SELECT id, 'preliquidacion', 'gerente' FROM usuarios WHERE rol = 'gerente';
 -- El admin sigue global (sin filas). Los demás pasan a 'usuario'.
 UPDATE usuarios SET rol = 'usuario' WHERE rol IN ('jefe', 'gerente');
 
--- Vuelta atrás (solo si hubiera que revertir el PR 3):
+-- Vuelta atrás (solo si hubiera que revertir el PR 3): el UPDATE reetiqueta
+-- por lo que hay en usuario_modulo al momento de revertir, así que también
+-- reetiqueta usuarios creados después del deploy (no solo los migrados acá
+-- arriba). Un `usuario` sin fila en usuario_modulo (p. ej. si se revierte
+-- antes de que se le haya asignado un módulo) queda con rol 'usuario', que
+-- el código viejo (pre-PR 3, sin ADR-0013) no reconoce como rol válido.
 --   UPDATE usuarios u JOIN usuario_modulo um ON um.usuario_id = u.id AND um.modulo = 'preliquidacion'
 --      SET u.rol = CASE um.rol WHEN 'operador' THEN 'jefe' ELSE 'gerente' END WHERE u.rol = 'usuario';
 --   DROP TABLE usuario_modulo;

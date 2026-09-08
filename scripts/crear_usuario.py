@@ -24,6 +24,20 @@ from app.core.auth import pwd_context  # noqa: E402
 from app.core.permisos import MODULOS, ROLES_MODULO  # noqa: E402
 
 
+def reemplazar_modulos(db, usuario: Usuario, pares: list[tuple[str, str]]) -> None:
+    """Reemplaza los módulos del usuario por `pares` (modulo, rol).
+
+    Borra los módulos viejos y hace flush antes de asignar los nuevos: si se
+    reasigna `usuario.modulos = [...]` directamente, SQLAlchemy intenta
+    insertar las filas nuevas antes de borrar las huérfanas y choca contra la
+    UNIQUE (usuario_id, modulo) con un IntegrityError.
+    """
+    for m in list(usuario.modulos):
+        db.delete(m)
+    db.flush()
+    usuario.modulos = [UsuarioModulo(modulo=m, rol=r) for m, r in pares]
+
+
 def _parse_modulo(valor: str) -> tuple[str, str]:
     if ":" not in valor:
         raise argparse.ArgumentTypeError(
@@ -72,7 +86,7 @@ def main() -> int:
             accion = "creado"
 
         if args.modulo:
-            usuario.modulos = [UsuarioModulo(modulo=m, rol=r) for m, r in args.modulo]
+            reemplazar_modulos(db, usuario, args.modulo)
 
         db.commit()
 

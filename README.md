@@ -277,7 +277,7 @@ Lista completa e interactiva en `/docs`. Resumen:
 
 ## Notas importantes
 
-- **Tabla `usuarios`**: ya existe en la BD propia; el sistema no la crea ni la modifica.
+- **Tabla `usuarios`**: versionada en `migrations/core/000_usuarios.sql`; `core/001` la actualiza (rol admin|usuario).
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
 - **Migraciones**: SQL manual versionado, organizado por carpeta. `migrations/core/` (núcleo, compartido por todos los módulos): `000_usuarios.sql`, `001_usuario_modulo.sql`. `migrations/preliquidacion/`: `000_esquema_base.sql` (tiene FK a `usuarios`) y luego ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad. ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible. En una base nueva, el orden es `core/000` → `preliquidacion/000` → `core/001` → las `ws` que falten según el estado. Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
 - **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción), `docs/modulos/GUIA-MODULOS.md` (cómo incorporar un módulo).

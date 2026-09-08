@@ -42,6 +42,8 @@ ssh -i ~/.ssh/preliquidacion_vps root@179.197.237.196 "cd /home/deploy && rm -rf
 # módulos nuevos empiezan en 001_.
 ```
 
+Desde el PR 3 el arranque NO crea tablas. Si falta una migración, el arranque imprime ERROR con las tablas faltantes y `/health` devuelve `status: error`; el login da 500 hasta aplicarla.
+
 ## Arquitectura
 
 **Un solo VPS** en **Hostinger, región São Paulo (Brasil)** — la misma red donde vive la base MySQL (`191.101.235.7`). El factor #1 de latencia es la distancia backend↔base (el sistema hace muchas queries por acción); por eso el backend va **pegado a la base**, no cerca de los usuarios. El frontend es estático y chico → se sirve del mismo VPS.

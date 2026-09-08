@@ -38,7 +38,8 @@ class Usuario(Base):
 
 class UsuarioModulo(Base):
     """Rol de un usuario dentro de un módulo (ADR-0013). Una fila por usuario y
-    módulo; el admin no tiene filas porque es global."""
+    módulo. Por convención no se le cargan filas al admin; el código no lo
+    exige (`tiene_permiso` corta antes por `rol == 'admin'`)."""
     __tablename__ = "usuario_modulo"
     __table_args__ = (UniqueConstraint("usuario_id", "modulo", name="uq_usuario_modulo"),)
 

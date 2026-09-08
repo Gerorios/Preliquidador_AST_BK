@@ -232,7 +232,7 @@ Fletes agrega su propio `from app.modulos.fletes import routers as routers_flete
 
 - `app/modulos/preliquidacion/__init__.py` — cómo se arma `routers`.
 - `app/modulos/preliquidacion/api/gerencial.py` — un router chico, con la dependencia de rol a nivel router (`APIRouter(prefix="/api/gerencial", tags=["Gerencial"], dependencies=[Depends(requiere_gerencial)])`, donde `requiere_gerencial` es `requiere_modulo("preliquidacion", "gerente")` de `app/modulos/preliquidacion/permisos.py`), en vez de repetirla en cada endpoint.
-- `tests/core/test_autorizacion_roles.py` — cómo se arma un `TestClient` sobre `app.main.app` en los tests, con `app.dependency_overrides` para `get_usuario_actual`, `get_db_propia`, `get_db_externa` y `get_db_sueldos` apuntando a una sqlite en memoria (función `_cliente_con_rol`, líneas 38-47).
+- `tests/core/test_autorizacion_roles.py` — cómo se arma un `TestClient` sobre `app.main.app` en los tests, con `app.dependency_overrides` para `get_usuario_actual`, `get_db_propia`, `get_db_externa` y `get_db_sueldos` apuntando a una sqlite en memoria (función `_cliente`, líneas 42-52).
 
 **Recordatorio**: nunca importar de `app.modulos.preliquidacion`; nunca escribir en las bases Externa o Sueldos.
 

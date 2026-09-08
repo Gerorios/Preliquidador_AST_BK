@@ -13,8 +13,10 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+from sqlalchemy import inspect
+
 from app.core.config import settings
-from app.core.database import verificar_conexiones
+from app.core.database import verificar_conexiones, engine_propia, Base
 from app.core import models as models_core   # noqa: F401 — registra las tablas del núcleo (usuarios)
 from app.modulos.preliquidacion import models  # noqa: F401 — registra los modelos del módulo
 
@@ -35,8 +37,18 @@ async def lifespan(app: FastAPI):
             print(f"  ERROR: {err}")
 
     # El esquema lo gobiernan las migraciones SQL (migrations/<modulo>/). No se
-    # crean tablas al arrancar: una tabla que falta es un deploy incompleto y
-    # tiene que fallar ruidosamente, no crearse con lo que diga el modelo.
+    # crean tablas al arrancar: una tabla que falta es un deploy incompleto.
+    # No se aborta el arranque (systemd entraría en bucle de reinicios): se
+    # imprime bien visible y se expone en /health para que se note enseguida.
+    app.state.tablas_faltantes = []
+    if resultado["propia"]:
+        existentes = set(inspect(engine_propia).get_table_names())
+        faltantes = sorted(t for t in Base.metadata.tables if t not in existentes)
+        if faltantes:
+            print(f"  ERROR: faltan tablas en la base propia (migraciones sin aplicar): {', '.join(faltantes)}")
+            app.state.tablas_faltantes = faltantes
+        else:
+            print("  Tablas BD propia: verificadas")
 
     print("─" * 50)
     yield
@@ -86,9 +98,17 @@ def generar_status():
 def health():
     conexiones = verificar_conexiones()
     ok = conexiones["externa"] and conexiones["propia"]
+    tablas_faltantes = getattr(app.state, "tablas_faltantes", [])
+    if tablas_faltantes:
+        status = "error"
+    elif ok:
+        status = "ok"
+    else:
+        status = "degraded"
     return {
-        "status": "ok" if ok else "degraded",
+        "status": status,
         "bd_externa": conexiones["externa"],
         "bd_propia": conexiones["propia"],
         "errores": conexiones["errores"],
+        "tablas_faltantes": tablas_faltantes,
     }
