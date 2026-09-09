@@ -257,6 +257,44 @@ class SueldosService:
         todos = [r for registros in self._por_legajo.values() for r in registros]
         return sorted(todos, key=lambda r: r["apellido_nombre"])
 
+    def buscar_personas(self, texto: str, limite: int = 50) -> dict:
+        """Personas del padrón que matchean por apellido/nombre o por prefijo de
+        CUIL, una entrada por persona con todos sus empleos (empresa, legajo).
+
+        Corre sobre el cache en memoria (ya cargado para la preliquidación), así
+        que no agrega queries. Las personas sin CUIL en el padrón salen con
+        cuil=None: la Administración las muestra deshabilitadas, porque el CUIL
+        es el identificador del usuario.
+        """
+        self._cargar_cache()
+
+        nombre = _normalizar_nombre(texto)
+        digitos = "".join(c for c in (texto or "") if c.isdigit())
+        if len(nombre) < 3 and len(digitos) < 3:
+            return {"personas": [], "total": 0}
+
+        por_persona: dict[str, dict] = {}
+        for registros in self._por_legajo.values():
+            for r in registros:
+                coincide = (
+                    (len(nombre) >= 3 and nombre in _normalizar_nombre(r["apellido_nombre"]))
+                    or (len(digitos) >= 3 and r["cuil"].startswith(digitos))
+                )
+                if not coincide:
+                    continue
+                # Sin CUIL no hay persona única: se agrupa por empresa+legajo para
+                # que aparezca igual en el buscador (deshabilitada).
+                clave = r["cuil"] or f"legajo:{r['empresa']}:{r['legajo']}"
+                persona = por_persona.setdefault(clave, {
+                    "cuil": r["cuil"] or None,
+                    "apellido_nombre": r["apellido_nombre"],
+                    "empleos": [],
+                })
+                persona["empleos"].append({"empresa": r["empresa"], "legajo": r["legajo"]})
+
+        personas = sorted(por_persona.values(), key=lambda p: p["apellido_nombre"])
+        return {"personas": personas[:limite], "total": len(personas)}
+
     def verificar_conexion(self) -> bool:
         try:
             self.db.execute(text("SELECT 1"))
