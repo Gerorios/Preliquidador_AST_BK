@@ -45,3 +45,17 @@ def requiere_modulo(modulo: str, *roles: str):
             )
         return usuario
     return dependencia
+
+
+def requiere_admin():
+    """Dependency de autorización para lo que administra el Sistema (usuarios,
+    permisos): exige el rol GLOBAL 'admin'. A diferencia de `requiere_modulo`,
+    no hay rol de módulo que alcance — ver CONTEXT.md, "Admin"."""
+    def dependencia(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+        if getattr(usuario, "rol", None) != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo un administrador puede hacer esto",
+            )
+        return usuario
+    return dependencia
