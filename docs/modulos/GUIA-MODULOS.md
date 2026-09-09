@@ -106,7 +106,7 @@ backend_preliquidacion/
 │   ├── models/models.py        # TODOS los modelos SQLAlchemy juntos
 │   └── schemas/schemas.py      # TODOS los schemas Pydantic juntos
 ├── migrations/                 # SQL manual: ws1_...sql ... ws16_...sql
-├── tests/                      # pytest, 276 tests
+├── tests/                      # pytest, 275 tests
 ├── docs/  adr/  AYUDA.md  DEPLOY.md  DOCUMENTACION.md  superpowers/plans/
 ├── CONTEXT.md                  # glosario del dominio
 └── README.md
@@ -511,7 +511,7 @@ Lo que quedó sin resolver y quién lo resuelve.
 - Confirmar si las consultas del Power Query se pueden exportar tal cual o hay que reconstruirlas.
 
 **Para Gero**
-- ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 276 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
+- ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 275 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
 - ~~Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.~~ Hecho (PR 3 de la etapa 0, 2026-09-08).
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - ~~Nombre visible del sistema.~~ Decidido: "Sistema de gestión La Asturiana" (ver CONTEXT.md, "Sistema").
@@ -540,5 +540,5 @@ Lo que quedó sin resolver y quién lo resuelve.
 | `docs/AYUDA.md` | Ayuda de uso del preliquidador, la que consume el asistente |
 | `docs/superpowers/plans/` | Planes de implementación de features anteriores. Sirven como ejemplo de cómo se planifica acá |
 | `migrations/preliquidacion/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
-| `tests/` | 276 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
+| `tests/` | 275 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
 | Frontend `README.md` | Stack, estructura y convenciones del front |
