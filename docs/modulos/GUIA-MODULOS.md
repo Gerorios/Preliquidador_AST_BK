@@ -1,12 +1,12 @@
 # Guía para incorporar un módulo al sistema
 
-**Para quién es**: para quien va a construir un módulo nuevo dentro de este sistema. La primera destinataria es Pitu, que va a construir el módulo de **Fletes**. Sirve igual para el tercer módulo y los siguientes.
+**Para quién es**: para quien va a construir un módulo nuevo dentro de este sistema. La primera destinataria es Pitu, que va a construir el módulo de **Liquidación Terceros**. Sirve igual para el tercer módulo y los siguientes.
 
 **Qué es este documento**: el contexto de todo lo que ya existe, las decisiones tomadas el 2026-09-07 sobre cómo crece el sistema (ADR-0013), las reglas que un módulo tiene que cumplir para entrar, cómo trabajamos entre varios sobre el mismo código, y lo que hay que preparar antes de escribir la primera línea.
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: la etapa 0 está completa salvo la pantalla de Administración (PR 5). El molde de Fletes existe en ambos repos, inactivo.
+**Estado**: la etapa 0 está completa salvo la pantalla de Administración (PR 5). El molde de **Liquidación Terceros** existe en ambos repos, inactivo. Su dominio ya está relevado: el glosario está en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y el plan por etapas en [`terceros/plan-terceros.md`](terceros/plan-terceros.md).
 
 ---
 
@@ -16,11 +16,11 @@ Es una aplicación web interna de La Asturiana SRL que arma la **preliquidación
 
 Está **en producción desde 2026-07-23** en `https://preliquidacion.laasturianasrl.com.ar`, lo usan el liquidador de sueldos y la gerencia, y los datos que tiene son reales. Eso condiciona todo lo que sigue: cualquier cambio tiene que poder entrar sin romper lo que ya se usa.
 
-El módulo de fletes resuelve otro circuito de liquidación, el de los fletes, que hoy se hace con un Excel conectado a la misma base del sistema de campo. La idea es traerlo adentro del mismo sistema, con el mismo login, el mismo menú y el mismo deploy, como segundo módulo. El sistema pasa a ser un pequeño sistema de gestión al que se le van a ir agregando módulos.
+El módulo de Liquidación Terceros resuelve otro circuito, el de lo que se le paga y se le descuenta a los terceros que prestan servicio (fletes de colectivos y horas de taller sobre maquinaria ajena), que hoy se hace con un Excel conectado a la misma base del sistema de campo. La idea es traerlo adentro del mismo sistema, con el mismo login, el mismo menú y el mismo deploy, como segundo módulo. El sistema pasa a ser un pequeño sistema de gestión al que se le van a ir agregando módulos.
 
 ### 1.1 Lo que tiene que saber del dominio del preliquidador
 
-No hace falta saber liquidar sueldos para hacer fletes. Sí conviene conocer estos términos porque aparecen en el núcleo compartido. El glosario completo está en `CONTEXT.md`.
+No hace falta saber liquidar sueldos para hacer el módulo de terceros. Sí conviene conocer estos términos porque aparecen en el núcleo compartido. El glosario completo está en `CONTEXT.md`.
 
 | Término | Qué es |
 |---|---|
@@ -33,7 +33,7 @@ No hace falta saber liquidar sueldos para hacer fletes. Sí conviene conocer est
 | Supervisor | Quién estuvo a cargo de la carga en el campo. |
 | Rol | Nivel de acceso de un usuario (ver sección 5). |
 
-Si el módulo de fletes usa alguno de estos ejes (por ejemplo, si los viajes tienen Cliente y Finca, o si se paga a Personas con Legajo), se comparten a través del núcleo y **no se redefinen**. Si fletes tiene sus propios conceptos (transportista, viaje, tarifa, lo que sea), esos son del módulo.
+Si el módulo de terceros usa alguno de estos ejes (por ejemplo, si los viajes tienen Cliente y Finca, o si se paga a Personas con Legajo), se comparten a través del núcleo y **no se redefinen**. Si tiene sus propios conceptos (tercero, viaje, tarifa, lo que sea), esos son del módulo.
 
 ---
 
@@ -82,9 +82,9 @@ Son tres, todas MySQL, en el mismo servidor de la empresa (São Paulo, misma reg
 
 | Base | Uso | Acceso |
 |---|---|---|
-| **Externa** (sistema de campo) | De acá salen las tareas y, para fletes, los viajes. Tablas `laa_*` y `ast_users`. | **Solo lectura. Nunca se escribe.** |
+| **Externa** (sistema de campo) | De acá salen las tareas y, para terceros, los viajes y las cargas de combustible. Tablas `laa_*` y `ast_users`. | **Solo lectura. Nunca se escribe.** |
 | **Sueldos** (maestro de empleados) | Personas, legajos, empresas. Entre 15 y 19 mil empleados. | **Solo lectura. Nunca se escribe.** |
-| **Propia** | Lo que el sistema genera: usuarios, preliquidaciones, conceptos, y a futuro las tablas de fletes. | Lectura y escritura. En producción es `preliquidacion`; en desarrollo es `testing` (sección 6). |
+| **Propia** | Lo que el sistema genera: usuarios, preliquidaciones, conceptos, y a futuro las tablas de terceros. | Lectura y escritura. En producción es `preliquidacion`; en desarrollo es `testing` (sección 6). |
 
 ### Infraestructura
 
@@ -139,7 +139,7 @@ backend_preliquidacion/
 │   │   ├── asistente.py              # chat de ayuda, transversal
 │   │   └── quincena.py               # calcular_rango_quincena y afines
 │   └── modulos/
-│       ├── __init__.py               # REGISTRO = (PRELIQUIDACION, FLETES); activos(); claves()
+│       ├── __init__.py               # REGISTRO = (PRELIQUIDACION, TERCEROS); activos(); claves()
 │       ├── preliquidacion/           # MÓDULO Preliquidación de sueldos (activo=True)
 │       │   ├── __init__.py           # arma MODULO: ModuloInfo(...)
 │       │   ├── permisos.py
@@ -147,26 +147,26 @@ backend_preliquidacion/
 │       │   ├── models.py
 │       │   ├── schemas.py
 │       │   └── services/             # incluye consulta_externa.py
-│       └── fletes/                   # MÓDULO Fletes (molde, inactivo — activo=False)
+│       └── terceros/                 # MÓDULO Liquidación Terceros (molde, inactivo — activo=False)
 │           ├── __init__.py           # arma MODULO: ModuloInfo(...)
 │           ├── permisos.py
-│           ├── api/fletes.py         # APIRouter(prefix="/api/fletes", tags=["Fletes"]) — un endpoint de estado
-│           ├── models.py             # tablas fletes_* (aún sin ninguna)
+│           ├── api/terceros.py       # APIRouter(prefix="/api/terceros", tags=["Liquidación Terceros"])
+│           ├── models.py             # tablas terceros_* (aún sin ninguna)
 │           ├── schemas.py
 │           ├── services/
 │           └── consulta_externa.py   # las consultas del Excel, en SQL parametrizado
 ├── migrations/
 │   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
-│   └── fletes/                       # (molde, inactivo) LEEME.md; 001_crear_tablas.sql cuando arranque
+│   └── terceros/                     # (molde, inactivo) LEEME.md; 001_crear_tablas.sql cuando arranque
 ├── tests/
 │   ├── core/                         # autorización por rol, arranque
 │   ├── preliquidacion/               # el resto (22 archivos)
-│   └── fletes/                       # (molde, inactivo) test_molde.py
+│   └── terceros/                     # (molde, inactivo) test_molde.py
 └── docs/
     ├── adr/                          # decisiones de todo el sistema
     └── modulos/
         ├── GUIA-MODULOS.md           # este archivo
-        └── fletes/                   # (molde, inactivo) CONTEXT-fletes.md; plan y ayuda de uso, después
+        └── terceros/                 # CONTEXT-terceros.md, plan-terceros.md, fuentes/ (fuera de git)
 
 frontend_preliquidacion/
 └── src/
@@ -191,41 +191,41 @@ frontend_preliquidacion/
         │   ├── pages/            # Dashboard, Revision, Verificacion, Conceptos, CategoriasOperarios, Gerencial, PanelPorConcepto
         │   ├── components/       # PanelLinea, FiltrosBar, AlertasBanner, ControlesJornal, InputBusqueda
         │   └── services/         # preliquidacion.js, gerencial.js
-        └── fletes/               # (PR 4, frontend) molde, inactivo
+        └── terceros/             # (PR 4, frontend) molde, inactivo
             ├── rutas.jsx         # activo: false
             └── pages/Inicio.jsx  # única pantalla del molde
 ```
 
 Cada módulo se registra en dos lugares y nada más: `app/modulos/__init__.py` incluye su `MODULO`, y `src/modulos/registro.js` incluye su entrada. `app/main.py` y `App.jsx` no conocen módulos por nombre: recorren el registro. Todo lo demás del módulo vive adentro de su carpeta.
 
-### 3.3 Cómo activar y completar el molde de Fletes
+### 3.3 Cómo activar y completar el molde de Liquidación Terceros
 
-El molde de Fletes ya existe en los dos repos, registrado pero inactivo (ver "Módulo activo" en `CONTEXT.md`). Esto es lo que hay que tocar para que deje de ser un molde:
+El molde ya existe en los dos repos, registrado pero inactivo (ver "Módulo activo" en `CONTEXT.md`). Esto es lo que hay que tocar para que deje de ser un molde:
 
 **1. Backend — activar y completar.**
 
-- `app/modulos/fletes/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta). Los modelos del módulo se registran con el campo `modelos` de `ModuloInfo`; el arranque los importa y con eso el chequeo de tablas faltantes de `/health` cubre al módulo.
-- `app/modulos/fletes/api/fletes.py` hoy tiene un único endpoint de estado (`GET /api/fletes/` → `{"modulo": "fletes", "estado": "en construcción"}`); ahí se agregan los endpoints reales, o se parte en más archivos dentro de `api/` (ver el patrón de `app/modulos/preliquidacion/api/`).
-- Modelos en `app/modulos/fletes/models.py`, tablas con prefijo `fletes_` (regla 5 de la sección 4.2).
-- Migraciones en `migrations/fletes/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/fletes/LEEME.md`), probadas primero contra `testing`.
-- Tests en `tests/fletes/` (hoy solo `test_molde.py`, que confirma que el módulo compila inactivo).
-- Glosario del dominio en `docs/modulos/fletes/CONTEXT-fletes.md`: ya tiene el cuestionario de la sección 8.1 de esta guía: responderlo ahí antes de diseñar el modelo.
+- `app/modulos/terceros/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta). Los modelos del módulo se registran con el campo `modelos` de `ModuloInfo`; el arranque los importa y con eso el chequeo de tablas faltantes de `/health` cubre al módulo.
+- `app/modulos/terceros/api/terceros.py` hoy tiene un único endpoint de estado (`GET /api/terceros/` → `{"modulo": "terceros", "estado": "en construcción"}`); ahí se agregan los endpoints reales, o se parte en más archivos dentro de `api/` (ver el patrón de `app/modulos/preliquidacion/api/`).
+- Modelos en `app/modulos/terceros/models.py`, tablas con prefijo `terceros_` (regla 5 de la sección 4.2).
+- Migraciones en `migrations/terceros/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/terceros/LEEME.md`), probadas primero contra `testing`.
+- Tests en `tests/terceros/` (hoy solo `test_molde.py`, que confirma que el módulo compila inactivo).
+- Glosario del dominio en `docs/modulos/terceros/CONTEXT-terceros.md`: ya tiene el cuestionario de la sección 8.1 de esta guía: responderlo ahí antes de diseñar el modelo.
 
 **2. Frontend — activar y completar.**
 
-- `src/modulos/fletes/rutas.jsx`: cambiar `activo: false` a `activo: true`.
-- Agregar páginas en `src/modulos/fletes/pages/` (hoy solo `Inicio.jsx`, la pantalla del molde) y sus rutas.
-- `etiquetasRol` del módulo en `src/modulos/fletes/rutas.jsx` (ver "Etiqueta de rol" en `CONTEXT.md`; el molde ya trae `{operador: "Liquidador de fletes", gerente: "Gerente"}`, ajustar si corresponde).
+- `src/modulos/terceros/rutas.jsx`: cambiar `activo: false` a `activo: true`.
+- Agregar páginas en `src/modulos/terceros/pages/` (hoy solo `Inicio.jsx`, la pantalla del molde) y sus rutas.
+- `etiquetasRol` del módulo en `src/modulos/terceros/rutas.jsx` (ver "Etiqueta de rol" en `CONTEXT.md`; el molde ya trae `{operador: "Liquidador de terceros", gerente: "Gerente"}`, ajustar si corresponde).
 - Íconos disponibles para la Tarjeta en `src/core/ui/iconos.jsx`.
 
-Activar Fletes = `activo: True`/`true` en los dos repos; el Inicio no consulta al backend para decidir las tarjetas — lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra `usuario.modulos` de la sesión.
+Activar el módulo = `activo: True`/`true` en los dos repos; el Inicio no consulta al backend para decidir las tarjetas — lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra `usuario.modulos` de la sesión.
 
-**3. Registro — ya está hecho para Fletes.** `app/modulos/__init__.py` ya tiene `FLETES` en `REGISTRO` y `src/modulos/registro.js` ya tiene su entrada; no hace falta tocarlos para Fletes. Para el **tercer módulo** (y siguientes), agregarlo es una línea en cada uno de esos dos archivos y nada más — el resto de esta sección aplica igual.
+**3. Registro — ya está hecho.** `app/modulos/__init__.py` ya tiene `TERCEROS` en `REGISTRO` y `src/modulos/registro.js` ya tiene su entrada; no hace falta tocarlos. Para el **tercer módulo** (y siguientes), agregarlo es una línea en cada uno de esos dos archivos y nada más — el resto de esta sección aplica igual.
 
-**4. Permisos.** `app/core/permisos.py` → `MODULOS = ("preliquidacion", "fletes")` ya incluye Fletes. Para dar de alta a una persona en el módulo:
+**4. Permisos.** `app/core/permisos.py` → `MODULOS = ("preliquidacion", "terceros")` ya lo incluye. Para dar de alta a una persona en el módulo:
 
 ```bash
-python scripts/asignar_modulo.py --email liq@x.com --modulo fletes --rol operador
+python scripts/asignar_modulo.py --email liq@x.com --modulo terceros --rol operador
 ```
 
 **Recordatorio**: nunca importar de `app.modulos.preliquidacion` (ni desde el frontend, de `src/modulos/preliquidacion/`); nunca escribir en las bases Externa o Sueldos.
@@ -239,13 +239,13 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 ### 4.1 Aislamiento
 
 1. **Todo el código del módulo vive en `app/modulos/<modulo>/` y `src/modulos/<modulo>/`.** Nada del módulo en otra carpeta.
-2. **Un módulo nunca importa de otro módulo.** Fletes no importa nada de `modulos/preliquidacion/`, ni al revés. Si necesita algo que está en otro módulo, es señal de que eso pertenece al núcleo: se pide, se conversa y se mueve al núcleo en un PR separado.
+2. **Un módulo nunca importa de otro módulo.** Terceros no importa nada de `modulos/preliquidacion/`, ni al revés. Si necesita algo que está en otro módulo, es señal de que eso pertenece al núcleo: se pide, se conversa y se mueve al núcleo en un PR separado.
 3. **Del núcleo se importa lo que el núcleo expone**, no sus internos.
 4. **No se modifican archivos fuera de la carpeta del módulo sin avisar antes.** El único toque fuera es la línea de registro del módulo, y va solo en `app/modulos/__init__.py` y en `src/modulos/registro.js` — el núcleo no conoce módulos por nombre: `app/main.py` recorre `app.modulos.activos()` y `App.jsx`/`Layout.jsx` recorren `src/modulos/registro.js`. Agregar un módulo nuevo es una línea en cada uno de esos dos archivos y nada más. Cualquier otro cambio al núcleo va en un PR aparte, chico, solo para eso, y lo revisa quien no lo escribió.
 
 ### 4.2 Datos
 
-5. **Todas las tablas del módulo llevan el prefijo del módulo**: `fletes_viaje`, `fletes_tarifa`, etc. El prefijo es la frontera visible en la base.
+5. **Todas las tablas del módulo llevan el prefijo del módulo**: `terceros_viaje`, `terceros_tarifa`, etc. El prefijo es la frontera visible en la base.
 6. **Un módulo escribe solo en sus tablas.** Nunca en tablas de otro módulo ni en las del núcleo (`usuarios`, `usuario_modulo`) salvo a través de los servicios del núcleo.
 7. **Las bases Externa y Sueldos son de solo lectura, siempre.** Ni un `INSERT`, ni un `UPDATE`, ni una tabla temporal. Si el módulo necesita guardar algo derivado de esos datos, lo guarda en sus propias tablas en la base Propia.
 8. **Las consultas a bases externas son SQL crudo con parámetros** (`text()` de SQLAlchemy con `:parametro`), nunca strings concatenados. No se mapean tablas ajenas con el ORM. Van en `consulta_externa.py` del módulo.
@@ -253,14 +253,14 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 ### 4.3 Migraciones
 
-10. **SQL manual, versionado, un archivo por cambio**: `migrations/fletes/001_crear_tablas.sql`, `002_agregar_columna_x.sql`. Numeración propia del módulo, correlativa.
+10. **SQL manual, versionado, un archivo por cambio**: `migrations/terceros/001_crear_tablas.sql`, `002_agregar_columna_x.sql`. Numeración propia del módulo, correlativa.
 11. **Cada migración es idempotente o dice claramente que no lo es** en un comentario arriba (`-- NO DIFERIBLE: crea columnas que el código de esta versión necesita`).
 12. **Se prueba primero contra `testing`**, se incluye en el PR, y a producción la aplica Gero junto con el deploy del código que la necesita. Nunca antes ni por separado sin coordinar.
 
 ### 4.4 Endpoints y permisos
 
-13. **Router propio con prefijo `/api/<modulo>`** y su tag. Los endpoints se nombran en español, en minúsculas y con guiones, como los actuales (`/api/fletes/viajes`, `/api/fletes/liquidaciones/{id}/exportar`).
-14. **Cada endpoint declara qué rol de módulo necesita** con la dependencia del núcleo: `Depends(requiere_modulo("fletes", "operador"))` o `"gerente"`. La restricción vive en el backend; el frontend solo esconde lo que no corresponde, no es la seguridad.
+13. **Router propio con prefijo `/api/<modulo>`** y su tag. Los endpoints se nombran en español, en minúsculas y con guiones, como los actuales (`/api/terceros/viajes`, `/api/terceros/liquidaciones/{id}/exportar`).
+14. **Cada endpoint declara qué rol de módulo necesita** con la dependencia del núcleo: `Depends(requiere_modulo("terceros", "operador"))` o `"gerente"`. La restricción vive en el backend; el frontend solo esconde lo que no corresponde, no es la seguridad.
 15. **Errores estructurados**: `HTTPException` con `detail` en español, legible para el usuario. Si la UI tiene que reaccionar a un caso (como hoy el 409 de solapamiento), `detail` es un objeto `{tipo, mensaje, ...}` y el `tipo` está documentado.
 16. **Todo lo que devuelve o recibe un endpoint tiene schema Pydantic** en `schemas.py` del módulo, con validaciones de rango donde el dominio las tenga.
 
@@ -293,7 +293,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 - `usuarios.rol` es **global**: `admin` ve y opera todo, en todos los módulos, y administra usuarios y permisos; `usuario` depende de sus módulos.
 - La tabla `usuario_modulo (usuario_id, modulo, rol)` da, por módulo, el rol `operador` o `gerente`. Una fila por usuario y módulo; el admin no tiene filas porque es global.
-- El **operador** de un módulo opera ese circuito completo y no ve las pantallas operativas de otro módulo. El liquidador de fletes no ve la preliquidación de sueldos, y el de sueldos no ve fletes. En Preliquidación, el operador (liquidador) no ve el panel Gerencial.
+- El **operador** de un módulo opera ese circuito completo y no ve las pantallas operativas de otro módulo. El liquidador de terceros no ve la preliquidación de sueldos, y el de sueldos no ve la de terceros. En Preliquidación, el operador (liquidador) no ve el panel Gerencial.
 - El **gerente** de un módulo ve el panel gerencial de ese módulo y lo que el módulo decida abrirle (en Preliquidación, además, el maestro de Conceptos completo). Una persona gerente de los dos módulos ve el analítico de ambos.
 - El menú muestra solo los módulos a los que el usuario tiene acceso. Si tiene uno solo, entra directo ahí.
 - El login (`POST /api/auth/login`) y `GET /api/auth/me` devuelven, junto con `id`/`nombre`/`email`/`rol`, el campo `modulos` con el rol por módulo:
@@ -323,7 +323,7 @@ requiere_conceptos = requiere_modulo(MODULO, "operador", "gerente")
 requiere_gerencial = requiere_modulo(MODULO, "gerente")
 ```
 
-Lo que fletes tiene que hacer: definir su propio `app/modulos/fletes/permisos.py` con `requiere_modulo("fletes", ...)` sobre las dependencias que necesite, usarlas en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito de fletes necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
+Lo que el módulo tiene que hacer: definir su propio `app/modulos/terceros/permisos.py` con `requiere_modulo("terceros", ...)` sobre las dependencias que necesite, usarlas en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
 
 Alta y gestión de usuarios: no hay ABM en la app, se corre a mano con `scripts/crear_usuario.py` (crea o actualiza un usuario y opcionalmente sus módulos) y `scripts/asignar_modulo.py` (asigna, cambia, quita o lista el rol de un usuario en un módulo puntual).
 
@@ -334,7 +334,7 @@ El código interno de un rol de módulo siempre es `operador` o `gerente` (ver a
 - Backend: `etiquetas_rol` en el `ModuloInfo` del módulo (`app/modulos/<modulo>/__init__.py`), expuesto en `GET /api/auth/modulos` (para la Administración del PR 5).
 - Frontend: `etiquetasRol` en el `modulo` exportado por `src/modulos/<modulo>/rutas.jsx` — es la copia que hoy usa el Inicio, definida independientemente del backend (`src/modulos/registro.js`, función `etiquetaRol`, contra el registro estático de módulos).
 
-Hoy: Preliquidación muestra `operador` como **Preliquidador** y `gerente` como **Gerente**; el molde de Fletes ya trae `operador` como **Liquidador de fletes** y `gerente` como **Gerente** (a confirmar cuando el módulo tenga usuarios reales).
+Hoy: Preliquidación muestra `operador` como **Preliquidador** y `gerente` como **Gerente**; el molde de Liquidación Terceros ya trae `operador` como **Liquidador de terceros** y `gerente` como **Gerente** (a confirmar cuando el módulo tenga usuarios reales).
 
 ---
 
@@ -378,7 +378,7 @@ La regla de esta etapa:
 | Desarrollo (tu máquina) | `testing` | Pitu y Gero, con las credenciales de `testing` |
 | Producción (VPS) | `preliquidacion` | Solo el VPS |
 
-`testing` era la base compartida original del sistema. Puede tener tablas de otros sistemas: **no se hace nunca un drop general**, solo se tocan las tablas del preliquidador y las de fletes. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas del preliquidador y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cuando existan las tablas `fletes_*`, se agregan a la lista del script.
+`testing` era la base compartida original del sistema. Puede tener tablas de otros sistemas: **no se hace nunca un drop general**, solo se tocan las tablas del preliquidador y las de terceros. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas del preliquidador y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cuando existan las tablas `terceros_*`, se agregan a la lista del script.
 
 Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque son de solo lectura. Las consultas que hagas en desarrollo van contra datos reales del sistema de campo: perfecto para validar contra el Excel.
 
@@ -391,13 +391,13 @@ Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque s
 
 ## 7. Cómo trabajamos sobre el mismo código
 
-1. **Rama por feature**, desde `main` actualizado: `feature/fletes-<tema>` (por ejemplo `feature/fletes-consulta-viajes`). Nunca se trabaja sobre `main` directamente; está protegida y no acepta push.
-2. **Commits chicos y descriptivos**, en español, con prefijo del tipo: `feat(fletes): ...`, `fix(fletes): ...`, `docs(fletes): ...`, `test(fletes): ...`. Un commit hace una cosa.
+1. **Rama por feature**, desde `main` actualizado: `feature/terceros-<tema>` (por ejemplo `feature/terceros-consulta-viajes`). Nunca se trabaja sobre `main` directamente; está protegida y no acepta push.
+2. **Commits chicos y descriptivos**, en español, con prefijo del tipo: `feat(terceros): ...`, `fix(terceros): ...`, `docs(terceros): ...`, `test(terceros): ...`. Un commit hace una cosa.
 3. **PR contra `main`** cuando la feature está completa y verificada (tests verdes, build OK, migraciones incluidas, docs del módulo al día). El PR explica qué hace, por qué, cómo se verificó y qué queda pendiente.
 4. **Revisión y merge: solo Gero.** Ningún PR se auto-mergea. Los PR que tocan el núcleo los revisa quien no los escribió.
 5. **Deploy: solo Gero**, con la regla escrita en `docs/DEPLOY.md`: pushear a GitHub no toca producción; producción cambia únicamente cuando Gero ejecuta el deploy tras autorizarlo.
 6. **Migraciones**: incluidas en el PR, probadas en `testing`, aplicadas a producción por Gero junto con el deploy.
-7. **Avisar antes de tocar fuera del módulo.** Si ves algo del núcleo o de preliquidación que te parece que está mal o falta, lo decís y se decide entre los dos. No se corrige "de paso" en un PR de fletes.
+7. **Avisar antes de tocar fuera del módulo.** Si ves algo del núcleo o de preliquidación que te parece que está mal o falta, lo decís y se decide entre los dos. No se corrige "de paso" en un PR de terceros.
 8. **Decisiones de diseño se conversan antes de codear**, no en la revisión del PR. Cuando una decisión es difícil de revertir, queda en un ADR.
 
 ---
@@ -408,10 +408,12 @@ Este es el trabajo que se puede empezar ya, mientras Gero reordena el código. E
 
 ### 8.1 Cuestionario de dominio
 
-Las respuestas a esto definen qué comparte fletes con el núcleo y cómo se modela. Nadie del lado del preliquidador las conoce; las tiene que responder Pitu, por escrito, en `docs/modulos/fletes/CONTEXT-fletes.md`.
+> **Ya respondido para Liquidación Terceros** en la sesión del 2026-09-09: el glosario resultante está en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y las decisiones en [`terceros/plan-terceros.md`](terceros/plan-terceros.md). El cuestionario queda acá como plantilla para el tercer módulo.
+
+Las respuestas a esto definen qué comparte el módulo con el núcleo y cómo se modela.
 
 **Sobre el período**
-- ¿La liquidación de fletes se hace por quincena, por mes, por viaje, por otro corte? ¿Coincide el corte con el de sueldos (1 a 15, 16 a fin)?
+- ¿La liquidación se hace por quincena, por mes, por viaje, por otro corte? ¿Coincide el corte con el de sueldos (1 a 15, 16 a fin)?
 - ¿Hay un momento en que una liquidación se "cierra" y ya no se toca? ¿Qué pasa si después aparece un viaje de un período cerrado?
 
 **Sobre a quién se paga**
@@ -436,7 +438,7 @@ Las respuestas a esto definen qué comparte fletes con el núcleo y cómo se mod
 - ¿Qué se entrega al final y en qué formato? ¿A quién?
 
 **Sobre los usuarios**
-- ¿Quién liquida fletes hoy? ¿Cuántas personas? ¿Qué mira la gerencia de este circuito?
+- ¿Quién liquida hoy? ¿Cuántas personas? ¿Qué mira la gerencia de este circuito?
 
 ### 8.2 Inventario del Excel actual
 
@@ -445,7 +447,7 @@ Para cada hoja o bloque del Excel:
 | Hoja / bloque | Qué muestra | De dónde salen los datos | Qué cálculo o cruce hace | Quién lo usa y para qué |
 |---|---|---|---|---|
 
-Y aparte: las **consultas de Power Query**, exportadas tal cual (el SQL que generan o el M que las define). Ese es el punto de partida de `consulta_externa.py` del módulo. Lo ideal es dejarlas en `docs/modulos/fletes/consultas-origen/` con un comentario por consulta diciendo qué devuelve.
+Y aparte: las **consultas de Power Query**, exportadas tal cual (el SQL que generan o el M que las define). Ese es el punto de partida de `consulta_externa.py` del módulo. Lo ideal es dejarlas en `docs/modulos/terceros/consultas-origen/` con un comentario por consulta diciendo qué devuelve.
 
 ### 8.3 Las pantallas que necesita el módulo
 
@@ -453,24 +455,26 @@ A partir de 8.1 y 8.2, una lista de pantallas con, para cada una: quién la usa,
 
 ### 8.4 El plan de implementación
 
-Con lo anterior, un plan por etapas en `docs/modulos/fletes/plan-fletes.md`. La secuencia sugerida en la sección 9 es un punto de partida.
+Con lo anterior, un plan por etapas en `docs/modulos/terceros/plan-terceros.md`. La secuencia sugerida en la sección 9 es un punto de partida.
 
 ---
 
-## 9. Etapas sugeridas para el módulo de fletes
+## 9. Etapas sugeridas para el módulo de Liquidación Terceros
+
+> Las etapas reales, ya acordadas y con más detalle, están en [`terceros/plan-terceros.md`](terceros/plan-terceros.md). Esta tabla queda como referencia de la forma que tiene el trabajo.
 
 No es un cronograma, es un orden que reduce riesgo: primero lo que se puede validar contra el Excel, después lo que agrega valor nuevo.
 
 | Etapa | Qué | Quién | Se puede empezar |
 |---|---|---|---|
-| 0 | Reordenar el sistema a módulos, permisos por módulo, carpeta `fletes/` de molde, base `testing` lista | Gero | **Hecha** (falta solo la pantalla de Administración, PR 5) |
-| 1 | Cuestionario de dominio, inventario del Excel, glosario `CONTEXT-fletes.md`, pantallas, plan | Pitu | Ya, en paralelo con 0 |
+| 0 | Reordenar el sistema a módulos, permisos por módulo, carpeta `terceros/` de molde, base `testing` lista | Gero | **Hecha** (falta solo la pantalla de Administración, PR 5) |
+| 1 | Cuestionario de dominio, inventario del Excel, glosario `CONTEXT-terceros.md`, pantallas, plan | Pitu | **Hecha** (2026-09-09) |
 | 2 | Consultas al sistema de campo en SQL parametrizado dentro del módulo, con tests que fijan lo que devuelven. Validación: mismos números que el Excel para un período conocido | Pitu | Cuando termine 0 |
 | 3 | Primera pantalla de solo lectura: el listado de viajes del período con filtros. Sin cálculos todavía. Sirve para que el usuario real vea los datos en el sistema y confirme que están bien | Pitu | Después de 2 |
-| 4 | Modelo propio: tablas `fletes_*`, migración 001, tarifas y reglas de pago, cálculo de la liquidación. Con tests de cada regla | Pitu | Después de 3, con 8.1 respondido |
+| 4 | Modelo propio: tablas `terceros_*`, migración 001, tarifas y reglas de pago, cálculo de la liquidación. Con tests de cada regla | Pitu | Después de 3, con 8.1 respondido |
 | 5 | Cruces y controles que hoy hace el Excel, como pantallas de verificación | Pitu | Después de 4 |
 | 6 | Exportación (Excel u otro formato que hoy se entregue) | Pitu | Después de 5 |
-| 7 | Panel gerencial de fletes bajo `/api/fletes/gerencial` | Pitu | Al final, con todo lo anterior funcionando y en uso |
+| 7 | Panel gerencial bajo `/api/terceros/gerencial` | Pitu | Al final, con todo lo anterior funcionando y en uso |
 
 Cada etapa termina con un PR mergeado, y a partir de la 3 con usuarios reales probándola en producción. Poner algo en producción temprano, aunque sea solo lectura, es lo que más aprende.
 
@@ -482,9 +486,9 @@ Resumen de las decisiones del grilling del 2026-09-07, con el porqué. El detall
 
 | Decisión | Elegido | Por qué |
 |---|---|---|
-| Dónde vive fletes | Módulo dentro del mismo sistema, mismos repos | Un login, un deploy, un VPS. Separar servicios duplica todo sin beneficio para dos personas. |
-| Orden | Reordenar preliquidación a módulos primero, después fletes | Si fletes empieza sobre la estructura por capas, copia el desorden y queda desparramado. |
-| Datos | Misma base, prefijo `fletes_`, migraciones por carpeta de módulo | Una conexión, un backup, joins con usuarios posibles. Las tablas actuales no se renombran: producción con datos reales. |
+| Dónde vive el módulo | Módulo dentro del mismo sistema, mismos repos | Un login, un deploy, un VPS. Separar servicios duplica todo sin beneficio para dos personas. |
+| Orden | Reordenar preliquidación a módulos primero, después el segundo módulo | Si el segundo empieza sobre la estructura por capas, copia el desorden y queda desparramado. |
+| Datos | Misma base, prefijo `terceros_`, migraciones por carpeta de módulo | Una conexión, un backup, joins con usuarios posibles. Las tablas actuales no se renombran: producción con datos reales. |
 | Qué comparte el núcleo | Solo lectura: auth, conexiones, cliente/finca/persona/legajo/empresa, quincena, UI común | Compartir lectura es barato y seguro. Compartir escritura acopla los módulos para siempre. |
 | Fuente externa | Cada módulo su `consulta_externa.py`, SQL crudo parametrizado, solo lectura | Es como funciona hoy y las consultas de Pitu ya existen en Power Query. |
 | Permisos | `admin` global; por módulo `operador` y `gerente` | Operadores no se ven entre módulos; gerente ve el analítico de los suyos. Escala al tercer módulo. |
@@ -501,7 +505,7 @@ Lo que quedó sin resolver y quién lo resuelve.
 
 **Para Pitu**
 - Todo el cuestionario de la sección 8.1. Sin eso no se puede diseñar el modelo de datos ni decidir qué comparte con el núcleo.
-- Si los viajes se pagan a empleados con legajo, hay que decidir si fletes usa el mismo maestro de sueldos (cache de 15 a 19 mil empleados que hoy carga preliquidación) o algo más chico. Depende de la respuesta al cuestionario.
+- Si los viajes se pagan a empleados con legajo, hay que decidir si el módulo usa el mismo maestro de sueldos (cache de 15 a 19 mil empleados que hoy carga preliquidación) o algo más chico. Depende de la respuesta al cuestionario.
 - Confirmar si las consultas del Power Query se pueden exportar tal cual o hay que reconstruirlas.
 
 **Para Gero**
@@ -511,11 +515,11 @@ Lo que quedó sin resolver y quién lo resuelve.
 - ~~Nombre visible del sistema.~~ Decidido: "Sistema de gestión La Asturiana" (ver CONTEXT.md, "Sistema").
 - ~~Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).~~ Se sacó (PR 3 de la etapa 0, 2026-09-08); el esquema es 100% migraciones SQL.
 - ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07) y para el frontend (PR 2, 2026-09-08).
-- ~~Molde del módulo Fletes (`app/modulos/fletes/`, `src/modulos/fletes/`), inactivo, con permisos, un endpoint de estado, migraciones y tests propios.~~ Hecho (PR 4 de la etapa 0, 2026-09-08).
+- ~~Molde del segundo módulo (`app/modulos/terceros/`, `src/modulos/terceros/`), inactivo, con permisos, un endpoint de estado, migraciones y tests propios.~~ Hecho (PR 4 de la etapa 0, 2026-09-08); renombrado de `fletes` a `terceros` el 2026-09-09.
 - ~~Registro de módulos (`app/modulos/__init__.py`, `src/modulos/registro.js`) y pantalla de Inicio con Tarjetas.~~ Hecho (PR 4 de la etapa 0, 2026-09-08).
 
 **Para conversar entre los dos**
-- Si fletes necesita algún dato de preliquidación o viceversa. Hoy la respuesta es "no comparten nada de escritura". Si aparece un caso real, se diseña en el núcleo.
+- Si terceros necesita algún dato de preliquidación o viceversa. Hoy la respuesta es "no comparten nada de escritura". Si aparece un caso real, se diseña en el núcleo.
 - Qué se le muestra al gerente que tiene ambos módulos: dos solapas, o algo más. Se decide cuando ambos paneles existan.
 - Numeración de ADR: hoy es global (0001 a 0013). Si los módulos generan muchos ADR propios, se puede pasar a una carpeta por módulo. Por ahora global.
 

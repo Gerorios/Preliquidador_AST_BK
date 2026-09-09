@@ -2,7 +2,7 @@
 
 Lenguaje ubicuo del sistema que arma la preliquidación de sueldos de cada quincena a partir de las tareas de campo, aplicándoles los conceptos/precios que define el liquidador. Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
 
-Desde 2026-09 el sistema pasa a ser un **Sistema** con **Módulos** (ver esas entradas): la preliquidación de sueldos es el primer módulo y el de fletes el segundo. Los términos de abajo, salvo los de la sección "Sistema y módulos", pertenecen al módulo de preliquidación.
+Desde 2026-09 el sistema pasa a ser un **Sistema** con **Módulos** (ver esas entradas): la preliquidación de sueldos es el primer módulo y la liquidación a terceros (fletes y horas de taller) el segundo. Los términos de abajo, salvo los de la sección "Sistema y módulos", pertenecen al módulo de preliquidación.
 
 ## Sistema y módulos
 
@@ -15,7 +15,7 @@ La pantalla a la que llega toda persona al entrar al Sistema: una Tarjeta por ca
 _Avoid_: confundir con el "Inicio" del módulo Preliquidación (el Dashboard de quincenas, otra pantalla).
 
 **Módulo**:
-Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (Preliquidación de sueldos, Fletes). Tiene sus propios datos, pantallas, reglas, tests y panel gerencial, y solo se apoya en el Núcleo compartido. Dos módulos nunca escriben los datos del otro; leerse entre sí solo pasa a través del Núcleo.
+Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (Preliquidación de sueldos, Liquidación Terceros). Tiene sus propios datos, pantallas, reglas, tests y panel gerencial, y solo se apoya en el Núcleo compartido. Dos módulos nunca escriben los datos del otro; leerse entre sí solo pasa a través del Núcleo.
 _Avoid_: "sección", "pantalla" (una pantalla es parte de un módulo, no un módulo)
 
 **Núcleo compartido**:
@@ -23,7 +23,7 @@ Lo que el Sistema ofrece a todos los Módulos: autenticación y roles, conexión
 _Avoid_: "utils", "común" (ambiguo con Concepto común)
 
 **Operador (de módulo)**:
-Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador — no ve el panel Gerencial; en Fletes, quien liquida los fletes). Un operador de un módulo no ve las pantallas operativas de otro módulo. En Preliquidación se muestra como Preliquidador (ver Etiqueta de rol).
+Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador — no ve el panel Gerencial; en Liquidación Terceros, quien liquida a los terceros). Un operador de un módulo no ve las pantallas operativas de otro módulo. En Preliquidación se muestra como Preliquidador (ver Etiqueta de rol).
 
 **Gerente (de módulo)**:
 Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle (en Preliquidación, el maestro de Conceptos completo). Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
@@ -35,7 +35,7 @@ Rol global del Sistema: ve y opera todos los módulos y administra usuarios y pe
 La entrada a un Módulo (o a Gerencial) desde el Inicio: ícono, nombre, una línea de descripción y la Etiqueta de rol de la persona en ese módulo. Solo se muestra si el módulo está activo y la persona tiene rol en él (el admin las ve todas).
 
 **Módulo activo**:
-Un módulo registrado puede estar inactivo: su código existe (rutas, modelos, permisos), pero el núcleo no monta sus rutas ni su API ni muestra su Tarjeta en el Inicio. Fletes nace inactivo y se activa cuando tenga su primera pantalla real.
+Un módulo registrado puede estar inactivo: su código existe (rutas, modelos, permisos), pero el núcleo no monta sus rutas ni su API ni muestra su Tarjeta en el Inicio. Liquidación Terceros nace inactivo y se activa cuando tenga su primera pantalla real.
 
 **Etiqueta de rol**:
 El nombre visible que cada módulo le da a sus roles de módulo. El código interno siempre es `operador`/`gerente`; en Preliquidación el operador se muestra como **Preliquidador**.
