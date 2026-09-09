@@ -8,11 +8,12 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.core.config import settings
 from app.core.database import get_db_propia
+from app.core.identidad import cuil_de_email, email_de_cuil, normalizar_cuil
 from app.core.models import Usuario
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
@@ -35,6 +36,11 @@ class UsuarioMe(BaseModel):
     email: str
     rol: str
     modulos: dict[str, str]
+
+
+class CambioPassword(BaseModel):
+    actual: str
+    nueva: str = Field(min_length=8)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -108,6 +114,31 @@ def get_usuario_actual(
     return usuario
 
 
+def _usuario_por_identificador(db: Session, tipeado: str) -> Optional[Usuario]:
+    """Resuelve lo que la persona escribió en el campo usuario: un mail real, el
+    email sintético completo, o el CUIL pelado (con o sin guiones)."""
+    usuario = db.query(Usuario).filter(
+        Usuario.email == tipeado, Usuario.activo == True  # noqa: E712
+    ).first()
+    if usuario:
+        return usuario
+    cuil = normalizar_cuil(tipeado)
+    if not cuil:
+        return None
+    return db.query(Usuario).filter(
+        Usuario.email == email_de_cuil(cuil), Usuario.activo == True  # noqa: E712
+    ).first()
+
+
+def _password_es_la_inicial(usuario: Usuario) -> bool:
+    """True si la contraseña sigue siendo el CUIL con el que se dio de alta.
+    Se calcula contra el hash guardado (no contra lo tipeado), así da igual si
+    entró escribiendo el CUIL con guiones. El frontend lo usa para el aviso no
+    bloqueante; nadie queda impedido de trabajar por esto."""
+    cuil = cuil_de_email(usuario.email)
+    return bool(cuil) and verificar_password(cuil, usuario.password)
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=TokenResponse)
@@ -115,15 +146,12 @@ def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db_propia),
 ):
-    usuario = db.query(Usuario).filter(
-        Usuario.email == form.username,
-        Usuario.activo == True,
-    ).first()
+    usuario = _usuario_por_identificador(db, form.username)
 
     if not usuario or not verificar_password(form.password, usuario.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos",
+            detail="Usuario o contraseña incorrectos",
         )
 
     token = crear_token({"sub": usuario.id})
@@ -141,6 +169,7 @@ def login(
             "email": usuario.email,
             "rol": usuario.rol,
             "modulos": modulos_de(usuario),
+            "password_inicial": _password_es_la_inicial(usuario),
         }
     )
 
@@ -163,3 +192,24 @@ def me(usuario: Usuario = Depends(get_usuario_actual)):
 def logout():
     # JWT es stateless — el logout lo maneja el frontend borrando el token
     return {"mensaje": "Sesión cerrada"}
+
+
+@router.post("/password")
+def cambiar_password(
+    datos: CambioPassword,
+    usuario: Usuario = Depends(get_usuario_actual),
+    db: Session = Depends(get_db_propia),
+):
+    """Cambio voluntario de la propia contraseña. Pide la actual: si alguien
+    deja la sesión abierta, un tercero no puede quedarse con la cuenta."""
+    # El usuario del cache está desligado de la sesión: se relee para escribir.
+    actual = db.query(Usuario).filter(Usuario.id == usuario.id).first()
+    if not actual or not verificar_password(datos.actual, actual.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual no es correcta",
+        )
+    actual.password = pwd_context.hash(datos.nueva)
+    db.commit()
+    invalidar_cache_usuarios()
+    return {"mensaje": "Contraseña actualizada"}

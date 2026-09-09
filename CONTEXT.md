@@ -29,7 +29,14 @@ Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Pr
 Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle (en Preliquidación, el maestro de Conceptos completo). Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
 
 **Admin**:
-Rol global del Sistema: ve y opera todos los módulos y administra usuarios y permisos. No es un rol de módulo.
+Rol global del Sistema: ve y opera todos los módulos y administra usuarios y permisos desde la pantalla de Administración. No es un rol de módulo.
+
+**Administración**:
+La pantalla del Sistema, visible solo para el rol Admin, donde se da de alta a una persona buscándola en el Padrón de empleados, se le asignan su rol global y sus roles por Módulo, y se gestionan los usuarios existentes (activar/desactivar, cambiar rol, reiniciar contraseña). El identificador de la persona es su CUIL: el alta guarda un email sintético derivado del CUIL (la columna `email` es única y no se migra) y la contraseña inicial es el CUIL, que cada persona puede cambiar cuando quiera desde su propia sesión.
+_Avoid_: ABM de usuarios (nombre técnico, no el término de dominio); confundir con los scripts de consola (`crear_usuario.py`, `asignar_modulo.py`), que quedan como alternativa y como salida de emergencia si el Admin pierde su propio acceso.
+
+**Padrón de empleados**:
+La tabla `nuempleados` del maestro de sueldos (solo lectura), de donde sale el alta de una persona en la Administración: apellido y nombre, CUIL, y sus legajos por Empresa. No se escribe nunca en esta tabla.
 
 **Tarjeta**:
 La entrada a un Módulo (o a Gerencial) desde el Inicio: ícono, nombre, una línea de descripción y la Etiqueta de rol de la persona en ese módulo. Solo se muestra si el módulo está activo y la persona tiene rol en él (el admin las ve todas).

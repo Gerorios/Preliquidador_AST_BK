@@ -6,7 +6,7 @@
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: la etapa 0 está completa salvo la pantalla de Administración (PR 5). El molde de Fletes existe en ambos repos, inactivo.
+**Estado**: la etapa 0 está completa. El molde de Fletes existe en ambos repos, inactivo.
 
 ---
 
@@ -106,7 +106,7 @@ backend_preliquidacion/
 │   ├── models/models.py        # TODOS los modelos SQLAlchemy juntos
 │   └── schemas/schemas.py      # TODOS los schemas Pydantic juntos
 ├── migrations/                 # SQL manual: ws1_...sql ... ws16_...sql
-├── tests/                      # pytest, 201 tests
+├── tests/                      # pytest, 276 tests
 ├── docs/  adr/  AYUDA.md  DEPLOY.md  DOCUMENTACION.md  superpowers/plans/
 ├── CONTEXT.md                  # glosario del dominio
 └── README.md
@@ -132,8 +132,12 @@ backend_preliquidacion/
 │   │   ├── config.py                 # settings
 │   │   ├── database.py               # las 3 conexiones y los get_db_*
 │   │   ├── models.py                 # Usuario, RolUsuario, UsuarioModulo
-│   │   ├── auth.py                   # usuario actual, login/me/logout
-│   │   ├── permisos.py               # MODULOS, ROLES_MODULO, requiere_modulo
+│   │   ├── auth.py                   # usuario actual, login/me/logout/password
+│   │   ├── identidad.py              # CUIL como identidad (PR 5): normalizar_cuil, email_de_cuil, cuil_de_email
+│   │   ├── administracion.py         # router /api/admin: alta desde el padrón, roles, reset (PR 5)
+│   │   ├── usuarios_service.py       # lógica de alta/roles que usa administracion.py (PR 5)
+│   │   ├── sueldos_service.py        # padrón de empleados (nuempleados) — mudado desde preliquidacion (PR 5)
+│   │   ├── permisos.py               # MODULOS, ROLES_MODULO, requiere_modulo, requiere_admin
 │   │   ├── modulos.py                # ModuloInfo (clave, nombre, descripcion, activo,
 │   │   │                             #   routers, etiquetas_rol, panel_gerencial, modelos) — ADR-0013
 │   │   ├── asistente.py              # chat de ayuda, transversal
@@ -146,7 +150,7 @@ backend_preliquidacion/
 │       │   ├── api/                  # preliquidacion, precios, export, gerencial
 │       │   ├── models.py
 │       │   ├── schemas.py
-│       │   └── services/             # incluye consulta_externa.py
+│       │   └── services/             # consulta_externa.py y el resto de la lógica del módulo
 │       └── fletes/                   # MÓDULO Fletes (molde, inactivo — activo=False)
 │           ├── __init__.py           # arma MODULO: ModuloInfo(...)
 │           ├── permisos.py
@@ -325,7 +329,9 @@ requiere_gerencial = requiere_modulo(MODULO, "gerente")
 
 Lo que fletes tiene que hacer: definir su propio `app/modulos/fletes/permisos.py` con `requiere_modulo("fletes", ...)` sobre las dependencias que necesite, usarlas en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito de fletes necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
 
-Alta y gestión de usuarios: no hay ABM en la app, se corre a mano con `scripts/crear_usuario.py` (crea o actualiza un usuario y opcionalmente sus módulos) y `scripts/asignar_modulo.py` (asigna, cambia, quita o lista el rol de un usuario en un módulo puntual).
+Alta y gestión de usuarios (desde el PR 5 de la etapa 0): se hace **desde la pantalla de Administración** (solo rol global `admin`), que busca a la persona en el padrón de empleados (`nuempleados`, solo lectura) y la da de alta con los roles elegidos. La identidad de la persona es su **CUIL**: como la columna `email` de `usuarios` es `UNIQUE NOT NULL` y esta etapa no migra el esquema, el alta guarda un email sintético `<cuil>@usuarios.laasturianasrl.com.ar` (`app/core/identidad.py`), y la **contraseña inicial es el CUIL**. Nadie tipea ese email: el login acepta el CUIL pelado (con o sin guiones) además del email real de los usuarios anteriores al PR 5. Cambiarla es voluntario — la persona puede seguir usando el CUIL indefinidamente — y el propio usuario la cambia desde su sesión con `POST /api/auth/password` (pide la contraseña actual).
+
+`scripts/crear_usuario.py` (crea o actualiza un usuario y opcionalmente sus módulos) y `scripts/asignar_modulo.py` (asigna, cambia, quita o lista el rol de un usuario en un módulo puntual) siguen existiendo como alternativa de consola y como **salida de emergencia** si el admin pierde su propio acceso.
 
 ### Etiquetas de rol
 
@@ -463,7 +469,7 @@ No es un cronograma, es un orden que reduce riesgo: primero lo que se puede vali
 
 | Etapa | Qué | Quién | Se puede empezar |
 |---|---|---|---|
-| 0 | Reordenar el sistema a módulos, permisos por módulo, carpeta `fletes/` de molde, base `testing` lista | Gero | **Hecha** (falta solo la pantalla de Administración, PR 5) |
+| 0 | Reordenar el sistema a módulos, permisos por módulo, carpeta `fletes/` de molde, base `testing` lista | Gero | **Hecha** |
 | 1 | Cuestionario de dominio, inventario del Excel, glosario `CONTEXT-fletes.md`, pantallas, plan | Pitu | Ya, en paralelo con 0 |
 | 2 | Consultas al sistema de campo en SQL parametrizado dentro del módulo, con tests que fijan lo que devuelven. Validación: mismos números que el Excel para un período conocido | Pitu | Cuando termine 0 |
 | 3 | Primera pantalla de solo lectura: el listado de viajes del período con filtros. Sin cálculos todavía. Sirve para que el usuario real vea los datos en el sistema y confirme que están bien | Pitu | Después de 2 |
@@ -505,7 +511,7 @@ Lo que quedó sin resolver y quién lo resuelve.
 - Confirmar si las consultas del Power Query se pueden exportar tal cual o hay que reconstruirlas.
 
 **Para Gero**
-- ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 201 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
+- ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 276 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
 - ~~Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.~~ Hecho (PR 3 de la etapa 0, 2026-09-08).
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - ~~Nombre visible del sistema.~~ Decidido: "Sistema de gestión La Asturiana" (ver CONTEXT.md, "Sistema").
@@ -513,6 +519,7 @@ Lo que quedó sin resolver y quién lo resuelve.
 - ~~Actualizar esta guía con las rutas reales cuando el reordenamiento esté mergeado.~~ Hecho para el backend (PR 1, 2026-09-07) y para el frontend (PR 2, 2026-09-08).
 - ~~Molde del módulo Fletes (`app/modulos/fletes/`, `src/modulos/fletes/`), inactivo, con permisos, un endpoint de estado, migraciones y tests propios.~~ Hecho (PR 4 de la etapa 0, 2026-09-08).
 - ~~Registro de módulos (`app/modulos/__init__.py`, `src/modulos/registro.js`) y pantalla de Inicio con Tarjetas.~~ Hecho (PR 4 de la etapa 0, 2026-09-08).
+- ~~Pantalla de Administración (PR 5): alta de usuarios desde el padrón, roles globales y por módulo, reset de contraseña.~~ Hecho (PR 5 de la etapa 0, 2026-09-09), sin migración: reusa la columna `email` existente con el email sintético del CUIL.
 
 **Para conversar entre los dos**
 - Si fletes necesita algún dato de preliquidación o viceversa. Hoy la respuesta es "no comparten nada de escritura". Si aparece un caso real, se diseña en el núcleo.
@@ -533,5 +540,5 @@ Lo que quedó sin resolver y quién lo resuelve.
 | `docs/AYUDA.md` | Ayuda de uso del preliquidador, la que consume el asistente |
 | `docs/superpowers/plans/` | Planes de implementación de features anteriores. Sirven como ejemplo de cómo se planifica acá |
 | `migrations/preliquidacion/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
-| `tests/` | 201 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
+| `tests/` | 276 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
 | Frontend `README.md` | Stack, estructura y convenciones del front |
