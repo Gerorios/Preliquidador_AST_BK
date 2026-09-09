@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.database import Base
 from app.modulos.preliquidacion.models import Preliquidacion, PreliquidacionLinea, AjusteManual
 from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
-from app.modulos.preliquidacion.services.sueldos_service import SueldosService
+from app.core.sueldos_service import SueldosService
 
 
 @pytest.fixture()

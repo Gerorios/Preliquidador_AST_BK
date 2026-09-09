@@ -10,7 +10,7 @@ from app.modulos.preliquidacion.models import (
 )
 from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
 from app.modulos.preliquidacion.services.motor_reglas import MotorReglas, normalizar_decimal
-from app.modulos.preliquidacion.services.sueldos_service import SueldosService
+from app.core.sueldos_service import SueldosService
 from app.modulos.preliquidacion.schemas import LineaUpdateRequest, ConceptoAdicionalRequest
 
 

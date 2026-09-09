@@ -9,8 +9,8 @@ Usan un fake de db (NO la BD real db_sueldos).
 """
 import pytest
 
-from app.modulos.preliquidacion.services import sueldos_service
-from app.modulos.preliquidacion.services.sueldos_service import SueldosService, refrescar_cache_sueldos
+from app.core import sueldos_service
+from app.core.sueldos_service import SueldosService, refrescar_cache_sueldos
 
 
 # Filas fijas con el shape que espera _cargar_cache:
