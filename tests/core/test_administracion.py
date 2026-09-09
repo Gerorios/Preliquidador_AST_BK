@@ -180,7 +180,7 @@ def test_reset_de_password_devuelve_el_cuil(db):
     r = c.post(f"/api/admin/usuarios/{nuevo_id}/password", json={}, headers=h)
     assert r.status_code == 200
     assert r.json()["password"] == CUIL_A
-    assert c.post("/api/auth/login", data={"username": CUIL_A, "password": CUIL_A}).status_code == 200
+    assert c.post("/api/auth/login", data={"username": email_de_cuil(CUIL_A), "password": CUIL_A}).status_code == 200
 
 
 def test_usuario_inexistente_da_404(db):
