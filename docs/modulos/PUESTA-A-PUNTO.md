@@ -142,7 +142,7 @@ Después:
 python -m pytest -q
 ```
 
-Tiene que terminar en verde. Al día de hoy son 201 tests y tardan alrededor de un minuto. No necesitan las bases: usan SQLite en memoria.
+Tiene que terminar en verde. Al día de hoy son 275 tests y tardan entre uno y cuatro minutos según la máquina. No necesitan las bases: usan SQLite en memoria.
 
 Por último, arrancar el servidor:
 
