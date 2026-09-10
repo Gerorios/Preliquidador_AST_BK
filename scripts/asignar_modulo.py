@@ -1,8 +1,8 @@
 """
 Asigna, cambia o quita el rol de un usuario en un módulo.
 
-    python scripts/asignar_modulo.py --email liq@x.com --modulo fletes --rol operador
-    python scripts/asignar_modulo.py --email liq@x.com --modulo fletes --quitar
+    python scripts/asignar_modulo.py --email liq@x.com --modulo terceros --rol operador
+    python scripts/asignar_modulo.py --email liq@x.com --modulo terceros --quitar
     python scripts/asignar_modulo.py --email liq@x.com --listar
 """
 import argparse

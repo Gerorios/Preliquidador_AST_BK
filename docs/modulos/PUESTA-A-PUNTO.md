@@ -189,7 +189,7 @@ Cada vez que se empieza a trabajar:
 1. Terminal 1, backend: `cd backend_preliquidacion`, activar el venv, `git pull`, `uvicorn app.main:app --reload --port 8000`.
 2. Terminal 2, frontend: `cd frontend_preliquidacion`, `git pull`, `npm run dev`.
 3. Si `git pull` trajo cambios en `requirements.txt` o `package.json`, volver a correr `pip install -r requirements-dev.txt` o `npm install`.
-4. Crear la rama de trabajo antes de tocar nada: `git checkout -b feature/fletes-<tema>`.
+4. Crear la rama de trabajo antes de tocar nada: `git checkout -b feature/terceros-<tema>`.
 
 Antes de abrir un PR:
 

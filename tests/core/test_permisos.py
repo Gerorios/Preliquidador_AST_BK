@@ -29,7 +29,7 @@ def test_modulos_de_devuelve_mapa():
 
 def test_admin_pasa_siempre():
     assert tiene_permiso(_u(rol="admin"), "preliquidacion", "operador")
-    assert tiene_permiso(_u(rol="admin"), "fletes", "gerente")
+    assert tiene_permiso(_u(rol="admin"), "terceros", "gerente")
 
 
 def test_operador_pasa_solo_donde_es_operador():
@@ -37,7 +37,7 @@ def test_operador_pasa_solo_donde_es_operador():
     assert tiene_permiso(u, "preliquidacion", "operador")
     assert tiene_permiso(u, "preliquidacion", "operador", "gerente")
     assert not tiene_permiso(u, "preliquidacion", "gerente")
-    assert not tiene_permiso(u, "fletes", "operador")
+    assert not tiene_permiso(u, "terceros", "operador")
 
 
 def test_gerente_no_es_operador():

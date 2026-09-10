@@ -19,7 +19,7 @@ from fastapi import Depends, HTTPException, status
 from app.core.auth import get_usuario_actual
 from app.core.models import Usuario
 
-MODULOS = ("preliquidacion", "fletes")  # debe coincidir con app/modulos/__init__.py (test_registro_modulos)
+MODULOS = ("preliquidacion", "terceros")  # debe coincidir con app/modulos/__init__.py (test_registro_modulos)
 ROLES_MODULO = ("operador", "gerente")
 
 

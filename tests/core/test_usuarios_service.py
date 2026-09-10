@@ -38,7 +38,7 @@ def test_crea_los_usuarios_del_lote_con_email_sintetico_y_password_igual_al_cuil
         personas=[{"cuil": CUIL_A, "apellido_nombre": "GOMEZ, JUAN"},
                   {"cuil": CUIL_B, "apellido_nombre": "PEREZ, ANA"}],
         rol_global="usuario",
-        modulos={"fletes": "operador"},
+        modulos={"terceros": "operador"},
     )
     assert [c["cuil"] for c in r["creados"]] == [CUIL_A, CUIL_B]
     assert r["omitidos"] == []
@@ -48,7 +48,7 @@ def test_crea_los_usuarios_del_lote_con_email_sintetico_y_password_igual_al_cuil
     assert u.rol == "usuario"
     assert u.activo is True
     assert verificar_password(CUIL_A, u.password), "la contraseña inicial es el CUIL"
-    assert {m.modulo: m.rol for m in u.modulos} == {"fletes": "operador"}
+    assert {m.modulo: m.rol for m in u.modulos} == {"terceros": "operador"}
 
 
 def test_omite_a_quien_ya_tiene_usuario_y_crea_al_resto(db):
@@ -80,9 +80,9 @@ def test_reemplazar_modulos_no_choca_contra_la_unique(db):
     u = _admin(db)
     reemplazar_modulos(db, u, [("preliquidacion", "operador")])
     db.commit()
-    reemplazar_modulos(db, u, [("preliquidacion", "gerente"), ("fletes", "operador")])
+    reemplazar_modulos(db, u, [("preliquidacion", "gerente"), ("terceros", "operador")])
     db.commit()
-    assert {m.modulo: m.rol for m in u.modulos} == {"preliquidacion": "gerente", "fletes": "operador"}
+    assert {m.modulo: m.rol for m in u.modulos} == {"preliquidacion": "gerente", "terceros": "operador"}
 
 
 def test_resetear_password_vuelve_al_cuil(db):

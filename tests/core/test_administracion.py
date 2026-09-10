@@ -108,14 +108,14 @@ def test_alta_en_lote_crea_los_dos_con_los_mismos_roles(db):
     c = TestClient(app)
     r = c.post("/api/admin/usuarios",
                json={"cuils": [CUIL_A, CUIL_B], "rol_global": "usuario",
-                     "modulos": {"fletes": "operador"}},
+                     "modulos": {"terceros": "operador"}},
                headers=_token(c, "adm@t.com"))
     assert r.status_code == 200, r.text
     assert len(r.json()["creados"]) == 2
     assert r.json()["omitidos"] == []
     for cuil in (CUIL_A, CUIL_B):
         u = db.query(Usuario).filter(Usuario.email == email_de_cuil(cuil)).one()
-        assert {m.modulo: m.rol for m in u.modulos} == {"fletes": "operador"}
+        assert {m.modulo: m.rol for m in u.modulos} == {"terceros": "operador"}
 
 
 def test_alta_rechaza_modulo_o_rol_inexistente(db):
@@ -124,7 +124,7 @@ def test_alta_rechaza_modulo_o_rol_inexistente(db):
     r1 = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario",
                                              "modulos": {"inventado": "operador"}}, headers=h)
     r2 = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario",
-                                             "modulos": {"fletes": "jefe"}}, headers=h)
+                                             "modulos": {"terceros": "jefe"}}, headers=h)
     r3 = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "rey",
                                              "modulos": {}}, headers=h)
     assert [r1.status_code, r2.status_code, r3.status_code] == [400, 400, 400]
@@ -144,10 +144,10 @@ def test_cambiar_roles_por_modulo(db):
     c = TestClient(app)
     op_id = db.query(Usuario).filter(Usuario.email == "op@t.com").one().id
     r = c.put(f"/api/admin/usuarios/{op_id}/modulos",
-              json={"modulos": {"fletes": "gerente"}},
+              json={"modulos": {"terceros": "gerente"}},
               headers=_token(c, "adm@t.com"))
     assert r.status_code == 200, r.text
-    assert r.json()["modulos"] == {"fletes": "gerente"}
+    assert r.json()["modulos"] == {"terceros": "gerente"}
 
 
 def test_desactivar_a_otro_y_que_no_pueda_loguearse(db):

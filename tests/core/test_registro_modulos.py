@@ -13,10 +13,10 @@ from app import main as app_main
 from app.main import app
 
 
-def test_registro_tiene_preliquidacion_activa_y_fletes_inactivo():
+def test_registro_tiene_preliquidacion_activa_y_terceros_inactivo():
     por_clave = {m.clave: m for m in REGISTRO}
     assert por_clave["preliquidacion"].activo is True
-    assert por_clave["fletes"].activo is False
+    assert por_clave["terceros"].activo is False
     assert all(isinstance(m, ModuloInfo) for m in REGISTRO)
 
 
@@ -30,9 +30,9 @@ def test_etiquetas_rol_preliquidacion():
     assert m.panel_gerencial is True
 
 
-def test_rutas_de_fletes_no_estan_montadas():
+def test_rutas_de_terceros_no_estan_montadas():
     paths = app.openapi()["paths"]
-    assert not any(p.startswith("/api/fletes") for p in paths)
+    assert not any(p.startswith("/api/terceros") for p in paths)
 
 
 def test_endpoint_modulos_devuelve_solo_activos():
@@ -45,7 +45,7 @@ def test_endpoint_modulos_devuelve_solo_activos():
     assert r.status_code == 200
     claves_resp = [m["clave"] for m in r.json()]
     assert claves_resp == [m.clave for m in activos()]
-    assert "fletes" not in claves_resp
+    assert "terceros" not in claves_resp
     assert r.json()[0]["etiquetas_rol"]["operador"] == "Preliquidador"
 
 
@@ -57,4 +57,4 @@ def test_modelos_de_activos_registrados():
 def test_main_no_importa_modulos_por_nombre():
     contenido = Path(app_main.__file__).read_text(encoding="utf-8")
     assert "app.modulos.preliquidacion" not in contenido
-    assert "app.modulos.fletes" not in contenido
+    assert "app.modulos.terceros" not in contenido
