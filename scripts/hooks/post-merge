@@ -1,0 +1,20 @@
+#!/bin/sh
+# Recordatorio de bitácora: avisa cuando un pull trae merges de PR a main.
+# Instalar con: scripts/hooks/instalar.sh
+# No escribe nada ni bloquea nada: solo imprime.
+
+rama=$(git rev-parse --abbrev-ref HEAD)
+[ "$rama" = "main" ] || exit 0
+
+# Solo merges de PR: los merges internos de rama no son decisiones.
+merges=$(git log ORIG_HEAD..HEAD --merges --oneline --grep='Merge pull request' 2>/dev/null)
+[ -n "$merges" ] || exit 0
+
+cantidad=$(printf '%s\n' "$merges" | wc -l | tr -d ' ')
+
+echo ""
+echo "  Entraron $cantidad PR(s) a main:"
+printf '%s\n' "$merges" | sed 's/^/    /'
+echo ""
+echo "  Sin anotar en docs/BITACORA.md. Corré /bitacora en Claude Code."
+echo ""
