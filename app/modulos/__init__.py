@@ -1,8 +1,8 @@
 """Registro de módulos del sistema. Agregar un módulo = una línea acá."""
 from app.modulos.preliquidacion import MODULO as PRELIQUIDACION
-from app.modulos.fletes import MODULO as FLETES
+from app.modulos.terceros import MODULO as TERCEROS
 
-REGISTRO = (PRELIQUIDACION, FLETES)
+REGISTRO = (PRELIQUIDACION, TERCEROS)
 
 
 def activos():

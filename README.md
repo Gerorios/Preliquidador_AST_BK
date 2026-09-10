@@ -45,7 +45,7 @@ app/
 │   ├── asistente.py               # chat de ayuda de uso (OpenAI), transversal
 │   └── quincena.py                # calcular_rango_quincena
 └── modulos/
-    ├── __init__.py                # REGISTRO = (PRELIQUIDACION, FLETES); activos(); claves()
+    ├── __init__.py                # REGISTRO = (PRELIQUIDACION, TERCEROS); activos(); claves()
     ├── preliquidacion/            # MÓDULO Preliquidación de sueldos (activo)
     │   ├── __init__.py            # arma MODULO: ModuloInfo(...), expone `routers`
     │   ├── api/                   # preliquidacion, precios, export, gerencial
@@ -53,22 +53,22 @@ app/
     │   │                          # consulta_externa, export_service, sueldos_service, solapamiento_service
     │   ├── models.py              # modelos del módulo (reexporta Usuario del núcleo)
     │   └── schemas.py
-    └── fletes/                    # MÓDULO Fletes (molde, inactivo)
+    └── terceros/                  # MÓDULO Liquidación Terceros (molde, inactivo)
         ├── __init__.py            # arma MODULO: ModuloInfo(activo=False, ...)
         ├── permisos.py
-        ├── api/fletes.py          # un endpoint de estado
-        ├── models.py              # tablas fletes_* (aún ninguna)
+        ├── api/terceros.py        # un endpoint de estado
+        ├── models.py              # tablas terceros_* (aún ninguna)
         ├── schemas.py
         ├── services/
         └── consulta_externa.py
 migrations/
 ├── core/                           # 000_usuarios, 001_usuario_modulo
 ├── preliquidacion/                # 000_esquema_base + ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
-└── fletes/                        # molde, inactivo (LEEME.md)
+└── terceros/                      # molde, inactivo (LEEME.md)
 tests/
 ├── core/                          # autorización por rol, arranque
 ├── preliquidacion/                # el resto (22 archivos)
-└── fletes/                        # molde, inactivo (test_molde.py)
+└── terceros/                      # molde, inactivo (test_molde.py)
 ```
 
 ### Modelo de datos propio
@@ -99,7 +99,7 @@ tests/
 
 Las decisiones de diseño están documentadas en `docs/adr/` (ADR-0001 a 0013). El lenguaje ubicuo del dominio está en `CONTEXT.md`. La documentación funcional completa está en `docs/DOCUMENTACION.md` y la ayuda de uso en `docs/AYUDA.md`.
 
-**Nuevos módulos**: desde 2026-09 el sistema crece por módulos (ADR-0013). La guía para incorporar uno, empezando por Fletes, está en [`docs/modulos/GUIA-MODULOS.md`](docs/modulos/GUIA-MODULOS.md). Para dejar una máquina nueva con los dos proyectos corriendo, [`docs/modulos/PUESTA-A-PUNTO.md`](docs/modulos/PUESTA-A-PUNTO.md).
+**Nuevos módulos**: desde 2026-09 el sistema crece por módulos (ADR-0013). La guía para incorporar uno, empezando por Liquidación Terceros, está en [`docs/modulos/GUIA-MODULOS.md`](docs/modulos/GUIA-MODULOS.md). Para dejar una máquina nueva con los dos proyectos corriendo, [`docs/modulos/PUESTA-A-PUNTO.md`](docs/modulos/PUESTA-A-PUNTO.md).
 
 ---
 

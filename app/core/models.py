@@ -45,7 +45,7 @@ class UsuarioModulo(Base):
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
-    modulo     = Column(String(30), nullable=False)   # 'preliquidacion' | 'fletes' | ...
+    modulo     = Column(String(30), nullable=False)   # 'preliquidacion' | 'terceros' | ...
     rol        = Column(String(20), nullable=False)   # 'operador' | 'gerente'
     creado_en  = Column(DateTime, default=datetime.utcnow, nullable=False)
 

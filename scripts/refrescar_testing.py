@@ -40,7 +40,7 @@ load_dotenv()
 
 # Tablas del preliquidador, en orden de dependencias (padres primero).
 # Cualquier otra tabla que haya en el destino se deja intacta.
-# Las tablas `fletes_*` del módulo Fletes se agregan acá cuando existan
+# Las tablas `terceros_*` del módulo Liquidación Terceros se agregan acá cuando existan
 # (hoy el módulo es un molde inactivo, sin migraciones propias).
 TABLAS = [
     "usuarios",

@@ -4,3 +4,9 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Fuentes de los módulos: material de origen con datos reales (nombres de
+# terceros, precios, saldos, personas) y con hosts y URLs de los sistemas de
+# origen. Los repos son públicos. Ver docs/modulos/*/fuentes/LEEME.md
+docs/modulos/*/fuentes/*
+!docs/modulos/*/fuentes/LEEME.md
