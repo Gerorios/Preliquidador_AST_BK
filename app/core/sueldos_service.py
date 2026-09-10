@@ -15,6 +15,8 @@ from typing import Optional
 from datetime import datetime, timedelta
 import unicodedata
 
+from app.core.identidad import normalizar_cuil
+
 
 QUERY_TODOS_NUEMPLEADOS = text("""
     SELECT empresa, legajo, apellido_nombre, cuil, categoria,
@@ -276,17 +278,24 @@ class SueldosService:
         por_persona: dict[str, dict] = {}
         for registros in self._por_legajo.values():
             for r in registros:
+                # El padrón trae algunos CUIL malformados (letras, largo
+                # distinto de 11): se normalizan acá —y no en el cache, que
+                # usa la preliquidación en producción para cruzar por CUIL—
+                # para que el alta los trate igual que a una persona sin
+                # CUIL, en vez de dejarlos pasar como si fueran usables.
+                cuil_normalizado = normalizar_cuil(r["cuil"])
                 coincide = (
                     (len(nombre) >= 3 and nombre in _normalizar_nombre(r["apellido_nombre"]))
-                    or (len(digitos) >= 3 and r["cuil"].startswith(digitos))
+                    or (len(digitos) >= 3 and cuil_normalizado is not None and cuil_normalizado.startswith(digitos))
                 )
                 if not coincide:
                     continue
-                # Sin CUIL no hay persona única: se agrupa por empresa+legajo para
-                # que aparezca igual en el buscador (deshabilitada).
-                clave = r["cuil"] or f"legajo:{r['empresa']}:{r['legajo']}"
+                # Sin CUIL (o inválido) no hay persona única: se agrupa por
+                # empresa+legajo para que aparezca igual en el buscador
+                # (deshabilitada).
+                clave = cuil_normalizado or f"legajo:{r['empresa']}:{r['legajo']}"
                 persona = por_persona.setdefault(clave, {
-                    "cuil": r["cuil"] or None,
+                    "cuil": cuil_normalizado,
                     "apellido_nombre": r["apellido_nombre"],
                     "empleos": [],
                 })

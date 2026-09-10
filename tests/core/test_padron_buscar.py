@@ -17,6 +17,8 @@ def servicio():
          "cuil": "27222222224", "categoria": None, "seccion": None, "cargo": None, "jornal": None},
         {"empresa": "LA ASTURIANA", "legajo": "6001", "apellido_nombre": "NUÑEZ, JOSE",
          "cuil": "", "categoria": None, "seccion": None, "cargo": None, "jornal": None},
+        {"empresa": "LA ASTURIANA", "legajo": "7002", "apellido_nombre": "TORRES, LUIS",
+         "cuil": "0 00000000", "categoria": None, "seccion": None, "cargo": None, "jornal": None},
     ]
     s._por_legajo = {}
     s._por_cuil = {}
@@ -63,3 +65,16 @@ def test_respeta_el_limite_y_reporta_el_total(servicio):
     assert r["total"] == 0
     r = servicio.buscar_personas("gomez", limite=1)
     assert len(r["personas"]) == 1
+
+
+def test_persona_con_cuil_malformado_en_el_padron_sale_con_cuil_none(servicio):
+    """Un CUIL que no normaliza a 11 dígitos (con letras, espacios, o largo
+    distinto) no debe llegar usable al alta: la Administración lo tiene que
+    tratar igual que a una persona sin CUIL (deshabilitada, con motivo)."""
+    persona = servicio.buscar_personas("torres")["personas"][0]
+    assert persona["cuil"] is None
+
+
+def test_persona_con_cuil_valido_sale_normalizada_a_solo_digitos(servicio):
+    persona = servicio.buscar_personas("gomez")["personas"][0]
+    assert persona["cuil"] == "20111111119"
