@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     asistente_modelo: str = "gpt-4o-mini"
 
+    # App del taller (Google Sheet publicado): las horas de taller sobre
+    # maquinaria de terceros. Vacío = la consulta de horas avisa que falta la
+    # URL, en vez de romper el arranque de la app. La URL no va al repo: los
+    # repos son públicos y expone datos de los mecánicos.
+    taller_sheet_url: str = ""
+
     @property
     def url_sueldos(self) -> str:
         password = quote_plus(self.db_sueldos_password)

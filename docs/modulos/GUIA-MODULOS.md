@@ -6,7 +6,7 @@
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: la etapa 0 está completa. El molde de **Liquidación Terceros** existe en ambos repos, inactivo. Su dominio ya está relevado: el glosario está en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y el plan por etapas en [`terceros/plan-terceros.md`](terceros/plan-terceros.md).
+**Estado**: la etapa 0 está completa y **Liquidación Terceros** arrancó por su etapa 1 (las cuatro consultas de origen, 2026-09-10). El módulo sigue inactivo: todavía no tiene pantalla. Su dominio está relevado: el glosario en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y el plan por etapas en [`terceros/plan-terceros.md`](terceros/plan-terceros.md).
 
 ---
 
@@ -544,5 +544,5 @@ Lo que quedó sin resolver y quién lo resuelve.
 | `docs/AYUDA.md` | Ayuda de uso del preliquidador, la que consume el asistente |
 | `docs/superpowers/plans/` | Planes de implementación de features anteriores. Sirven como ejemplo de cómo se planifica acá |
 | `migrations/preliquidacion/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
-| `tests/` | 275 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
+| `tests/` | 321 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
 | Frontend `README.md` | Stack, estructura y convenciones del front |

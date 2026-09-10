@@ -1,6 +1,6 @@
 # Plan de implementación — módulo Liquidación Terceros
 
-**Estado**: diseño acordado, sin código todavía. El molde está renombrado y registrado, inactivo.
+**Estado**: etapa 1 hecha (2026-09-10); las demás, diseño acordado sin código. El molde está renombrado y registrado, inactivo.
 **Fecha de la decisión**: 2026-09-09, sesión de grilling sobre el Excel que hoy resuelve el circuito.
 **Quién lo construye**: Pitu. Revisión y merge, Gero (regla 4 de `GUIA-MODULOS.md`).
 
@@ -96,7 +96,7 @@ Encontradas midiendo sobre los datos reales durante el grilling. Todas cambian n
 
 | Qué | Estado hoy |
 |---|---|
-| **Fecha de los repuestos** | La consulta usa la fecha del encabezado del movimiento, pero la correcta es la de la descarga a la maquinaria. En 2026, la mitad de las líneas de terceros cae en otra quincena según cuál se use, y algunas en otro año |
+| **Fecha de los repuestos** | La consulta usa la fecha del encabezado del movimiento, pero la correcta es la de la descarga a la maquinaria. Medido sobre 2026 (1.318 líneas de terceros): el 69% tiene las dos fechas distintas y el **46% cae en otra quincena** según cuál se use. Ninguna cambia de año, al menos en las líneas cuyo encabezado cae en 2026. La consulta ya trae las dos (`fecha` y `fecha_descarga`); el filtro se cambia en la quincena de corte |
 | **Seguros** | Se liquidan por un circuito separado del Excel. El módulo los absorbe para que salga todo junto |
 | **Máquinas sin cubrir** | El sistema de compras tiene máquinas de terceros que la app del taller no tiene, entre ellas la de un transportista cuyos repuestos hoy no llegan a su recibo |
 | **Precios inconsistentes** | Con el precio tipeado por fila, hay grupos de viajes idénticos (mismo bus, día, destino y tipo) con dos precios distintos alternados. La tabla de tarifas los elimina |
@@ -131,7 +131,7 @@ Sigue el orden sugerido en la sección 9 de `GUIA-MODULOS.md`: primero lo que se
 
 | # | Qué | Termina cuando |
 |---|---|---|
-| 1 | Las cuatro consultas dentro del módulo, en SQL parametrizado, con tests que fijan lo que devuelven | Los números coinciden con el Excel para una quincena conocida |
+| 1 | ~~Las cuatro consultas dentro del módulo, en SQL parametrizado, con tests que fijan lo que devuelven~~ | **Hecho (2026-09-10).** Ver abajo |
 | 2 | Ingesta y pantallas de solo lectura: viajes, cargas, repuestos y horas de la quincena, con filtros | El liquidador ve los datos en el sistema y confirma que están bien |
 | 3 | **Alertas de cruce** entre los tres sistemas | Empieza la limpieza de los sistemas de origen, guiada por la pantalla |
 | 4 | Tablas propias, migración 001, tarifas y cálculo del neto, con tests de cada regla | Una quincena calcula igual que el Excel |
@@ -142,6 +142,42 @@ Sigue el orden sugerido en la sección 9 de `GUIA-MODULOS.md`: primero lo que se
 | 9 | Panel gerencial bajo `/api/terceros/gerencial` | Al final, con todo lo anterior en uso |
 
 Cada etapa termina con un PR mergeado. A partir de la 2, con el usuario real mirándola.
+
+### Etapa 1 — cómo quedó (2026-09-10)
+
+Las cuatro consultas viven en `app/modulos/terceros/services/`, acotadas a una Quincena en
+lugar de "el año en curso":
+
+| Consulta | Dónde | Origen |
+|---|---|---|
+| `ConsultaExternaService.viajes` | `consulta_externa.py` | Sistema de campo |
+| `ConsultaExternaService.cargas_combustible` | `consulta_externa.py` | Sistema de campo |
+| `ConsultaExternaService.repuestos` | `consulta_externa.py` | Sistema de compras (La Falda) |
+| `ConsultaTallerService.horas_quincena` | `consulta_taller.py` | Sheet publicado de la app del taller |
+
+La cuarta no es SQL: baja el Sheet publicado y lo lee con `openpyxl`, sin dependencias nuevas
+(`httpx` y `openpyxl` ya estaban). La URL viene por `TALLER_SHEET_URL` y no está en el repo. La
+descarga está separada del parseo para que la lógica se pueda testear sin salir a la red.
+
+**Cómo se comprueba.** `scripts/validar_terceros_etapa1.py` compara las cuatro consultas contra
+las hojas de aterrizaje del Excel. Necesita las bases, la URL del Sheet y el Excel de `fuentes/`,
+así que no es un test: los 47 tests de `tests/terceros/` cubren lo que sí se puede probar sin
+bases —el rango de fechas de cada quincena, a qué base va cada consulta, el contrato de columnas
+y toda la lógica del lector del Sheet.
+
+```bash
+python scripts/validar_terceros_etapa1.py --quincena 2026-08-01
+```
+
+Las dos últimas quincenas que el Excel cubre completas coinciden **exacto**, fila por fila y en
+los totales:
+
+| Quincena | Viajes | Combustible | Repuestos | Horas de taller |
+|---|---|---|---|---|
+| `07-2Q` | 677 filas / 605,25 viajes | 119 filas / 17.505 l | 27 filas / $826.784,208 | 32 filas / 98,5 hs |
+| `08-1Q` | 756 filas / 667 viajes | 130 filas / 19.387 l | 43 filas / $1.475.648,11 | 54 filas / 133 hs |
+
+Lo que la etapa dejó a la vista está en la sección 6, "Salidos de la etapa 1".
 
 ---
 
@@ -163,6 +199,25 @@ Cada etapa termina con un PR mergeado. A partir de la 2, con el usuario real mir
 **Con Gero**
 - Aprobar `reportlab` como dependencia nueva para el PDF.
 - La app del taller está publicada en la web sin restricción y expone datos personales de los mecánicos. No lo introduce el módulo, pero conviene que lo sepa quien la administra.
+
+**Salidos de la etapa 1** (medidos contra las bases reales, 2026-09-10)
+- **Ninguna hora de taller de agosto está aprobada**: las 54 de la 1ra quincena y las 58 de la 2da
+  están todas en `Pendiente`. Si se aplicara la regla de "solo se cobran las aprobadas" (ver
+  `CONTEXT-terceros.md`, "Hora de taller"), esa quincena no cobraría una sola hora. Hay que definir
+  con el liquidador y con el taller quién aprueba y cuándo, antes de la etapa 4.
+- **La heurística que deduce el tercero del nombre de la máquina falla cuando el número de interno
+  está separado del símbolo**: `TRACTOR DEUTZ N° 113 SOSA ALBERTO` devuelve el nombre entero de la
+  máquina en lugar de `SOSA ALBERTO`, porque ni `N°` ni `113` son a la vez "empieza con N" y "trae
+  dígitos". El Excel hace exactamente lo mismo, así que el número liquidado no cambia, pero ese
+  tercero aparece como uno propio. No se afina la heurística: es el caso que resuelve pedirle al
+  sistema de campo el dueño como campo propio (sección 2.1).
+- **Hay líneas de "MANO DE OBRA" con precio unitario de repuesto**: 466 líneas de 2026, todas de
+  enero a la 2da de junio, con dos precios unitarios ($207.200 y $247.933,88) multiplicados por las
+  horas, que suman $337 millones sobre un total de $370 millones del año. Parecen el importe total de
+  una factura de reparación tomado como precio por unidad. **No afecta lo validado**: no hay ninguna
+  de estas líneas en las quincenas que el Excel cubre (07-2Q y 08-1Q), porque la hoja `La Falda` solo
+  guarda los meses que se fueron pegando. Hay que resolverlo antes de la etapa 5, que importa el
+  histórico.
 
 **Sueltos, a resolver leyendo el Excel**
 - Ajustes manuales, detección de duplicados, carga manual de viajes que no vienen del sistema de campo, y el estado de cuenta anual.

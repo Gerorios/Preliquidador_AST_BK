@@ -128,6 +128,8 @@ El backend no arranca sin un `.env` en la raíz de `backend_preliquidacion/` con
 
 La plantilla con todas las variables está en `.env.example`. Para desarrollo, `DB_PROPIA_NAME` tiene que ser `testing`, no `preliquidacion` (ver `GUIA-MODULOS.md`, sección 6.2).
 
+`TALLER_SHEET_URL` es la URL del Google Sheet publicado de la app del taller, de donde el módulo Liquidación Terceros lee las horas. Viene en el mismo `.env`. Dejarla vacía no rompe nada: solo esa consulta avisa que falta configurarla.
+
 ### Comprobación
 
 ```bash
@@ -142,7 +144,7 @@ Después:
 python -m pytest -q
 ```
 
-Tiene que terminar en verde. Al día de hoy son 275 tests y tardan entre uno y cuatro minutos según la máquina. No necesitan las bases: usan SQLite en memoria.
+Tiene que terminar en verde. Al día de hoy son 321 tests y tardan entre uno y cuatro minutos según la máquina. No necesitan las bases ni internet: usan SQLite en memoria y, donde hace falta un Excel, lo arman al vuelo.
 
 Por último, arrancar el servidor:
 
