@@ -11,7 +11,7 @@ El conjunto que comparten todos los Módulos: usuarios, roles, acceso a las base
 _Avoid_: llamar "Preliquidación" al sistema completo — desde 2026-09 eso es el nombre de un módulo.
 
 **Inicio**:
-La pantalla a la que llega toda persona al entrar al Sistema: una Tarjeta por cada Módulo al que tiene acceso, más una tarjeta de Gerencial si es gerente o admin en algún módulo con panel gerencial. Se pasa siempre por Inicio, aunque la persona tenga acceso a un solo módulo.
+La pantalla a la que llega toda persona al entrar al Sistema: la saluda por su nombre, y le ofrece una Tarjeta por cada Módulo al que tiene acceso, más una tarjeta de Gerencial si es gerente o admin en algún módulo con panel gerencial, y una de Administración si es admin. Se pasa siempre por Inicio, aunque la persona tenga acceso a un solo módulo. Es también el único lugar donde viven las dos acciones de cuenta —cambiar la propia contraseña y cerrar sesión—, al pie de las tarjetas: dentro de un Módulo solo se puede cerrar sesión, y el cambio de contraseña se ofrece además en la Administración.
 _Avoid_: confundir con el "Inicio" del módulo Preliquidación (el Dashboard de quincenas, otra pantalla).
 
 **Módulo**:
@@ -39,14 +39,14 @@ _Avoid_: ABM de usuarios (nombre técnico, no el término de dominio); confundir
 La tabla `nuempleados` del maestro de sueldos (solo lectura), de donde sale el alta de una persona en la Administración: apellido y nombre, CUIL, y sus legajos por Empresa. No se escribe nunca en esta tabla.
 
 **Tarjeta**:
-La entrada a un Módulo (o a Gerencial) desde el Inicio: ícono, nombre, una línea de descripción y la Etiqueta de rol de la persona en ese módulo. Solo se muestra si el módulo está activo y la persona tiene rol en él (el admin las ve todas).
+La entrada a un Módulo (o a Gerencial, o a la Administración) desde el Inicio: ícono, nombre y una línea de descripción. Solo se muestra si el módulo está activo y la persona tiene rol en él (el admin las ve todas). No muestra el rol de la persona: ver Etiqueta de rol.
 
 **Módulo activo**:
 Un módulo registrado puede estar inactivo: su código existe (rutas, modelos, permisos), pero el núcleo no monta sus rutas ni su API ni muestra su Tarjeta en el Inicio. Fletes nace inactivo y se activa cuando tenga su primera pantalla real.
 
 **Etiqueta de rol**:
-El nombre visible que cada módulo le da a sus roles de módulo. El código interno siempre es `operador`/`gerente`; en Preliquidación el operador se muestra como **Preliquidador**.
-_Avoid_: usar "operador" en pantalla.
+El nombre visible que cada módulo le da a sus roles de módulo. El código interno siempre es `operador`/`gerente`; en Preliquidación el operador se muestra como **Preliquidador**. Se usa **solo en la Administración**, para que el Admin elija y lea los roles con palabras y no con códigos: a la propia persona el Sistema **no le muestra en ninguna pantalla** qué rol tiene (decisión del 2026-09-10). El mecanismo se conserva igual: cada módulo declara sus etiquetas y el Sistema las expone en `GET /api/auth/modulos`.
+_Avoid_: usar "operador" en pantalla; mostrarle a alguien su propio rol.
 
 ## Language (módulo Preliquidación)
 
