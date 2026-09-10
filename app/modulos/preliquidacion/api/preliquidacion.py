@@ -68,7 +68,7 @@ def generar(
 def refrescar_sueldos(_=Depends(get_usuario_actual)):
     """Marca el maestro de sueldos (cache de proceso) para recargarse en el
     próximo uso. Útil cuando cambió nuempleados y no se quiere esperar al TTL."""
-    from app.modulos.preliquidacion.services.sueldos_service import refrescar_cache_sueldos
+    from app.core.sueldos_service import refrescar_cache_sueldos
     refrescar_cache_sueldos()
     invalidar_cache_empresas()
     return MensajeResponse(mensaje="Maestro de sueldos marcado para refrescar")

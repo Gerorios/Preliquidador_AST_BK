@@ -39,8 +39,12 @@ app/
 │   ├── config.py                  # settings (.env)
 │   ├── database.py                # las 3 conexiones (externa, sueldos, propia) y Base ORM
 │   ├── models.py                  # Usuario, RolUsuario, UsuarioModulo
-│   ├── auth.py                    # login/me/logout, get_usuario_actual
-│   ├── permisos.py                # MODULOS, ROLES_MODULO, modulos_de, tiene_permiso, requiere_modulo
+│   ├── auth.py                    # login/me/logout/password, get_usuario_actual
+│   ├── identidad.py               # CUIL como identidad: normalizar_cuil, email_de_cuil, cuil_de_email
+│   ├── administracion.py          # router /api/admin: alta desde el padrón, roles, reset de contraseña
+│   ├── usuarios_service.py        # lógica de alta/roles que usa administracion.py
+│   ├── sueldos_service.py         # maestro de empleados (nuempleados), mudado desde preliquidacion (PR 5)
+│   ├── permisos.py                # MODULOS, ROLES_MODULO, modulos_de, tiene_permiso, requiere_modulo, requiere_admin
 │   ├── modulos.py                 # ModuloInfo (clave, nombre, descripcion, activo, routers, etiquetas_rol, panel_gerencial)
 │   ├── asistente.py               # chat de ayuda de uso (OpenAI), transversal
 │   └── quincena.py                # calcular_rango_quincena
@@ -50,7 +54,7 @@ app/
     │   ├── __init__.py            # arma MODULO: ModuloInfo(...), expone `routers`
     │   ├── api/                   # preliquidacion, precios, export, gerencial
     │   ├── services/              # preliquidacion_service, motor_reglas, gerencial_service,
-    │   │                          # consulta_externa, export_service, sueldos_service, solapamiento_service
+    │   │                          # consulta_externa, export_service, solapamiento_service
     │   ├── models.py              # modelos del módulo (reexporta Usuario del núcleo)
     │   └── schemas.py
     └── terceros/                  # MÓDULO Liquidación Terceros (molde, inactivo)
@@ -180,7 +184,7 @@ python scripts/asignar_modulo.py --email liq@x.com --listar
 python scripts/asignar_modulo.py --email liq@x.com --modulo preliquidacion --quitar
 ```
 
-`crear_usuario.py` da de alta o actualiza un usuario (rol global `admin`/`usuario`) y puede fijar sus módulos de una; `asignar_modulo.py` asigna, cambia, quita o lista el rol de un usuario ya existente en un módulo puntual (`operador`/`gerente`), sin tocar el resto de sus datos. No hay ABM de usuarios en la app: se corren a mano contra la base que apunte el `.env` (`DB_PROPIA_*`).
+`crear_usuario.py` da de alta o actualiza un usuario (rol global `admin`/`usuario`) y puede fijar sus módulos de una; `asignar_modulo.py` asigna, cambia, quita o lista el rol de un usuario ya existente en un módulo puntual (`operador`/`gerente`), sin tocar el resto de sus datos. Desde el PR 5 el alta normal se hace desde la pantalla de Administración (`/api/admin`, ver la sección de Endpoints), buscando a la persona en el padrón de empleados; estos scripts quedan como alternativa de consola y como salida de emergencia si el admin pierde el acceso.
 
 ---
 
@@ -217,10 +221,21 @@ Lista completa e interactiva en `/docs`. Resumen:
 ### Autenticación (`/api/auth`)
 | Método | Ruta | Descripción |
 |---|---|---|
-| POST | `/login` | Login OAuth2 password → JWT |
+| POST | `/login` | Login OAuth2 password → JWT. El campo `username` acepta el CUIL pelado (con o sin guiones), el email sintético completo, o un email real; la respuesta incluye `usuario.password_inicial` (True si la contraseña sigue siendo el CUIL, para el aviso no bloqueante) |
 | GET | `/me` | Usuario autenticado |
 | POST | `/logout` | Logout (stateless) |
+| POST | `/password` | Cambio voluntario de la propia contraseña (pide la actual) |
 | GET | `/modulos` | Módulos activos del sistema (requiere sesión; sin rol de módulo), para el Inicio y la Administración |
+
+### Administración (`/api/admin`) — solo rol global `admin`
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/usuarios` | Lista todos los usuarios con su rol global, módulos y CUIL |
+| GET | `/padron` | Busca personas en el padrón de empleados (por apellido/nombre/CUIL), marcando quién ya tiene usuario |
+| POST | `/usuarios` | Alta de una o varias personas del padrón; la identidad es el CUIL (email sintético) y la contraseña inicial es el CUIL |
+| PATCH | `/usuarios/{usuario_id}` | Cambia nombre, rol global o activo/inactivo de un usuario |
+| PUT | `/usuarios/{usuario_id}/modulos` | Reemplaza los módulos y roles de módulo de un usuario |
+| POST | `/usuarios/{usuario_id}/password` | Resetea la contraseña de un usuario al CUIL (salida de emergencia si perdió el acceso) |
 
 ### Preliquidación (`/api/preliquidacion`)
 | Método | Ruta | Descripción |
@@ -290,7 +305,7 @@ Lista completa e interactiva en `/docs`. Resumen:
 
 ## Notas importantes
 
-- **Tabla `usuarios`**: versionada en `migrations/core/000_usuarios.sql`; `core/001` la actualiza (rol admin|usuario).
+- **Tabla `usuarios`**: versionada en `migrations/core/000_usuarios.sql`; `core/001` la actualiza (rol admin|usuario). El PR 5 (Administración de usuarios) no agrega ninguna migración: `email` ya era `UNIQUE NOT NULL`, y el alta desde el padrón reusa esa columna con el email sintético `<cuil>@usuarios.laasturianasrl.com.ar` (ver `app/core/identidad.py`).
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
 - **Migraciones**: SQL manual versionado, organizado por carpeta. `migrations/core/` (núcleo, compartido por todos los módulos): `000_usuarios.sql`, `001_usuario_modulo.sql`. `migrations/preliquidacion/`: `000_esquema_base.sql` (tiene FK a `usuarios`) y luego ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad. ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible. En una base nueva, el orden es `core/000` → `preliquidacion/000` → `core/001` → las `ws` que falten según el estado. Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
 - **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción), `docs/modulos/GUIA-MODULOS.md` (cómo incorporar un módulo).

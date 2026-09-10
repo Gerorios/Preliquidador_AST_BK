@@ -15,6 +15,8 @@ from typing import Optional
 from datetime import datetime, timedelta
 import unicodedata
 
+from app.core.identidad import normalizar_cuil
+
 
 QUERY_TODOS_NUEMPLEADOS = text("""
     SELECT empresa, legajo, apellido_nombre, cuil, categoria,
@@ -256,6 +258,51 @@ class SueldosService:
         self._cargar_cache()
         todos = [r for registros in self._por_legajo.values() for r in registros]
         return sorted(todos, key=lambda r: r["apellido_nombre"])
+
+    def buscar_personas(self, texto: str, limite: int = 50) -> dict:
+        """Personas del padrón que matchean por apellido/nombre o por prefijo de
+        CUIL, una entrada por persona con todos sus empleos (empresa, legajo).
+
+        Corre sobre el cache en memoria (ya cargado para la preliquidación), así
+        que no agrega queries. Las personas sin CUIL en el padrón salen con
+        cuil=None: la Administración las muestra deshabilitadas, porque el CUIL
+        es el identificador del usuario.
+        """
+        self._cargar_cache()
+
+        nombre = _normalizar_nombre(texto)
+        digitos = "".join(c for c in (texto or "") if c.isdigit())
+        if len(nombre) < 3 and len(digitos) < 3:
+            return {"personas": [], "total": 0}
+
+        por_persona: dict[str, dict] = {}
+        for registros in self._por_legajo.values():
+            for r in registros:
+                # El padrón trae algunos CUIL malformados (letras, largo
+                # distinto de 11): se normalizan acá —y no en el cache, que
+                # usa la preliquidación en producción para cruzar por CUIL—
+                # para que el alta los trate igual que a una persona sin
+                # CUIL, en vez de dejarlos pasar como si fueran usables.
+                cuil_normalizado = normalizar_cuil(r["cuil"])
+                coincide = (
+                    (len(nombre) >= 3 and nombre in _normalizar_nombre(r["apellido_nombre"]))
+                    or (len(digitos) >= 3 and cuil_normalizado is not None and cuil_normalizado.startswith(digitos))
+                )
+                if not coincide:
+                    continue
+                # Sin CUIL (o inválido) no hay persona única: se agrupa por
+                # empresa+legajo para que aparezca igual en el buscador
+                # (deshabilitada).
+                clave = cuil_normalizado or f"legajo:{r['empresa']}:{r['legajo']}"
+                persona = por_persona.setdefault(clave, {
+                    "cuil": cuil_normalizado,
+                    "apellido_nombre": r["apellido_nombre"],
+                    "empleos": [],
+                })
+                persona["empleos"].append({"empresa": r["empresa"], "legajo": r["legajo"]})
+
+        personas = sorted(por_persona.values(), key=lambda p: p["apellido_nombre"])
+        return {"personas": personas[:limite], "total": len(personas)}
 
     def verificar_conexion(self) -> bool:
         try:

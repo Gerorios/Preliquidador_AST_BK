@@ -83,11 +83,12 @@ app.add_middleware(
 )
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
-from app.core import auth, asistente  # noqa: E402
+from app.core import auth, asistente, administracion  # noqa: E402
 from app.core.auth import get_usuario_actual  # noqa: E402
 from app.core.models import Usuario  # noqa: E402
 
 app.include_router(auth.router)
+app.include_router(administracion.router)
 for modulo in activos():
     for r in modulo.routers:
         app.include_router(r)

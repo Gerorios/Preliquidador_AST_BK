@@ -91,3 +91,23 @@ def test_requiere_modulo_sin_permiso_mensaje(cliente):
     r = cliente(_u()).get("/operativo")
     assert r.status_code == 403
     assert r.json()["detail"] == "No tenés permiso para esta operación"
+
+
+def test_requiere_admin_deja_pasar_al_admin_y_rechaza_al_resto():
+    from fastapi import HTTPException
+    from types import SimpleNamespace
+    from app.core.permisos import requiere_admin
+
+    dependencia = requiere_admin()
+
+    admin = SimpleNamespace(rol="admin", modulos=[])
+    assert dependencia(usuario=admin) is admin
+
+    for rol in ("usuario", None):
+        comun = SimpleNamespace(rol=rol, modulos=[])
+        try:
+            dependencia(usuario=comun)
+        except HTTPException as e:
+            assert e.status_code == 403
+        else:
+            raise AssertionError(f"rol {rol!r} no debería pasar requiere_admin")
