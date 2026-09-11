@@ -41,6 +41,16 @@ Un ADR no es un resumen de lo que pasó: es un compromiso. No se escribe sin el 
 - Las **migraciones no se difieren**: van en el mismo PR que el código que las necesita.
 - Anotar lo que se va haciendo en la memoria del proyecto, en cada hito.
 
+## Commits
+
+- **Formato**: `<tipo>(<scope>): <descripción>`, en español, sin punto final, hasta 72
+  caracteres. Vocabulario **cerrado**: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
+  Si hace falta uno nuevo, se pregunta antes.
+- **Cuerpo sólo si hubo una decisión real** (se eligió A sobre B, hay un riesgo, hay un
+  porqué que el diff no muestra). Nunca de relleno: el agente `bitacora` lee estos mensajes
+  y archiva como decisión lo que encuentre ahí.
+- El detalle y las barandas, en `.claude/skills/commit/SKILL.md` (`/commit`).
+
 ## Base de datos
 
 `db_propia` es **compartida por 4+ sistemas**; sólo las tablas del preliquidador son
