@@ -240,3 +240,34 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
 **Estado**
 - Deploy: no, no requiere.
 - Migraciones: ninguna.
+
+## 2026-09-11 — La excepción de la bitácora, escrita
+
+**Mergeado**
+- PR #45 (backend_preliquidacion) — deja por escrito que `docs/BITACORA.md` se
+  commitea directo a `main` y que va una entrada por día de merge; toca
+  `CLAUDE.md` y `.claude/agents/bitacora.md` (el contrato del agente escribano).
+  Incluye además el commit con las entradas de los PRs #43 y #44.
+
+**Por frontera**
+- Docs: sólo documentación; nada de código, migraciones ni dependencias.
+
+**Decisiones**
+- Escribir la excepción en los dos lugares (`CLAUDE.md` y el contrato del
+  agente). Porqué: es donde alguien la va a buscar, y con el motivo al lado para
+  que en unos meses no parezca que la regla se aflojó sin razón. La tentación a
+  evitar es extenderla: cualquier otro archivo sigue yendo por rama.
+- Una entrada por día de merge, no una por tanda. Porqué: al anotar #43 y #44,
+  mergeados en días distintos, el contrato no decía qué hacer con varios merges
+  y habrían quedado en una sola entrada fechada arbitrariamente.
+- No ajustar el tamaño de las entradas. Porqué: con tres escritas (151, 40 y 34
+  líneas) la duda que dejó el PR #43 quedó medida — la larga cerraba una etapa
+  con dos PRs grandes, un PR normal cae en 35-40 líneas.
+
+**Estado**
+- Deploy: no, no requiere.
+- Migraciones: ninguna.
+
+**Nota**
+- La entrada anterior del 2026-09-11 anotaba esta decisión como "no figura en
+  ningún PR". Este PR la deja registrada.
