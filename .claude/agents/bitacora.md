@@ -54,6 +54,15 @@ Append al final, agrupado por fecha (más nueva abajo). Nunca reescribas ni
 borres entradas viejas: si algo quedó desactualizado, la entrada nueva lo
 corrige, la vieja queda como registro de lo que se creía entonces.
 
+**Va directo a `main`, sin rama ni PR.** Es la única excepción a "rama antes de
+editar" del proyecto. Porqué: si la anotación fuera por PR, cada merge generaría
+un segundo merge para anotar el primero, en cadena infinita. Vale sólo para este
+archivo, que es append-only y no ejecuta nada. Vos escribís el archivo; el commit
+lo hace quien te despachó.
+
+Una entrada por **día de merge**, no una por tanda: si los merges pendientes caen
+en días distintos, van entradas separadas.
+
 Formato de una entrada:
 
 ```
