@@ -311,3 +311,58 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
 **Pendiente**
 - `scripts/hooks/instalar.sh` corre una vez por clon: cada clon nuevo del front
   queda sin el hook hasta que alguien lo instale.
+
+## 2026-09-11 — La convención de commits, por escrito
+
+**Mergeado**
+- PR #47 (backend_preliquidacion) — skill `/commit` con la convención de
+  mensajes del repo (`.claude/skills/commit/SKILL.md`, nuevo), resumen de tres
+  viñetas en `CLAUDE.md`, corrección de la línea de `docs/modulos/GUIA-MODULOS.md`
+  que nombraba cuatro tipos, y el plan en `docs/superpowers/plans/`.
+
+**Por frontera**
+- Docs: lo único tocado. Nada de aplicación, ni núcleo, ni módulos, ni front.
+  La convención queda fijada como `<tipo>(<scope>): <descripción>` en español,
+  con vocabulario cerrado a seis tipos (`feat`, `fix`, `refactor`, `docs`,
+  `test`, `chore`).
+
+**Decisiones**
+- La regla central de la skill es **cuándo NO poner cuerpo**: sólo si hubo una
+  decisión real. Porqué: el agente `bitacora` lee estos mensajes además del
+  cuerpo del PR para archivar el porqué de cada merge, así que un cuerpo escrito
+  para cumplir un formato se convierte en una decisión que nadie tomó, archivada
+  como si alguien la hubiera tomado. Vacío es mejor que relleno.
+- La convención se escribe en dos lados a propósito: el detalle en la skill, tres
+  viñetas en `CLAUDE.md`. Porqué: la skill sólo se carga cuando se la invoca y
+  `CLAUDE.md` se carga siempre; sin esas líneas la convención no regiría para
+  quien commitea sin pasar por `/commit`.
+- La guía de módulos se corrigió en el mismo PR. Porqué: es lo que lee Pitu y
+  nombraba cuatro tipos, así que la convención quedaba bifurcada apenas se
+  escribió la skill.
+- `## Prohibido` va primero en el archivo de la skill y no al final. Porqué:
+  `.claude/settings.local.json` permite `Bash(git *)` y `Bash(git push *)` sin
+  prompt, y esa lista es lo único que frena un push o un `amend` accidental.
+- Descartado: instalar la skill de eagerworks (`npx skills add`). Su aporte
+  principal es agrupar los cambios en varios commits por unidad lógica, que acá
+  no se quiere, y traía cuatro archivos de referencia, un `.eagerworks/commit.json`
+  con namespace ajeno y un puntero a una skill `create-pr` inexistente. Se le
+  tomaron tres ideas: inferir el vocabulario del historial propio, pasar el
+  mensaje por HEREDOC y declarar por escrito los límites de mutación.
+- Descartado por ahora: un hook `commit-msg` que valide el formato. Sería la
+  única verificación permanente y real —hoy todo depende de que el agente lea la
+  skill— pero se reabre si en un mes aparecen commits fuera de convención.
+- Descartado: que la skill cree el PR o pushee. Termina en el commit.
+
+**Estado**
+- Deploy: no. Nada que deployar.
+- Migraciones: ninguna.
+- Tests: 277 passed (108s). Los 32 errores del primer intento fueron por el
+  `.env` faltante en el worktree, no por el cambio.
+- Dogfooding: los cuatro commits del PR se escribieron con las reglas de la skill,
+  y los acentos por HEREDOC en Windows salieron correctos.
+
+**Pendiente**
+- Sin probar: la baranda de la skill que crea la rama sola cuando se está en
+  `main`. No se puede ensayar desde un worktree, porque git no permite tener
+  `main` checkouteada dos veces. Se prueba en el checkout principal o la primera
+  vez que se dispare de verdad.
