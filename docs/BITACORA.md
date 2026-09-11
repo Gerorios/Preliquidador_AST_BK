@@ -165,3 +165,78 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
   separado del Excel y el módulo absorbe; y las máquinas de terceros que el
   sistema de compras tiene y la app del taller no, entre ellas la de un
   transportista cuyos repuestos hoy no llegan a su recibo.
+
+## 2026-09-10 — Agente escribano: la bitácora empieza a existir
+
+**Mergeado**
+- PR #43 (backend_preliquidacion) — agrega el agente `bitacora`, el comando
+  `/bitacora`, un hook `post-merge` que avisa si entraron PRs sin anotar, su
+  instalador, y `docs/BITACORA.md` con la primera entrada ya escrita.
+
+**Por frontera**
+- Docs y herramientas de trabajo: seis archivos nuevos, ninguno de aplicación.
+  Sin migraciones, sin dependencias, sin tocar núcleo ni módulos.
+
+**Decisiones**
+- El disparador es el merge a `main`, no la apertura del PR. Porqué: un PR
+  abierto es una propuesta, no una decisión; al diseñarlo había cuatro PRs
+  abiertos que se solapaban en 7 archivos y sin orden de merge decidido, y un
+  agente disparado por apertura habría anotado como verdad dos estados
+  incompatibles. Descartado: disparar al abrir el PR.
+- Dos niveles de autonomía: `docs/BITACORA.md` lo escribe el agente solo,
+  `MEMORY.md` y `memory/*.md` van siempre con OK humano. Porqué: la bitácora es
+  append-only y un error queda como línea fea que la entrada siguiente corrige;
+  la memoria se carga como contexto en cada sesión, así que un error ahí se
+  vuelve verdad sin que nadie lo note.
+- El porqué sale del cuerpo del PR y nunca se deduce del diff; si no está
+  escrito, el agente anota "Porqué no registrado en el PR". Porqué: es
+  preferible una bitácora con huecos honestos a una con porqués inventados que
+  después se citan como ciertos.
+- `.gitattributes` fuerza LF en los hooks. Porqué: en Windows con `autocrlf`, un
+  clon nuevo bajaba `post-merge` con CRLF y `sh` rechaza un shebang con `\r`.
+
+**Estado**
+- Deploy: no, no requiere.
+- Migraciones: ninguna.
+- La primera entrada se auditó a mano contra el código (archivos nuevos, 6
+  endpoints `/api/admin`, `MODULOS`, prefijo `terceros_`, 277 tests).
+
+**Pendiente**
+- Los diez porqués sin registrar que dejó la primera corrida siguen abiertos
+  (ver la entrada del 2026-09-10 anterior y el cuerpo del PR #43).
+- El instalador de hooks corre por clon: `sh scripts/hooks/instalar.sh`.
+
+## 2026-09-11 — CLAUDE.md, para que la bitácora se consulte
+
+**Mergeado**
+- PR #44 (backend_preliquidacion) — agrega `CLAUDE.md` (~90 líneas), único
+  archivo del PR.
+
+**Por frontera**
+- Docs: nada de código, migraciones ni dependencias.
+
+**Decisiones**
+- Nombrar `docs/BITACORA.md` desde `CLAUDE.md`. Porqué: `CLAUDE.md` se carga en
+  cada sesión y la bitácora no; sin algo que la nombre, el porqué archivado no
+  se consulta nunca. El PR #43 construyó el archivo y no el reflejo de abrirlo.
+- Bajar a `CLAUDE.md` las reglas de trabajo que vivían sólo en la memoria del
+  asistente (rama antes de editar, no deployar sin OK, smoke tests reales,
+  verificación adversarial, migraciones no diferibles). Porqué: depender de la
+  memoria es frágil, y esas reglas existen porque el sistema está en producción
+  y lo usan personas reales.
+- Incluir la tabla de los cuatro documentos (`CONTEXT.md`, `docs/adr/`,
+  `docs/BITACORA.md`, `docs/modulos/GUIA-MODULOS.md`). Porqué: se confunden
+  entre sí y la confusión tiene consecuencias — un ADR es un compromiso con
+  alternativas descartadas, no un resumen, y no se escribe sin el usuario.
+- Dejarlo corto y sólo con lo no deducible leyendo el repo (trampas del entorno,
+  reglas pedidas por el usuario, qué documento es cuál). Porqué: un `CLAUDE.md`
+  largo se ignora.
+- **Las entradas de esta bitácora se commitean directo a `main`, sin rama ni
+  PR.** Porqué: si fueran por PR, cada anotación generaría otro merge que
+  anotar, en cadena infinita. Es la única excepción a "rama antes de editar" y
+  vale sólo para `docs/BITACORA.md`, que es append-only y no ejecuta nada.
+  (Decisión tomada en conversación el 2026-09-11, no figura en ningún PR.)
+
+**Estado**
+- Deploy: no, no requiere.
+- Migraciones: ninguna.
