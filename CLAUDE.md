@@ -31,7 +31,8 @@ Un ADR no es un resumen de lo que pasó: es un compromiso. No se escribe sin el 
 
 ## Reglas de trabajo (el usuario las pidió explícitamente)
 
-- **Rama antes de editar.** Nunca commitear directo a `main`.
+- **Rama antes de editar.** Nunca commitear directo a `main`. Única excepción:
+  `docs/BITACORA.md`, que va directo (ver abajo).
 - **NUNCA deployar al VPS sin OK explícito del usuario.** El sistema está en producción en
   https://preliquidacion.laasturianasrl.com.ar y lo usan personas reales. Mergear a `main`
   no es deployar.
@@ -71,6 +72,16 @@ sh scripts/hooks/instalar.sh      # hooks de git, uno por clon
 cuerpos de PR siempre con `--body-file` (nunca `--body` inline).
 
 `main` exige una aprobación y no se puede auto-aprobar: el merge va con `--admin`.
+
+## La bitácora se commitea directo a `main`
+
+Es la única excepción a "rama antes de editar", y vale **sólo** para `docs/BITACORA.md`.
+
+Porqué: si la anotación fuera por PR, cada merge generaría un segundo merge para anotar el
+primero, que a su vez habría que anotar. Cadena infinita. Y el archivo es append-only y no
+ejecuta nada, así que un error ahí es una línea fea en un diario, no un bug.
+
+No extender la excepción a ningún otro archivo. La regla existe para proteger el código.
 
 ## Al escribir un PR
 
