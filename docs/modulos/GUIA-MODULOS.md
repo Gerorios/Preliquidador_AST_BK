@@ -398,7 +398,7 @@ Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque s
 ## 7. Cómo trabajamos sobre el mismo código
 
 1. **Rama por feature**, desde `main` actualizado: `feature/terceros-<tema>` (por ejemplo `feature/terceros-consulta-viajes`). Nunca se trabaja sobre `main` directamente; está protegida y no acepta push.
-2. **Commits chicos y descriptivos**, en español, con prefijo del tipo: `feat(terceros): ...`, `fix(terceros): ...`, `docs(terceros): ...`, `test(terceros): ...`. Un commit hace una cosa.
+2. **Commits chicos y descriptivos**, en español, con prefijo del tipo: `feat(terceros): ...`, `fix(terceros): ...`, `docs(terceros): ...`, `test(terceros): ...`. Un commit hace una cosa. Los tipos son seis en total (esos cuatro más `refactor` y `chore`) y la convención completa —cuándo el mensaje lleva cuerpo y cuándo no— está en `.claude/skills/commit/SKILL.md`, que se invoca con `/commit`.
 3. **PR contra `main`** cuando la feature está completa y verificada (tests verdes, build OK, migraciones incluidas, docs del módulo al día). El PR explica qué hace, por qué, cómo se verificó y qué queda pendiente.
 4. **Revisión y merge: solo Gero.** Ningún PR se auto-mergea. Los PR que tocan el núcleo los revisa quien no los escribió.
 5. **Deploy: solo Gero**, con la regla escrita en `docs/DEPLOY.md`: pushear a GitHub no toca producción; producción cambia únicamente cuando Gero ejecuta el deploy tras autorizarlo.
