@@ -271,3 +271,43 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
 **Nota**
 - La entrada anterior del 2026-09-11 anotaba esta decisión como "no figura en
   ningún PR". Este PR la deja registrada.
+
+## 2026-09-11 — Los dos agujeros del circuito de la bitácora, tapados
+
+**Mergeado**
+- PR #46 (backend_preliquidacion) — agrega a `CLAUDE.md` la regla de preguntar
+  al usuario, después de cada merge a `main`, si correr `/bitacora`.
+- PR #42 (frontend_preliquidacion) — lleva al front el mismo circuito: hook
+  `post-merge`, `scripts/hooks/instalar.sh`, `.gitattributes` (LF en los hooks)
+  y un `CLAUDE.md` propio.
+
+**Por frontera**
+- Docs y herramientas de trabajo: nada de aplicación en ninguno de los dos
+  repos. Sin dependencias, sin build, sin módulos ni núcleo tocados.
+
+**Decisiones**
+- Preguntar en una línea y no insistir si el usuario dice que no. Porqué: el
+  hook `post-merge` sólo avisa cuando la máquina del usuario actualiza `main` y
+  ese aviso se pierde entre la salida de otros comandos; y una pregunta larga
+  repetida en cada merge se empieza a ignorar en una semana. Si dice que no, la
+  próxima corrida cubre ese merge igual con su fecha correcta.
+- El front avisa pero no escribe: el agente `bitacora` vive en el backend.
+  Porqué: si se mergeaba algo sólo del front no avisaba nadie y el porqué se
+  perdía — justo donde más se pierde, porque las decisiones de interfaz salen de
+  una prueba manual y no de un diff (caso citado: el login con `type="email"`
+  que rechazaba un CUIL con el backend en verde).
+- **La bitácora sigue siendo una sola, en el backend.** Porqué: dos diarios para
+  un mismo sistema serían dos versiones de la misma historia, y cuando no
+  coincidan no se sabría cuál vale. (Decisión tomada en conversación el
+  2026-09-11, no figura en el cuerpo de ningún PR.)
+- `.gitattributes` en el front no es cosmético. Porqué: en Windows con
+  `autocrlf`, un clon nuevo bajaría `post-merge` con CRLF y `sh` rechaza un
+  shebang terminado en `\r`. Mismo bug que ya había aparecido en el backend.
+
+**Estado**
+- Deploy: no, ninguno de los dos lo requiere.
+- Migraciones: ninguna.
+
+**Pendiente**
+- `scripts/hooks/instalar.sh` corre una vez por clon: cada clon nuevo del front
+  queda sin el hook hasta que alguien lo instale.
