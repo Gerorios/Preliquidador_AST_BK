@@ -73,6 +73,19 @@ cuerpos de PR siempre con `--body-file` (nunca `--body` inline).
 
 `main` exige una aprobación y no se puede auto-aprobar: el merge va con `--admin`.
 
+## Después de cada merge a `main`, preguntar por la bitácora
+
+Apenas se mergea un PR, **preguntarle al usuario si corro `/bitacora`**. Una línea, no un
+párrafo: "quedó sin anotar el PR #N, ¿lo anoto?". Si dice que no, seguir sin insistir — no
+se pierde nada, la próxima corrida lo cubre igual.
+
+Porqué: el hook `post-merge` sólo avisa cuando la máquina del usuario actualiza `main`, y ese
+aviso se pierde fácil entre la salida de otros comandos. La pregunta es el respaldo. Sin
+ella, el diario se atrasa hasta que alguien se acuerda, que es exactamente como mueren estos
+archivos.
+
+Nunca correr `/bitacora` sin preguntar: escribe en `main` directo.
+
 ## La bitácora se commitea directo a `main`
 
 Es la única excepción a "rama antes de editar", y vale **sólo** para `docs/BITACORA.md`.
