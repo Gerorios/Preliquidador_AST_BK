@@ -96,7 +96,7 @@ Encontradas midiendo sobre los datos reales durante el grilling. Todas cambian n
 
 | Qué | Estado hoy |
 |---|---|
-| **Fecha de los repuestos** | La consulta usa la fecha del encabezado del movimiento, pero la correcta es la de la descarga a la maquinaria. Medido sobre 2026 (1.318 líneas de terceros): el 69% tiene las dos fechas distintas y el **46% cae en otra quincena** según cuál se use. Ninguna cambia de año, al menos en las líneas cuyo encabezado cae en 2026. La consulta ya trae las dos (`fecha` y `fecha_descarga`); el filtro se cambia en la quincena de corte |
+| **Fecha de los repuestos** | La consulta usa la fecha del encabezado del movimiento, pero la correcta es la de la descarga a la maquinaria. Medido sobre las 1.320 líneas de terceros de 2026: el 69% tiene las dos fechas distintas y el **46% cae en otra quincena** según cuál se use. El cruce de año existe pero no cae en 2026: son 60 líneas con encabezado de noviembre de 2025 y descarga en enero de 2026, que se ven recién si la medición incluye 2025. La consulta ya trae las dos (`fecha` y `fecha_descarga`); el filtro se cambia en la quincena de corte |
 | **Seguros** | Se liquidan por un circuito separado del Excel. El módulo los absorbe para que salga todo junto |
 | **Máquinas sin cubrir** | El sistema de compras tiene máquinas de terceros que la app del taller no tiene, entre ellas la de un transportista cuyos repuestos hoy no llegan a su recibo |
 | **Precios inconsistentes** | Con el precio tipeado por fila, hay grupos de viajes idénticos (mismo bus, día, destino y tipo) con dos precios distintos alternados. La tabla de tarifas los elimina |
