@@ -1,6 +1,6 @@
 # Plan de implementación — módulo Liquidación Terceros
 
-**Estado**: etapa 1 hecha (2026-09-10); las demás, diseño acordado sin código. El molde está renombrado y registrado, inactivo.
+**Estado**: etapas 1 y 2 hechas (2026-09-10 y 2026-09-14); las demás, diseño acordado sin código. El molde está renombrado y registrado, inactivo.
 **Fecha de la decisión**: 2026-09-09, sesión de grilling sobre el Excel que hoy resuelve el circuito.
 **Quién lo construye**: Pitu. Revisión y merge, Gero (regla 4 de `GUIA-MODULOS.md`).
 
@@ -132,7 +132,7 @@ Sigue el orden sugerido en la sección 9 de `GUIA-MODULOS.md`: primero lo que se
 | # | Qué | Termina cuando |
 |---|---|---|
 | 1 | ~~Las cuatro consultas dentro del módulo, en SQL parametrizado, con tests que fijan lo que devuelven~~ | **Hecho (2026-09-10).** Ver abajo |
-| 2 | Ingesta y pantallas de solo lectura: viajes, cargas, repuestos y horas de la quincena, con filtros | El liquidador ve los datos en el sistema y confirma que están bien |
+| 2 | ~~Ingesta y pantallas de solo lectura: viajes, cargas, repuestos y horas de la quincena, con filtros~~ | **Hecho (2026-09-14).** Falta que el liquidador las mire y confirme |
 | 3 | **Alertas de cruce** entre los tres sistemas | Empieza la limpieza de los sistemas de origen, guiada por la pantalla |
 | 4 | Tablas propias, migración 001, tarifas y cálculo del neto, con tests de cada regla | Una quincena calcula igual que el Excel |
 | 5 | Importación del histórico congelado y de las tarifas ya tipeadas | 2026 hasta la 1ra de agosto está adentro y concilia |
@@ -179,6 +179,35 @@ los totales:
 
 Lo que la etapa dejó a la vista está en la sección 6, "Salidos de la etapa 1".
 
+### Etapa 2 — cómo quedó (2026-09-14)
+
+El módulo **se activó**: dejó de ser un molde al tener sus primeras pantallas reales, que es
+la condición que fija `CONTEXT.md` en "Módulo activo". Cinco pantallas, todas de solo lectura:
+una portada con el resumen de la quincena y el tablero de horas, y una por conjunto (Viajes,
+Combustible, Repuestos, Horas de taller) con buscador y orden por columna.
+
+**Un endpoint por conjunto, ninguno que los junte.** Hubo un `/resumen` que devolvía las
+cuatro cifras de la portada y se sacó: pedía los cuatro orígenes en serie y tardaba 15
+segundos, que es lo primero que el liquidador ve al entrar. Con cuatro endpoints el navegador
+los pide en paralelo (21,6 s → 12,1 s medidos), cada tarjeta aparece cuando llega la suya —las
+tres primeras en menos de 3 segundos—, el conjunto que falla no voltea a los demás, y al abrir
+su pantalla los datos ya están en caché. El costo es que la portada trae las filas para contar
+cuatro números; a este volumen sale más barato que esperar.
+
+`/horas-taller` sí devuelve dos cosas juntas (`horas` y `estados`) porque salen de la misma
+lectura: el Sheet pesa 1,3 MB y tarda unos seis segundos, y pedirlas por separado lo bajaba
+dos veces.
+
+**Lo que todavía no hace**: no calcula ni guarda nada. Sin tarifas, sin neto, sin recibo. Las
+horas pendientes se muestran con su estado pero no se decide nada con ellas.
+
+**Verificación**: 91 tests nuevos (368 en total, suite completa en verde), `npm run build` sin
+errores, y smoke test real contra las tres bases y el Sheet con el servidor levantado — las
+cuatro rutas responden 200 con los números de la quincena, 401 sin token, 403 con el rol de
+otro módulo y 422 con una fecha que no es inicio de quincena. **Sin probar en el navegador**:
+no hay con qué manejarlo desde acá, así que la interfaz está construida y compilada pero
+nadie la miró andando todavía.
+
 ---
 
 ## 6. Pendientes de confirmar
@@ -218,6 +247,17 @@ Lo que la etapa dejó a la vista está en la sección 6, "Salidos de la etapa 1"
   de estas líneas en las quincenas que el Excel cubre (07-2Q y 08-1Q), porque la hoja `La Falda` solo
   guarda los meses que se fueron pegando. Hay que resolverlo antes de la etapa 5, que importa el
   histórico.
+
+**Salidos de la etapa 2** (2026-09-14)
+- **Una línea de horas de taller desapareció del Sheet**: el 9/09 la 1ra quincena de agosto
+  tenía 54 líneas y 133 horas; hoy tiene 53 y 132,5. La que falta es del 5 de agosto, 0,5 hs,
+  máquina de Franco Muñoz. No fue rechazada —las rechazadas se cuentan y siguen en cero—:
+  se borró. Es una quincena que ya se liquidó. Confirma dos cosas que hasta ahora eran
+  supuestos: que en la app del taller cualquiera puede borrar una línea sin dejar rastro (ver
+  `../taller/ESPECIFICACION-taller.md`, sección 8), y que **la etapa 6 tiene que congelar el
+  recibo al emitirlo**, porque el origen cambia debajo de uno.
+- **Ninguna hora de agosto sigue aprobada**: las 53 que quedan están en `Pendiente`, igual que
+  en la medición de la etapa 1. Refuerza el pendiente de definir quién aprueba y cuándo.
 
 **Sueltos, a resolver leyendo el Excel**
 - Ajustes manuales, detección de duplicados, carga manual de viajes que no vienen del sistema de campo, y el estado de cuenta anual.

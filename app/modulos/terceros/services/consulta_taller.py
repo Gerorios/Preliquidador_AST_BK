@@ -30,11 +30,14 @@ import openpyxl
 
 from app.core.config import settings
 from app.core.quincena import calcular_rango_quincena
+from app.modulos.terceros.services import quincenas
 
 HOJA_MAESTRO = "Maestro_Maquinas"
 HOJA_HORAS = "BD_Horas"
 
 PROPIEDAD_TERCEROS = "TERCEROS"
+ESTADO_APROBADO = "APROBADO"
+ESTADO_PENDIENTE = "PENDIENTE"
 ESTADO_RECHAZADO = "RECHAZADO"
 
 # Columnas que se leen de cada hoja, con el nombre tal como lo escribe el Sheet.
@@ -110,8 +113,6 @@ def _detectar_tercero(nombre: str | None) -> str:
     return corte or s
 
 
-def _quincena_mes(f: date) -> str:
-    return f"{f.month:02d}-{1 if f.day <= 15 else 2}Q"
 
 
 def _filas(hoja, columnas: tuple[str, ...]) -> list[dict]:
@@ -136,8 +137,17 @@ def _filas(hoja, columnas: tuple[str, ...]) -> list[dict]:
     ]
 
 
-def leer_horas(libro: bytes, quincena: date | None = None) -> list[dict]:
-    """Toda la lógica, sin red. `quincena` None devuelve el Sheet completo."""
+def _leer_crudo(libro: bytes, quincena: date | None = None) -> list[dict]:
+    """Las horas de la quincena sobre máquinas de terceros, **con las
+    rechazadas incluidas**.
+
+    Es la base de las dos vistas que el módulo necesita y que difieren sólo en
+    eso: el listado de lo que se cobra (que las deja afuera, porque una hora
+    rechazada no se cobra nunca) y el tablero de estados (que las cuenta, para
+    poder reclamarle al taller antes de liquidar). Una sola pasada: si el
+    cruce con el maestro o el recorte de la quincena se hicieran dos veces,
+    las dos vistas podrían dejar de hablar del mismo conjunto.
+    """
     wb = openpyxl.load_workbook(io.BytesIO(libro), read_only=True, data_only=True)
     try:
         maestro = _filas(wb[HOJA_MAESTRO], COLUMNAS_MAESTRO)
@@ -156,8 +166,6 @@ def leer_horas(libro: bytes, quincena: date | None = None) -> list[dict]:
 
     resultado = []
     for h in horas:
-        if str(h["Estado"] or "").strip().upper() == ESTADO_RECHAZADO:
-            continue
         maquina = terceros.get(_id_maquina(h["id_maquina"]))
         if maquina is None:          # no es de un tercero: no se cobra
             continue
@@ -169,7 +177,7 @@ def leer_horas(libro: bytes, quincena: date | None = None) -> list[dict]:
         nombre_maquina = maquina["nombre_maquinaria"]
         resultado.append({
             "fecha": fecha,
-            "quincena_mes": _quincena_mes(fecha),
+            "quincena_mes": quincenas.etiqueta(fecha),
             "anio": fecha.year,
             "tercero": _detectar_tercero(nombre_maquina),
             "maquina": nombre_maquina,
@@ -194,6 +202,34 @@ def leer_horas(libro: bytes, quincena: date | None = None) -> list[dict]:
     return resultado
 
 
+def _estado(fila: dict) -> str:
+    return str(fila["estado"] or "").strip().upper()
+
+
+def leer_horas(libro: bytes, quincena: date | None = None) -> list[dict]:
+    """Las horas que se pueden cobrar. Sin red. `quincena` None devuelve todo."""
+    return [h for h in _leer_crudo(libro, quincena) if _estado(h) != ESTADO_RECHAZADO]
+
+
+def contar_estados(libro: bytes, quincena: date) -> dict:
+    """Cuántas horas hay en cada estado, para el tablero de la quincena.
+
+    Cuenta las rechazadas, que el listado no muestra: la pregunta que responde
+    no es "qué cobro" sino "qué falta que el taller resuelva antes de que yo
+    liquide" (plan-terceros.md, sección 2.4).
+    """
+    filas = _leer_crudo(libro, quincena)
+    def horas_de(estado):
+        return sum(f["horas_total"] for f in filas if _estado(f) == estado)
+    return {
+        "aprobadas": sum(1 for f in filas if _estado(f) == ESTADO_APROBADO),
+        "pendientes": sum(1 for f in filas if _estado(f) == ESTADO_PENDIENTE),
+        "rechazadas": sum(1 for f in filas if _estado(f) == ESTADO_RECHAZADO),
+        "horas_aprobadas": horas_de(ESTADO_APROBADO),
+        "horas_pendientes": horas_de(ESTADO_PENDIENTE),
+    }
+
+
 class ConsultaTallerService:
     """Las horas de taller de una quincena. `libro` permite pasar un xlsx ya
     bajado —un test, o una lectura que se reusa— en vez de salir a la red."""
@@ -201,6 +237,15 @@ class ConsultaTallerService:
     def __init__(self, libro: bytes | None = None):
         self._libro = libro
 
+    def _bajar(self) -> bytes:
+        """Se baja una sola vez por instancia: las dos vistas de una misma
+        pantalla no tienen por qué pedir el Sheet dos veces."""
+        if self._libro is None:
+            self._libro = descargar_libro()
+        return self._libro
+
     def horas_quincena(self, quincena: date) -> list[dict]:
-        libro = self._libro if self._libro is not None else descargar_libro()
-        return leer_horas(libro, quincena)
+        return leer_horas(self._bajar(), quincena)
+
+    def estados_quincena(self, quincena: date) -> dict:
+        return contar_estados(self._bajar(), quincena)

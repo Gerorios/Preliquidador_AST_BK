@@ -151,6 +151,10 @@ FRONTEND_URL=http://localhost:5173
 # Asistente (opcional — vacío lo deshabilita)
 OPENAI_API_KEY=
 ASISTENTE_MODELO=gpt-4o-mini
+
+# App del taller (opcional — vacío deshabilita las horas de taller de
+# Liquidación Terceros; el resto del sistema anda igual)
+TALLER_SHEET_URL=
 ```
 
 > ⚠️ El bloque `DB_SUELDOS_*` es obligatorio: la aplicación no arranca sin él.
@@ -295,6 +299,19 @@ Lista completa e interactiva en `/docs`. Resumen:
 | GET | `/indicadores` | KPIs de control: $/hora jornal + descomposición de la variación |
 | GET | `/control-plantas` | Control Plantas vs Jornal por quincena (lectura) |
 | GET | `/control-tancadas` | Control Tancadas vs Jornal por quincena (lectura) |
+
+### Liquidación Terceros (`/api/terceros`) — rol `operador` en el módulo `terceros`
+Solo lectura: muestran lo que llega de los sistemas de origen para una quincena. No escriben en ninguna base — el módulo no tiene tablas propias hasta la etapa 4 de su plan.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/quincenas` | Quincenas elegibles del selector, calculadas por calendario |
+| GET | `/viajes` | Viajes de la quincena (sistema de campo) |
+| GET | `/combustible` | Cargas de combustible de la quincena (sistema de campo) |
+| GET | `/repuestos` | Repuestos y reparaciones sobre máquinas de terceros (La Falda) |
+| GET | `/horas-taller` | Horas sobre máquinas de terceros + recuento por estado (Sheet de la app del taller; 502 si no se puede leer) |
+
+Todos toman `?quincena=AAAA-MM-DD` con el primer día de la quincena (el 1 o el 16); otra fecha devuelve 422. No hay un endpoint que junte los cuatro: se pedían en serie y tardaban 15 segundos, y el navegador los pide en paralelo.
 
 ### Asistente (`/api/asistente`)
 | Método | Ruta | Descripción |

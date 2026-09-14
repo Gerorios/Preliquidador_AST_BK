@@ -1,4 +1,4 @@
-"""Molde del módulo Liquidación Terceros: inactivo en el registro, pero su router funciona si se monta."""
+"""El módulo en el registro, y quién entra a sus endpoints."""
 from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -15,8 +15,9 @@ def _cliente(usuario):
     return TestClient(app)
 
 
-def test_modulo_inactivo():
-    assert MODULO.clave == "terceros" and MODULO.activo is False
+def test_modulo_activo():
+    """Se activó en la etapa 2, al tener su primera pantalla real."""
+    assert MODULO.clave == "terceros" and MODULO.activo is True
 
 
 def test_operador_de_terceros_ve_el_estado():
