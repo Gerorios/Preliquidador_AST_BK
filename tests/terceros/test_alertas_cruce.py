@@ -241,3 +241,10 @@ def test_el_impacto_se_escribe_en_singular_cuando_es_una_sola():
     assert a[0].impacto.startswith("1 línea de")
     b = de_tipo(detectar(mc=[compras(961, "COMEDOR")], lineas={961: 3}), "sin_par_en_taller")
     assert b[0].impacto.startswith("3 líneas de")
+
+
+def test_el_verbo_concuerda_con_el_numero_de_lineas():
+    una = de_tipo(detectar(mc=[compras(1, "X")], mt=[taller(2, "X")], lineas={1: 1}), "id_duplicado")
+    assert "1 línea de repuestos este año queda de un lado solo" == una[0].impacto
+    varias = de_tipo(detectar(mc=[compras(1, "X")], mt=[taller(2, "X")], lineas={1: 5}), "id_duplicado")
+    assert "5 líneas de repuestos este año quedan de un lado solo" == varias[0].impacto

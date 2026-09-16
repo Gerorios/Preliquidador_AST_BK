@@ -166,7 +166,8 @@ def _ids_duplicados(compras, taller, lineas) -> tuple[list[Alerta], set[tuple[st
                     "puente entre los dos: mientras estén duplicados, los repuestos y las "
                     "horas de esta máquina no se juntan en el mismo recibo."
                 ),
-                impacto=(f"{_lineas(n)} de repuestos este año quedan de un lado solo"
+                impacto=(f"{_lineas(n)} de repuestos este año "
+                         f"{'queda' if n == 1 else 'quedan'} de un lado solo"
                          if n else "Todavía sin movimiento este año"),
                 referencias=[f"compras:{c['id_maquina']}", f"taller:{t['id_maquina']}"],
             ))
