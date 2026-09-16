@@ -115,3 +115,33 @@ class HorasTallerResponse(BaseModel):
     """
     horas: list[HoraTallerResponse]
     estados: EstadoHorasResponse
+
+
+class AlertaResponse(BaseModel):
+    """Una cosa que no cruza entre dos sistemas, y qué hacer con ella."""
+    tipo: str
+    severidad: str          # alta | media | baja
+    sistema: str            # dónde se corrige, no dónde se detectó
+    titulo: str
+    detalle: str
+    impacto: str | None = None      # por qué importa, en números
+    referencias: list[str] = []     # 'compras:981', 'taller:990', 'campo:216'
+
+
+class MaquinariaCampoResumen(BaseModel):
+    """Cuánta maquinaria de terceros del sistema de campo se puede cruzar.
+
+    Va como medición y no como una alerta por máquina porque la causa es una
+    sola y no se arregla fila por fila: al sistema de campo le falta el dueño
+    como campo propio.
+    """
+    total: int
+    cruzan: int
+    sin_patente: int
+    con_patente_sin_par: int
+
+
+class AlertasResponse(BaseModel):
+    anio: int               # el año sobre el que se midió el movimiento
+    alertas: list[AlertaResponse]
+    maquinaria_campo: MaquinariaCampoResumen

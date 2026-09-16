@@ -230,6 +230,31 @@ def contar_estados(libro: bytes, quincena: date) -> dict:
     }
 
 
+def leer_maestro(libro: bytes) -> list[dict]:
+    """El maestro de máquinas del Sheet, para las Alertas de cruce.
+
+    Trae las de terceros con su id, que es el que debería coincidir con el del
+    sistema de compras. No filtra por quincena: un problema de cruce no es de
+    una quincena, es del maestro.
+    """
+    wb = openpyxl.load_workbook(io.BytesIO(libro), read_only=True, data_only=True)
+    try:
+        filas = _filas(wb[HOJA_MAESTRO], COLUMNAS_MAESTRO)
+    finally:
+        wb.close()
+    return [
+        {
+            "id_maquina": _id_maquina(f["id_maquina"]),
+            "nombre": f["nombre_maquinaria"],
+            "tipo": f["Tipo"],
+            "propiedad": str(f["propiedad"] or "").strip().upper(),
+        }
+        for f in filas
+        if str(f["propiedad"] or "").strip().upper() == PROPIEDAD_TERCEROS
+        and _id_maquina(f["id_maquina"]) is not None
+    ]
+
+
 class ConsultaTallerService:
     """Las horas de taller de una quincena. `libro` permite pasar un xlsx ya
     bajado —un test, o una lectura que se reusa— en vez de salir a la red."""
@@ -249,3 +274,6 @@ class ConsultaTallerService:
 
     def estados_quincena(self, quincena: date) -> dict:
         return contar_estados(self._bajar(), quincena)
+
+    def maestro(self) -> list[dict]:
+        return leer_maestro(self._bajar())

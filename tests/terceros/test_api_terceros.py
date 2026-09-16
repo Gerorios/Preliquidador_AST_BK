@@ -60,6 +60,7 @@ class ExternaFalsa:
     def __init__(self, error=None):
         self.error = error
         self.quincenas_pedidas = []
+        self.anios_pedidos = []
 
     def _responder(self, quincena, filas):
         self.quincenas_pedidas.append(quincena)
@@ -75,6 +76,30 @@ class ExternaFalsa:
 
     def repuestos(self, quincena):
         return self._responder(quincena, [REPUESTO])
+
+    # ─── maestros, para /alertas ───
+    def maquinarias_terceros_campo(self):
+        if self.error:
+            raise self.error
+        return [{"id": 1, "nombre": "MANITOU N0046 BARRIOS", "descripcion": "TERCEROS;;;;"}]
+
+    def colectivos_campo(self):
+        if self.error:
+            raise self.error
+        return [{"id": 216, "nombre": "DEMARCO, OSCAR", "patente": "KPH682",
+                 "patente_descripcion": "HFU440", "propiedad": "TERCEROS", "descripcion": ""}]
+
+    def maquinas_terceros_compras(self):
+        if self.error:
+            raise self.error
+        return [{"id_maquina": 981, "nombre": "FUMIGADORA 400 LTS", "codigo": "",
+                 "propiedad": "TERCEROS"}]
+
+    def lineas_por_maquina(self, anio):
+        self.anios_pedidos.append(anio)
+        if self.error:
+            raise self.error
+        return {981: 24}
 
 
 class TallerFalso:
@@ -94,6 +119,12 @@ class TallerFalso:
         if self.error:
             raise self.error
         return self.estados
+
+    def maestro(self):
+        if self.error:
+            raise self.error
+        return [{"id_maquina": 990, "nombre": "FUMIGADORA 400 LTS", "tipo": "",
+                 "propiedad": "TERCEROS"}]
 
 
 LIQUIDADOR = SimpleNamespace(
@@ -148,7 +179,7 @@ def test_sin_quincena_no_se_adivina_ninguna(cliente):
 
 # ─── Quién entra ────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-taller"])
+@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-taller", "alertas"])
 def test_un_operador_de_otro_modulo_no_entra(ruta):
     otro = SimpleNamespace(id=2, nombre="X", email="x@t.com", rol="usuario", activo=True,
                            modulos=[SimpleNamespace(modulo="preliquidacion", rol="operador")])
@@ -244,3 +275,61 @@ def test_un_error_de_programacion_no_se_disfraza_de_origen_caido():
     c = _con_origenes(taller=TallerFalso(error=TypeError("bug nuestro")))
     with pytest.raises(TypeError):
         c.get(f"/api/terceros/horas-taller?quincena={Q}")
+
+
+# ─── Alertas de cruce ───────────────────────────────────────────────────────
+
+def test_las_alertas_no_llevan_quincena_pero_si_año(cliente):
+    """Un problema de cruce es del maestro, no de un período. El año sirve para
+    una sola cosa: saber si una máquina descolgada tuvo movimiento."""
+    c, externa, _ = cliente
+    r = c.get("/api/terceros/alertas?anio=2026")
+    assert r.status_code == 200
+    assert r.json()["anio"] == 2026
+    assert externa.anios_pedidos == [2026]
+    assert externa.quincenas_pedidas == []
+
+
+def test_sin_año_se_usa_el_corriente(cliente):
+    from datetime import date
+    c, externa, _ = cliente
+    assert c.get("/api/terceros/alertas").json()["anio"] == date.today().year
+
+
+def test_las_alertas_dicen_en_que_sistema_se_corrigen(cliente):
+    """Es el punto de la pantalla: no señalar el error, sino a quién avisarle."""
+    c, _, _ = cliente
+    alertas = c.get("/api/terceros/alertas?anio=2026").json()["alertas"]
+    assert alertas
+    assert all(a["sistema"] for a in alertas)
+    assert all(a["severidad"] in ("alta", "media", "baja") for a in alertas)
+
+
+def test_las_alertas_vienen_de_la_mas_urgente_a_la_menos(cliente):
+    c, _, _ = cliente
+    orden = {"alta": 0, "media": 1, "baja": 2}
+    severidades = [a["severidad"] for a in c.get("/api/terceros/alertas?anio=2026").json()["alertas"]]
+    assert severidades == sorted(severidades, key=lambda s: orden[s])
+
+
+def test_el_resumen_de_maquinaria_del_campo_viene_con_las_alertas(cliente):
+    c, _, _ = cliente
+    m = c.get("/api/terceros/alertas?anio=2026").json()["maquinaria_campo"]
+    assert set(m) == {"total", "cruzan", "sin_patente", "con_patente_sin_par"}
+    assert m["total"] == 1 and m["sin_patente"] == 1
+
+
+def test_sin_el_maestro_del_taller_no_se_devuelven_alertas_a_medias():
+    """Sin el maestro del taller toda máquina parecería no tener par: media
+    lista sería falsa, y una alerta falsa hace perder más tiempo que ninguna."""
+    c = _con_origenes(taller=TallerFalso(error=httpx.ConnectError("sin red")))
+    r = c.get("/api/terceros/alertas?anio=2026")
+    assert r.status_code == 502
+    assert "no respondió" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("anio", [1999, 2101])
+def test_un_año_disparatado_se_rechaza(anio, cliente):
+    c, _, _ = cliente
+    assert c.get(f"/api/terceros/alertas?anio={anio}").status_code == 422
+

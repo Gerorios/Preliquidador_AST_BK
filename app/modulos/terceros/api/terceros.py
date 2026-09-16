@@ -1,9 +1,16 @@
 """Endpoints del módulo Liquidación Terceros.
 
-Etapa 2 del plan: los cuatro conjuntos de una quincena, de **solo lectura**.
-No hay POST ni PATCH todavía y no se escribe en ninguna base: el módulo no
-tiene tablas propias hasta la etapa 4. Cada pedido va a los orígenes y
-devuelve lo que hay.
+Todo **de solo lectura**: no hay POST ni PATCH y no se escribe en ninguna base.
+El módulo no tiene tablas propias hasta la etapa 4 de su plan; cada pedido va a
+los orígenes y devuelve lo que hay.
+
+Dos cosas distintas conviven acá:
+
+  - Los cuatro **conjuntos de una quincena** (etapa 2): viajes, combustible,
+    repuestos y horas de taller. Llevan `?quincena=`.
+  - Las **alertas de cruce** (etapa 3): lo que no se encuentra entre los tres
+    sistemas de origen. No llevan quincena, porque un problema de cruce es del
+    maestro y no de un período.
 
 Un endpoint por conjunto y **ninguno que los junte**. Hubo uno —un `/resumen`
 que devolvía las cuatro cifras de la portada— y se sacó: pedía los cuatro
@@ -27,13 +34,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db_externa, get_db_sueldos
 from app.modulos.terceros.permisos import requiere_operativo
 from app.modulos.terceros.schemas import (
+    AlertasResponse,
     CargaCombustibleResponse,
     HorasTallerResponse,
     QuincenaResponse,
     RepuestoResponse,
     ViajeResponse,
 )
-from app.modulos.terceros.services import quincenas
+from app.modulos.terceros.services import alertas_cruce, quincenas
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
 from app.modulos.terceros.services.consulta_taller import (
     ConsultaTallerService,
@@ -155,3 +163,43 @@ def listar_horas_taller(
         )
     except FALLAS_DE_ORIGEN as e:
         raise HTTPException(status_code=502, detail=_mensaje_origen(e))
+
+
+@router.get("/alertas", response_model=AlertasResponse)
+def alertas_de_cruce(
+    anio: int = Query(default_factory=lambda: date.today().year, ge=2020, le=2100,
+                      description="Año sobre el que se mide si una máquina tuvo movimiento"),
+    externa: ConsultaExternaService = Depends(get_consulta_externa),
+    taller: ConsultaTallerService = Depends(get_consulta_taller),
+):
+    """Lo que no cruza entre los tres sistemas de origen.
+
+    No lleva quincena: un problema de cruce es del maestro, no de un período.
+    El año sí, y sólo para una cosa: saber si una máquina descolgada tuvo
+    movimiento, que es lo que distingue una alerta accionable de una fila
+    muerta.
+
+    Si la app del taller no contesta, no se devuelve media verdad: sin su
+    maestro, la mitad de las alertas serían falsas —toda máquina parecería no
+    tener par—, así que se responde 502 y se dice por qué.
+    """
+    try:
+        maquinas_taller = taller.maestro()
+    except FALLAS_DE_ORIGEN as e:
+        raise HTTPException(status_code=502, detail=_mensaje_origen(e))
+
+    maquinas_compras = externa.maquinas_terceros_compras()
+    maquinarias_campo = externa.maquinarias_terceros_campo()
+    colectivos = externa.colectivos_campo()
+    lineas = externa.lineas_por_maquina(anio)
+
+    alertas = alertas_cruce.detectar(
+        maquinarias_campo, colectivos, maquinas_compras, maquinas_taller, lineas
+    )
+    return AlertasResponse(
+        anio=anio,
+        alertas=[vars(a) for a in alertas],
+        maquinaria_campo=alertas_cruce.resumen_maquinaria_campo(
+            maquinarias_campo, maquinas_compras, maquinas_taller
+        ),
+    )

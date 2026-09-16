@@ -276,6 +276,62 @@ ORDER BY ru.fecha, ru.maquina
 """)
 
 
+
+# ─── Maestros, para las Alertas de cruce (etapa 3) ──────────────────────────
+# No alimentan ninguna liquidación: sirven para comparar los tres sistemas
+# entre sí y avisar dónde no se encuentran. Ver services/alertas_cruce.py.
+
+QUERY_MAQUINARIAS_TERCEROS = text("""
+SELECT id,
+       nombre,
+       descripcion,
+       TRIM(SUBSTRING_INDEX(descripcion, ';', 1)) AS propiedad
+FROM laa_maquinarias
+WHERE estado <> 9
+  AND UPPER(TRIM(SUBSTRING_INDEX(descripcion, ';', 1))) LIKE '%%TERCERO%%'
+ORDER BY nombre
+""")
+
+# Todos los colectivos, no sólo los de terceros: dos de las alertas son
+# justamente sobre los que tienen la propiedad mal escrita o vacía, que por
+# definición no se pueden filtrar por propiedad.
+QUERY_COLECTIVOS = text("""
+SELECT id,
+       nombre,
+       patente,
+       descripcion,
+       TRIM(SUBSTRING_INDEX(descripcion, ';', 1))  AS propiedad,
+       TRIM(SUBSTRING_INDEX(descripcion, ';', -1)) AS patente_descripcion
+FROM laa_colectivos
+WHERE estado <> 9
+ORDER BY nombre
+""")
+
+QUERY_MAQUINAS_TERCEROS_COMPRAS = text("""
+SELECT m.id_maquina,
+       m.nombre,
+       m.codigo,
+       g.grupo1_nombre AS propiedad
+FROM nuemaquinas m
+LEFT JOIN nuegrupo1maquinas g ON m.grupo1_id = g.grupo1_id
+WHERE UPPER(TRIM(g.grupo1_nombre)) LIKE '%%TERCERO%%'
+ORDER BY m.nombre
+""")
+
+# Cuántas líneas de descarga tuvo cada máquina en el año. Es lo que separa una
+# alerta accionable de una fila muerta: sin movimiento no hay nada que
+# reclamarle a nadie todavía.
+QUERY_LINEAS_POR_MAQUINA = text("""
+SELECT pp.id_maquina, COUNT(*) AS lineas
+FROM movdet pp
+LEFT JOIN movim xx ON pp.numero = xx.numero
+WHERE pp.borrado <> 'S'
+  AND xx.borrado <> 'S'
+  AND (xx.deposito = 4 OR xx.deposito = 0)
+  AND YEAR(xx.fecha) = :anio
+GROUP BY pp.id_maquina
+""")
+
 # Las columnas que devuelve cada consulta. Están acá y no solo en el SQL porque
 # son el contrato de la etapa 1: son las mismas que hoy tienen las hojas de
 # aterrizaje del Excel, y los tests las fijan para que un cambio en el SELECT
@@ -326,5 +382,27 @@ class ConsultaExternaService:
         resultado = db.execute(
             query, {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}
         )
+        columnas = list(resultado.keys())
+        return [dict(zip(columnas, fila)) for fila in resultado.fetchall()]
+
+    # ─── Maestros, para las Alertas de cruce ────────────────────────────────
+
+    def maquinarias_terceros_campo(self) -> list[dict]:
+        return self._sin_parametros(self.db_externa, QUERY_MAQUINARIAS_TERCEROS)
+
+    def colectivos_campo(self) -> list[dict]:
+        return self._sin_parametros(self.db_externa, QUERY_COLECTIVOS)
+
+    def maquinas_terceros_compras(self) -> list[dict]:
+        return self._sin_parametros(self.db_sueldos, QUERY_MAQUINAS_TERCEROS_COMPRAS)
+
+    def lineas_por_maquina(self, anio: int) -> dict[int, int]:
+        """Cuántas líneas de repuestos tuvo cada máquina en el año."""
+        resultado = self.db_sueldos.execute(QUERY_LINEAS_POR_MAQUINA, {"anio": anio})
+        return {fila[0]: fila[1] for fila in resultado.fetchall() if fila[0] is not None}
+
+    @staticmethod
+    def _sin_parametros(db: Session, query) -> list[dict]:
+        resultado = db.execute(query)
         columnas = list(resultado.keys())
         return [dict(zip(columnas, fila)) for fila in resultado.fetchall()]

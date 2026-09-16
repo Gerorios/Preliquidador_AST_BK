@@ -1,6 +1,6 @@
 # Plan de implementación — módulo Liquidación Terceros
 
-**Estado**: etapas 1 y 2 hechas (2026-09-10 y 2026-09-14); las demás, diseño acordado sin código. El molde está renombrado y registrado, inactivo.
+**Estado**: etapas 1, 2 y 3 hechas (2026-09-10, 09-14 y 09-16); las demás, diseño acordado sin código. El módulo está activo desde la etapa 2.
 **Fecha de la decisión**: 2026-09-09, sesión de grilling sobre el Excel que hoy resuelve el circuito.
 **Quién lo construye**: Pitu. Revisión y merge, Gero (regla 4 de `GUIA-MODULOS.md`).
 
@@ -133,7 +133,7 @@ Sigue el orden sugerido en la sección 9 de `GUIA-MODULOS.md`: primero lo que se
 |---|---|---|
 | 1 | ~~Las cuatro consultas dentro del módulo, en SQL parametrizado, con tests que fijan lo que devuelven~~ | **Hecho (2026-09-10).** Ver abajo |
 | 2 | ~~Ingesta y pantallas de solo lectura: viajes, cargas, repuestos y horas de la quincena, con filtros~~ | **Hecho (2026-09-14).** Falta que el liquidador las mire y confirme |
-| 3 | **Alertas de cruce** entre los tres sistemas | Empieza la limpieza de los sistemas de origen, guiada por la pantalla |
+| 3 | ~~**Alertas de cruce** entre los tres sistemas~~ | **Hecho (2026-09-16).** Falta que empiece la limpieza, que es de otras personas |
 | 4 | Tablas propias, migración 001, tarifas y cálculo del neto, con tests de cada regla | Una quincena calcula igual que el Excel |
 | 5 | Importación del histórico congelado y de las tarifas ya tipeadas | 2026 hasta la 1ra de agosto está adentro y concilia |
 | 6 | Cuenta corriente, estados, emisión y congelado del recibo | Se puede cerrar una quincena completa |
@@ -178,6 +178,44 @@ los totales:
 | `08-1Q` | 756 filas / 667 viajes | 130 filas / 19.387 l | 43 filas / $1.475.648,11 | 54 filas / 133 hs |
 
 Lo que la etapa dejó a la vista está en la sección 6, "Salidos de la etapa 1".
+
+### Etapa 3 — cómo quedó (2026-09-16)
+
+`GET /api/terceros/alertas` y la pantalla **Alertas**. No lleva quincena: un problema de
+cruce es del maestro, no de un período. Sí lleva año, y para una sola cosa — saber si una
+máquina descolgada tuvo movimiento.
+
+Seis tipos de alerta, cada una diciendo **en qué sistema se corrige**, que es lo que el
+liquidador necesita para saber a quién avisarle:
+
+| Tipo | Qué detecta | Hoy |
+|---|---|---|
+| `id_duplicado` | La misma máquina con dos `id_maquina` distintos entre compras y el taller | 3 |
+| `sin_par_en_taller` | Compras le carga repuestos y el taller no la tiene en su maestro | 1 |
+| `sin_par_en_compras` | El taller la tiene como de terceros y compras no la reconoce | 14 |
+| `patente_inconsistente` | El colectivo lleva una patente en su columna y otra en la descripción | 3 |
+| `propiedad_invalida` | La propiedad no dice TERCEROS ni PROPIO | 2 |
+| `dueno_casi_duplicado` | Dos dueños cuyo nombre difiere en una letra | 2 |
+
+**Dos criterios que hacen que la lista sea corta**, y que salieron de medir:
+
+- *Sólo se alerta de lo que alguien puede accionar.* De las 11 máquinas que compras tiene y
+  el taller no, únicamente 2 tuvieron repuestos en el año. Listar las otras 9 entierra las
+  que importan.
+- *La falta estructural no se lista fila por fila.* 43 de las 46 maquinarias de terceros del
+  sistema de campo no cruzan con nada. Eso no son 43 tareas: es una sola, y es cambiar el
+  origen. Va como una medición aparte, arriba de la lista.
+
+**Una excepción deliberada a "nada se resuelve por parecido"**: cuando una máquina no tiene
+par, la alerta sugiere la ficha del otro sistema cuyo nombre más se le parece (umbral 0,85).
+No cruza nada ni decide nada — agrega la frase "quizá sea esta", que es la diferencia entre
+una tarea que alguien puede hacer y un misterio. Caso real: «COMEDOR CITRSVIL N° 1» del
+taller ahora dice que probablemente sea la 961 de compras, con el nombre mal tipeado.
+
+**Verificación**: 38 tests nuevos (406 en total, suite completa en verde), `npm run build`
+sin errores, y smoke real con el servidor levantado contra las tres bases y el Sheet —
+`/alertas` responde 200 en 4,6 s con 25 alertas, 401 sin token, 403 con el rol de otro
+módulo y 422 con un año disparatado. **Sin probar en el navegador**, como las de la etapa 2.
 
 ### Etapa 2 — cómo quedó (2026-09-14)
 
@@ -258,6 +296,22 @@ nadie la miró andando todavía.
   recibo al emitirlo**, porque el origen cambia debajo de uno.
 - **Ninguna hora de agosto sigue aprobada**: las 53 que quedan están en `Pendiente`, igual que
   en la medición de la etapa 1. Refuerza el pendiente de definir quién aprueba y cuándo.
+
+**Salidos de la etapa 3** (medidos el 2026-09-16)
+- **El puente entre compras y el taller ya está roto.** Se suponía que el `id_maquina` era
+  común a los dos sistemas; hay 3 máquinas con el mismo nombre y distinto id, y una de ellas
+  —FUMIGADORA 400 LTS CITRUSVIL 570— tiene 27 líneas de repuestos este año. Mientras estén
+  duplicadas, sus repuestos y sus horas no se juntan en el mismo recibo. Es lo primero a
+  corregir antes de la etapa 4.
+- **La patente no sirve como puente para maquinaria: cruzan 3 de 46.** El resto no tiene
+  patente en ninguno de los dos sistemas. Es el número que respalda el pedido de la sección
+  2.1 — que el sistema de campo traiga el dueño (o un id) como campo propio. Sin eso, la
+  maquinaria de terceros del sistema de campo no se puede cruzar con nada, y no hay
+  heurística que lo arregle.
+- **Un colectivo tiene la patente de otro dueño.** DEMARCO, OSCAR lleva KPH682 en su
+  columna y HFU440 en la descripción, y HFU440 es de SALOMOM, FELIPE. Hay tres casos así.
+- **SALOMOM, FELIPE y SALOMON, FELIPE** son dos fichas con un colectivo cada una. Si son la
+  misma persona, está recibiendo dos recibos.
 
 **Sueltos, a resolver leyendo el Excel**
 - Ajustes manuales, detección de duplicados, carga manual de viajes que no vienen del sistema de campo, y el estado de cuenta anual.

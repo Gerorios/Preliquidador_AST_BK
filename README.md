@@ -310,8 +310,9 @@ Solo lectura: muestran lo que llega de los sistemas de origen para una quincena.
 | GET | `/combustible` | Cargas de combustible de la quincena (sistema de campo) |
 | GET | `/repuestos` | Repuestos y reparaciones sobre máquinas de terceros (La Falda) |
 | GET | `/horas-taller` | Horas sobre máquinas de terceros + recuento por estado (Sheet de la app del taller; 502 si no se puede leer) |
+| GET | `/alertas` | Lo que no cruza entre los tres sistemas de origen, con el sistema donde se corrige cada cosa. Toma `?anio=` (por defecto el corriente) y **no** lleva quincena |
 
-Todos toman `?quincena=AAAA-MM-DD` con el primer día de la quincena (el 1 o el 16); otra fecha devuelve 422. No hay un endpoint que junte los cuatro: se pedían en serie y tardaban 15 segundos, y el navegador los pide en paralelo.
+Los cuatro listados toman `?quincena=AAAA-MM-DD` con el primer día de la quincena (el 1 o el 16); otra fecha devuelve 422. No hay un endpoint que junte los cuatro: se pedían en serie y tardaban 15 segundos, y el navegador los pide en paralelo.
 
 ### Asistente (`/api/asistente`)
 | Método | Ruta | Descripción |
