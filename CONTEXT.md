@@ -2,7 +2,7 @@
 
 Lenguaje ubicuo del sistema que arma la preliquidación de sueldos de cada quincena a partir de las tareas de campo, aplicándoles los conceptos/precios que define el liquidador. Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
 
-Desde 2026-09 el sistema pasa a ser un **Sistema** con **Módulos** (ver esas entradas): la preliquidación de sueldos es el primer módulo y la liquidación a terceros (fletes y horas de taller) el segundo. Los términos de abajo, salvo los de la sección "Sistema y módulos", pertenecen al módulo de preliquidación.
+Desde 2026-09 el sistema pasa a ser un **Sistema** con **Módulos** (ver esas entradas): la preliquidación de sueldos es el primer módulo y la liquidación a terceros (servicio de fletes y de maquinaria) el segundo. Los términos de abajo, salvo los de la sección "Sistema y módulos", pertenecen al módulo de preliquidación.
 
 ## Sistema y módulos
 

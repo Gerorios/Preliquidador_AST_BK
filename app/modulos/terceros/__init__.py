@@ -14,7 +14,7 @@ from app.modulos.terceros.api import terceros
 routers = [terceros.router]
 MODULO = ModuloInfo(
     clave="terceros", nombre="Liquidación Terceros",
-    descripcion="Liquidación a terceros: fletes y horas de taller.",
+    descripcion="Liquidación a terceros: servicio de fletes y maquinaria.",
     activo=True, routers=tuple(routers),
     etiquetas_rol={"operador": "Liquidador de terceros", "gerente": "Gerente"},
     panel_gerencial=False,

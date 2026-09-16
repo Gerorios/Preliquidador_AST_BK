@@ -2,99 +2,133 @@
 
 Lenguaje ubicuo del módulo **Liquidación Terceros**, el segundo módulo del Sistema (ver "Sistema y módulos" en `CONTEXT.md`). Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
 
-Escrito a partir de la sesión de grilling del 2026-09-09 sobre el Excel que hoy resuelve el circuito. Las decisiones de diseño y el orden de trabajo están en [`plan-terceros.md`](plan-terceros.md); las fuentes originales (el Excel maestro, las consultas de Power Query y los archivos de las estaciones y de seguros) están en `fuentes/`, fuera de git.
+Escrito a partir de la sesión de grilling del 2026-09-09 y revisado el 2026-09-16, cuando apareció el segundo circuito (servicio de maquinaria). Las decisiones de diseño y el orden de trabajo están en [`plan-terceros.md`](plan-terceros.md); las fuentes originales están en `fuentes/`, fuera de git.
 
 ---
 
 ## El módulo
 
 **Liquidación Terceros**:
-El módulo que liquida lo que la empresa le paga y le descuenta a los terceros que le prestan servicio. Cubre dos circuitos que comparten el mismo sujeto que cobra: **Fletes** (traslado de personal a las fincas en colectivos) y **Horas de taller** (mano de obra propia aplicada a maquinaria ajena). No son dos módulos porque las horas de taller son un término del neto del recibo de flete.
-_Avoid_: llamarlo "Fletes" — los fletes son uno de sus dos circuitos, y el más chico en cantidad de terceros.
+El módulo que liquida lo que la empresa le paga y le descuenta a los terceros que le prestan servicio. Cubre dos servicios distintos con el mismo sujeto que cobra y el mismo recibo: el Servicio de flete y el Servicio de maquinaria.
+_Avoid_: llamarlo "Fletes" — el flete es uno de sus dos servicios
 
 **Tercero**:
-La persona o empresa a la que se le liquida: el que cobra los viajes y al que se le descuenta lo que consumió. Puede ser transportista (tiene colectivos), contratista de maquinaria (tiene máquinas que se reparan en el taller), o las dos cosas. Es el sujeto del Recibo y el titular del Saldo.
-_Avoid_: "dueño de colectivo" (deja afuera a los contratistas de maquinaria, que son la mayoría de los terceros del taller), "proveedor"
+La persona o empresa a la que se le liquida: la que cobra por lo que presta y a la que se le descuenta lo que consumió. Es el sujeto del Recibo y el titular del Saldo.
+_Avoid_: "dueño de colectivo" (deja afuera a los de maquinaria), "proveedor"
+
+**Servicio de flete**:
+Un Tercero traslada personal a las fincas con sus Colectivos. Lo que se le paga son los Viajes.
+_Avoid_: "fletes" a secas cuando se habla del módulo entero
+
+**Servicio de maquinaria**:
+Un Tercero pone su Maquinaria a trabajar en las fincas de la empresa. Lo que se le paga son las Horas de servicio.
+_Avoid_: confundirlo con el taller — acá la máquina del Tercero **trabaja**; en el taller la **reparan**
 
 **Colectivo**:
-El vehículo con el que un Tercero traslada personal a las fincas, identificado por su **patente**. Un Tercero puede tener muchos colectivos. En el sistema de campo cada colectivo es una fila cuyo `nombre` es, en realidad, **el nombre de su dueño** — por eso un mismo nombre aparece repetido en tantas filas como vehículos tenga.
+El vehículo con el que un Tercero presta el Servicio de flete, identificado por su **patente**. Un Tercero puede tener muchos. En el sistema de campo cada colectivo es una fila cuyo `nombre` es, en realidad, el nombre de su dueño.
 _Avoid_: usar "colectivo" para hablar del dueño, aunque el sistema de campo lo haga
 
 **Maquinaria de tercero**:
-Máquina (tractor, cargadora, pulverizadora, elevador) que pertenece a un Tercero y que se repara en el taller de la empresa. Existe en tres sistemas a la vez con tres identificadores distintos y tres nombres distintos; el puente entre ellos es el **id del sistema de campo**, no el nombre.
+Máquina (tractor, cargadora, pulverizadora, elevador) que pertenece a un Tercero. Participa de los dos lados del recibo: **trabaja** en las fincas (Hora de servicio, se paga) y **se repara** en el taller de la empresa (Hora de reparación y Repuesto, se descuentan).
 
 **Quincena**:
 El período de liquidación, el mismo corte que el resto del Sistema: 1ra = días 1 a 15, 2da = 16 a fin de mes. En el Excel de origen se escribe `MM-1Q` / `MM-2Q`.
 
 ---
 
-## Lo que se liquida
+## Lo que se le paga al Tercero
+
+**Viaje**:
+Un traslado de personal a una finca, cargado por el Supervisor en el sistema de campo con su colectivo, chofer, cliente, finca y capataz. La cantidad puede ser **0,5**: medio viaje es normal.
+
+**Tipo de viaje**:
+Corto o Largo. No es una clave de la Tarifa sino su **resultado**: la misma regla que fija el precio fija el tipo. No se deduce del destino — un mismo cliente y finca tiene viajes de los dos tipos.
+
+**Hora de servicio**:
+Hora que una Maquinaria de tercero trabajó en una finca de la empresa, cargada en el sistema de campo junto con su cliente, finca y tarea. Es lo que se le paga al dueño por el Servicio de maquinaria.
+_Avoid_: "hora de máquina" (es el nombre de una Unidad base, no del hecho), "hora de taller"
+
+---
+
+## Lo que se le descuenta al Tercero
+
+**Carga de combustible**:
+Litros que un Colectivo cargó en una estación habilitada, respaldados por un **Vale**. Solo alcanza al Servicio de flete.
+
+**Vale**:
+El comprobante físico que el Supervisor le entrega al chofer y sin el cual no puede cargar combustible. Su número es el que identifica la carga en el sistema de campo y el que permite cruzarla contra lo que factura la estación.
+
+**Repuesto**:
+Repuesto, lubricante o reparación que salió del taller de la empresa hacia una Maquinaria de tercero. Su fecha es la de la **descarga a la maquinaria**, no la del encabezado del movimiento ni la de la factura de compra.
+
+**Hora de reparación**:
+Hora que un mecánico de la empresa dedicó a reparar una Maquinaria de tercero, cargada en la app del taller. La hora total incluye preparación y traslado. **Solo se cobran las aprobadas**: una pendiente todavía no se cobra, y una rechazada no se cobra nunca.
+_Avoid_: "hora de taller" (se confundía con la Hora de servicio, que va en el sentido contrario)
+
+**Seguro**:
+Cuota que la empresa le descuenta al Tercero por las pólizas que le cubre. Son de tres clases —del vehículo o la máquina (automotor), del chofer en relación de dependencia, y de accidentes personales— y **se imputan enteras a la 2da quincena del mes**, no se parten.
+_Avoid_: pensar que es solo de los colectivos propios; alcanza a colectivos y a maquinaria de terceros
+
+---
+
+## El Recibo
 
 **Recibo**:
 El documento que se le manda a cada Tercero al cerrar la quincena, con el detalle de lo que se le paga y lo que se le descuenta, el saldo anterior y el total. Es lo que el Tercero usa para emitir su factura. Se emite uno por Tercero y por Quincena, y **una vez emitido queda congelado**: lo que llegue después va al siguiente.
 
-**Recibo de taller**:
-El Recibo de un Tercero que **no** es transportista y por lo tanto no tiene recibo de flete: solo lleva sus horas de taller. Es la mayoría de los terceros del taller.
-
 **Neto a pagar**:
-Lo que resulta del Recibo de flete:
-`Viajes − Combustible − Repuestos − Horas de taller − Seguros + Ajustes`.
-Positivo la empresa le paga al Tercero; negativo el Tercero le debe a la empresa.
-
-**Viaje**:
-Un traslado de personal a una finca, cargado por el Supervisor en el sistema de campo con su colectivo, chofer, cliente, finca y capataz. La cantidad puede ser **0,5** — medio viaje es normal. Es el único componente del neto que se paga; todos los demás se descuentan.
-
-**Carga de combustible**:
-Litros que un colectivo cargó en una estación habilitada, respaldados por un **Vale**. Se descuenta al Tercero al precio por litro que tenga pactado.
-
-**Vale**:
-El comprobante físico que el Supervisor le entrega al chofer y sin el cual no puede cargar combustible. Su número es el que identifica la carga en el sistema de campo y **el que permite cruzarla contra lo que factura la estación**.
-
-**Repuesto**:
-Repuesto, lubricante o reparación que salió del taller de la empresa hacia una Maquinaria de tercero. Se descuenta al dueño de esa máquina. Su fecha es la de la **descarga a la maquinaria**, no la del encabezado del movimiento ni la de la factura de compra.
-
-**Hora de taller**:
-Hora que un mecánico de la empresa dedicó a reparar una Maquinaria de tercero, cargada en la app del taller. Se descuenta al dueño de la máquina, al valor de la hora vigente a la fecha del trabajo. La hora total incluye preparación y traslado. **Solo se cobran las horas aprobadas**: una pendiente todavía no se cobra, y una rechazada no se cobra nunca.
-
-**Seguro**:
-Cuota que la empresa le descuenta al Tercero por las pólizas que le cubre. Son de tres clases — del vehículo o la máquina (automotor), del chofer en relación de dependencia, y de accidentes personales — y llegan en un archivo mensual. **Se imputan enteras a la 2da quincena del mes**, no se parten.
-_Avoid_: pensar que es solo de los colectivos propios de la empresa; alcanza a colectivos y a maquinaria de terceros
+Lo que se le paga por los servicios que prestó, menos lo que consumió:
+`Viajes + Horas de servicio − Combustible − Repuestos − Horas de reparación − Seguros + Ajustes`.
+Positivo la empresa le paga al Tercero; negativo el Tercero le debe. Un Tercero que presta un solo servicio simplemente tiene el otro término en cero; no son dos recibos distintos.
 
 **Ajuste**:
 Corrección manual con signo sobre el Recibo, con motivo. Positivo le paga más, negativo le descuenta.
 
 ---
 
-## Cómo se determina cuánto se paga
+## El Tarifario
+
+**Tarifario**:
+El maestro de precios del módulo: cinco tablas, una por cada cosa que se paga o se descuenta. Todas son **por quincena** y ninguna se deriva de los datos — cada precio se pacta con cada Tercero.
+_Avoid_: buscarle una fórmula a un precio; es una negociación, no un cálculo
 
 **Tarifa de viaje**:
-Regla que el liquidador carga **por quincena** y que determina el Tipo de viaje y el precio. Se define sobre seis dimensiones opcionales —tercero, patente, chofer, cliente, finca y capataz— y la combinación habitual es **tercero + capataz**, porque el capataz identifica adónde va el viaje. No hay ninguna regla que se pueda derivar de los datos: el precio se pacta con cada dueño.
-_Avoid_: buscarle una fórmula; es una negociación, no un cálculo
+Regla que determina el Tipo de viaje y el precio de un Viaje, sobre cuatro dimensiones: tercero, cliente, finca y capataz. La combinación habitual es **tercero + capataz**, porque el capataz identifica adónde va el viaje.
 
-**Tipo de viaje**:
-Corto o Largo. No es una clave de la Tarifa sino su **resultado**: la misma regla que fija el precio fija el tipo. No se deduce del destino — un mismo cliente y finca tiene viajes de los dos tipos.
+**Tarifa de servicio**:
+Regla que determina el precio de una Hora de servicio, sobre cuatro dimensiones: tercero, cliente, finca y tarea. Además de un precio, fija la **Unidad base**.
+
+**Unidad base**:
+Sobre qué hora se calcula una Tarifa de servicio: la **hora de máquina** o la **hora de jornal**. El sistema de campo carga las dos por cada trabajo y no son iguales; cuál se paga es lo pactado con cada Tercero, no una propiedad del dato. Es el mismo término y el mismo criterio que la Unidad base de Preliquidación (ver `CONTEXT.md`).
+_Avoid_: dar por sentado que se paga la hora de máquina
+
+**Precio del combustible**:
+Precio por litro que se le descuenta a un Tercero. No depende de la estación ni del tipo de carga.
+
+**Precio de la hora de reparación**:
+Precio de la hora de mano de obra del taller, por Tercero.
+
+**Precio del seguro**:
+Importe de la cuota de una póliza, por Maquinaria de tercero y dueño. **Lo carga a mano quien tiene a cargo los seguros**, dentro de la app: no llega por archivo ni se deduce de ningún sistema.
 
 **Regla más específica**:
-Cuando dos Tarifas alcanzan al mismo Viaje, gana **la que tiene más dimensiones cargadas**: una regla con más condiciones es una excepción deliberada sobre una más general. Si empatan en cantidad de dimensiones, el viaje queda **ambiguo** y lo resuelve el liquidador; el sistema no elige en silencio.
+Cuando dos Tarifas alcanzan al mismo hecho, gana **la que tiene más dimensiones cargadas**: una regla con más condiciones es una excepción deliberada sobre una más general. Si empatan en cantidad de dimensiones, el hecho queda **ambiguo** y lo resuelve el liquidador; el sistema no elige en silencio.
 
 **Tarifa heredada**:
 Tarifa que vino copiada de otra quincena y todavía no fue confirmada. Se usa igual, pero queda resaltada hasta confirmarse, para no arrastrar un precio viejo sin darse cuenta. (Mismo criterio que el Precio heredado de Preliquidación, ADR-0004.)
 
-**Precio del combustible**:
-Precio por litro que se le descuenta a un Tercero, cargado **por quincena y por tercero**. No depende de la estación ni del tipo de carga.
-
-**Valor de la hora de taller**:
-Precio de la hora de mano de obra, con vigencia desde una fecha. A una hora se le aplica el valor vigente **a la fecha del trabajo**, no el de hoy.
+**Sin tarifa**:
+Un hecho al que ninguna Tarifa alcanza. **No entra al Recibo y no paga cero en silencio**: queda listado aparte hasta que el liquidador le cargue el precio.
 
 ---
 
 ## Cuándo se cobra
 
 **Quincena de imputación**:
-La quincena a la que un gasto pertenece por su fecha.
+La quincena a la que un hecho pertenece por su fecha.
 
 **Quincena efectiva**:
-La quincena en la que un gasto **realmente se cobra o se descuenta**, cuando no es la de su fecha. La carga el liquidador a mano, con **motivo**, y existe por dos razones distintas que conviene no confundir: porque el dato llegó tarde (la gente sigue cargando viajes después de cerrada la quincena, y el recibo sale a los tres días), o porque la empresa **decidió** no descontarle algo a un Tercero esa quincena para ayudarlo. La segunda no se deduce de ninguna fecha.
+La quincena en la que un hecho **realmente se cobra o se descuenta**, cuando no es la de su fecha. La carga el liquidador a mano, con **motivo**, y existe por dos razones que conviene no confundir: porque el dato llegó tarde (la gente sigue cargando después de cerrada la quincena, y el recibo sale a los tres días), o porque la empresa **decidió** no descontarle algo a un Tercero esa quincena para ayudarlo. La segunda no se deduce de ninguna fecha.
 
 **Quincena de liquidación**:
 La que efectivamente se usa para liquidar: la Quincena efectiva si está cargada, si no la de imputación. Es la que filtran todas las cuentas del Recibo.
@@ -103,7 +137,7 @@ La que efectivamente se usa para liquidar: la Quincena efectiva si está cargada
 El momento en que el Recibo se manda al Tercero. Cierra esa quincena para ese Tercero y **congela** el documento: lo que se corrija o llegue después no cambia lo ya enviado, aparece en el Recibo siguiente. Se puede reabrir, con motivo.
 
 **Llegada tardía**:
-Un gasto cuya fecha de carga es posterior a la emisión del Recibo de su quincena. El sistema la detecta y **propone** diferirla; la decisión es del liquidador.
+Un hecho cuya fecha de carga es posterior a la emisión del Recibo de su quincena. El sistema la detecta y **propone** diferirla; la decisión es del liquidador.
 _Avoid_: "Alcahuete" (así se llamaba la alerta en el Excel)
 
 ---
@@ -121,20 +155,34 @@ Quincena cuyo saldo está en discusión con el Tercero y que por eso **no suma**
 
 ---
 
-## Los sistemas de origen y el cruce
+## Los sistemas de origen
 
 **Sistema de campo**:
-El sistema operativo de la empresa donde los Supervisores cargan los viajes y las cargas de combustible, y donde vive el maestro de colectivos y de maquinaria. **Es el maestro**: si un dato está mal, se corrige ahí y no en el módulo. De solo lectura para el Sistema.
+El sistema donde los Supervisores cargan los Viajes, las Cargas de combustible y las Horas de servicio, y donde vive el maestro de colectivos y de maquinaria. **Es el maestro**: si un dato está mal, se corrige ahí y no en el módulo. De solo lectura para el Sistema.
 
 **Sistema de compras**:
-El sistema donde se registran las salidas de repuestos y las reparaciones hacia las máquinas. De solo lectura. Es la misma base que el Sistema usa como maestro de personal.
+El sistema donde se registran las salidas de Repuestos y las reparaciones hacia las máquinas. De solo lectura. Es la misma base que el Sistema usa como maestro de personal.
 
 **App del taller**:
-La aplicación donde los mecánicos cargan las horas trabajadas sobre cada máquina, con su estado de aprobación. El módulo la lee sola, sin que nadie suba nada.
+La aplicación donde los mecánicos cargan las Horas de reparación sobre cada máquina, con su estado de aprobación. El módulo la lee sola, sin que nadie suba nada.
+
+**Estación de servicio**:
+El comercio donde se cargan los Colectivos. Cada una factura aparte y en su propio formato; lo que factura se sube a la app para contrastarlo contra lo cargado en el Sistema de campo. La que no manda archivo digital se carga a mano.
+
+---
+
+## Los controles
+
+**Verificación**:
+Control que corre sobre los datos de una quincena y avisa de algo que hay que mirar **antes** de liquidar. No corrige nada ni frena la liquidación: señala, dice dónde se corrige y deja la decisión en manos de una persona. Se organizan por fuente de datos, porque el responsable de corregir es distinto en cada una.
+_Avoid_: "alerta" a secas (era el nombre viejo, de cuando el único control era el de cruce)
+
+**Duplicado**:
+Dos cargas del mismo hecho en la misma fuente — el mismo viaje cargado dos veces, la misma carga de combustible, el mismo repuesto. Es la Verificación más común y la que más plata mueve.
 
 **Alerta de cruce**:
-Aviso de que un dato de un sistema no encuentra su par en otro: una máquina sin id del sistema de campo, un tercero de un archivo de seguros que el sistema de campo no conoce, un vale facturado por una estación que no está cargado. **No se adivina ni se descarta en silencio**: se avisa, y se corrige en el sistema que corresponde, con su responsable. Es la regla que gobierna todos los cruces del módulo.
+La Verificación de que un dato de un sistema no encuentra su par en otro: una máquina que el sistema de compras tiene y la app del taller no, un vale facturado por una estación que no está cargado. **Nada se resuelve por parecido**: un cruce que falla genera un aviso accionable, no una adivinanza.
 _Avoid_: resolver un cruce fallido por parecido de nombre
 
 **Conciliación de combustible**:
-Control que compara lo que factura una estación de servicio contra lo que está cargado en el Sistema de campo, cruzando por número de Vale. Devuelve tres listas: lo que la estación facturó y no está cargado (lo que hay que pedirle al Supervisor, y la plata que si no se pierde), lo cargado que la estación no facturó, y lo que está en los dos con litros distintos. No cambia la liquidación: sirve para que el Sistema de campo esté completo antes de emitir los Recibos.
+La Verificación que compara lo que factura una Estación de servicio contra lo cargado en el Sistema de campo, cruzando por número de Vale. Devuelve tres listas: lo facturado y no cargado (la plata que si no se pierde), lo cargado y no facturado, y lo que está en los dos con litros distintos.

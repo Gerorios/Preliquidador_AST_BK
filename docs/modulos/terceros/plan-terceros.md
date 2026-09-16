@@ -1,7 +1,7 @@
 # Plan de implementación — módulo Liquidación Terceros
 
-**Estado**: etapas 1, 2 y 3 hechas (2026-09-10, 09-14 y 09-16); las demás, diseño acordado sin código. El módulo está activo desde la etapa 2.
-**Fecha de la decisión**: 2026-09-09, sesión de grilling sobre el Excel que hoy resuelve el circuito.
+**Estado**: etapas 1 a 3 hechas (2026-09-10, 09-14 y 09-16). El plan se rehízo el **2026-09-16**, cuando apareció el segundo circuito —el servicio de maquinaria— y con él una forma distinta del módulo.
+**Fecha de la decisión original**: 2026-09-09, sesión de grilling sobre el Excel que hoy resuelve el circuito.
 **Quién lo construye**: Pitu. Revisión y merge, Gero (regla 4 de `GUIA-MODULOS.md`).
 
 El glosario del dominio está en [`CONTEXT-terceros.md`](CONTEXT-terceros.md). Las fuentes originales —el Excel maestro, las consultas de Power Query, los archivos de las estaciones y el de seguros— están en `fuentes/`, **fuera de git** (ver `fuentes/LEEME.md`).
@@ -10,308 +10,197 @@ El glosario del dominio está en [`CONTEXT-terceros.md`](CONTEXT-terceros.md). L
 
 ## 1. Qué reemplaza
 
-Un Excel con 19 hojas que hoy arma la liquidación de terceros: cuatro hojas de aterrizaje donde caen las consultas, cuatro hojas de trabajo con las decisiones humanas, una grilla de 53 terceros × 24 quincenas, y las salidas (recibo, recibo de taller, tablero y controles).
+Un Excel con 19 hojas que hoy arma la liquidación de terceros. Lo que el módulo tiene que resolver y el Excel no:
 
-Lo que el módulo tiene que resolver y el Excel no:
-
-- **Un solo lugar** conectado a las fuentes, sin copiar y pegar entre hojas de aterrizaje y hojas de trabajo.
+- **Un solo lugar** conectado a las fuentes, sin copiar y pegar entre hojas.
 - **Precios como tabla**, no tipeados fila por fila. Hoy el precio de cada viaje se escribe a mano: unos 6.600 tipeos por año, con inconsistencias medibles.
-- **Recibos congelados**: hoy un recibo ya enviado cambia solo si alguien corrige un dato viejo en el sistema de origen.
-- **Alertas de cruce** entre los tres sistemas de origen, que hoy se detectan a ojo o no se detectan.
+- **Recibos congelados**: hoy un recibo ya enviado cambia solo si alguien corrige un dato viejo.
+- **Verificaciones** —duplicados y cruces entre sistemas— que hoy se detectan a ojo o no se detectan.
 - **La cuenta corriente en el recibo**: lo del período más lo que se debe, que hoy queda afuera.
 
 ---
 
-## 2. Decisiones tomadas
+## 2. Los dos servicios
 
-### 2.1 Identidad y cruce entre sistemas
+Un Tercero le presta a la empresa uno de dos servicios, o los dos, y **cobra por un solo recibo**:
 
-**El sistema de campo es el maestro** de colectivos, maquinaria y sus dueños. El módulo no mantiene un padrón propio: si un dato está mal, se corrige en el sistema de origen, con su responsable. Esa fue una decisión explícita — no sumar un sistema más para mantener.
+| Servicio | Se le paga | Se le descuenta |
+|---|---|---|
+| **Flete** | Viajes | Combustible, Repuestos, Seguros, Horas de reparación |
+| **Maquinaria** | Horas de servicio | Repuestos, Seguros, Horas de reparación |
 
-**El puente entre sistemas es un identificador, no un nombre.** Los tres sistemas nombran la misma máquina de tres maneras distintas y los ids son autoincrementales independientes, así que unir por texto obliga a tres personas a escribir lo mismo para siempre. En su lugar:
+El combustible solo alcanza al flete. Lo demás es común a los dos.
+
+**La distinción que más importa y la que más fácil se confunde**: la *Hora de reparación* es el mecánico de la empresa arreglando la máquina del Tercero (el Tercero nos debe) y la *Hora de servicio* es la máquina del Tercero trabajando en nuestras fincas (le pagamos). Las dos van en el mismo recibo, con signo opuesto. Antes las dos se llamaban "horas de taller".
+
+**Medido el 2026-09-16**: el servicio de maquinaria son 8.079 horas de máquina en 2026, 911 registros, 13 máquinas — y en pulverizadas otros 103 registros. Los dueños son los mismos que ya aparecen por repuestos y taller.
+
+---
+
+## 3. Decisiones tomadas
+
+### 3.1 Identidad y cruce entre sistemas
+
+**El sistema de campo es el maestro** de colectivos, maquinaria y sus dueños. El módulo no mantiene un padrón propio: si un dato está mal, se corrige en el origen, con su responsable.
+
+**El puente entre sistemas es un identificador, no un nombre.** Medido en la etapa 3: de 46 maquinarias de terceros del sistema de campo, **solo 3 cruzan** con los otros dos sistemas por patente. El resto no tiene patente. Ninguna heurística lo arregla; hace falta un campo.
 
 | Sistema | Qué se le pide |
 |---|---|
-| Sistema de campo | Un token más en `descripcion` de la maquinaria con **el dueño**, para que deje de estar embebido en el nombre. Es lo único que se puede pedir: el sistema no es nuestro y solo admite campos separados por `;` |
-| Sistema de compras | Un campo con **el id de la maquinaria del sistema de campo**. Es nuestro, se puede modificar |
-| App del taller | Una columna con **el id de la maquinaria del sistema de campo** en su maestro de máquinas |
-| Archivo de seguros | Una columna con **el dueño escrito exactamente como lo escribe el sistema de campo**. Lo arma alguien de la empresa, se puede pedir |
+| Sistema de campo | Un token más en `descripcion` de la maquinaria con **el dueño**. Es lo único que admite: campos separados por `;` |
+| Sistema de compras | Un campo con **el id de la maquinaria del sistema de campo**. Es nuestro |
+| App del taller | Una columna con **el id de la maquinaria del sistema de campo** |
 
-El nombre deja de ser pegamento y pasa a ser **control**: el módulo compara los nombres de los tres sistemas y avisa cuando divergen, sin que la liquidación se caiga.
+**Nada se resuelve por parecido.** Un cruce que falla genera una Verificación accionable, no una adivinanza. La única excepción es sugerir, dentro de una alerta que ya existe, cuál podría ser la ficha equivalente — no cruza ni decide nada.
 
-**Nada se resuelve por parecido.** Un cruce que falla genera una alerta accionable ("esta máquina no tiene id del sistema de campo", "este dueño del archivo de seguros no existe"), no una adivinanza.
+### 3.2 El Tarifario
 
-### 2.2 Tarifas
+Cinco tablas, todas **por quincena**, con copia desde la quincena que se elija y marca de heredada (mismo mecanismo del ADR-0004 de Preliquidación).
 
-- **Grano de quincena**, no vigencia por fecha. La razón es operativa: el flujo es cargar los precios de la quincena y, al liquidar la siguiente, **copiarlos desde la quincena que se elija**, dejando vacíos los que no tengan nada. Es el mismo mecanismo del ADR-0004 de Preliquidación, incluida la marca de heredado.
-- **Seis dimensiones opcionales**: tercero, patente, chofer, cliente, finca, capataz. La combinación habitual es tercero + capataz.
-- **El tipo de viaje es resultado de la regla, no clave**: la misma regla fija tipo y precio.
-- **Gana la regla más específica** (más dimensiones cargadas). Empate = viaje ambiguo, lo resuelve el liquidador. Al crear una regla que pisa a otras, se muestra a cuántos viajes les cambia el precio y se pide confirmar, como el ADR-0011.
-- **Sin tarifa, el viaje no entra al recibo**: queda listado aparte, nunca paga cero en silencio.
-- **Combustible**: precio por litro por quincena y por tercero, sin más dimensiones.
-- **Horas de taller**: valor de la hora con vigencia desde una fecha; se aplica el vigente a la fecha del trabajo.
+| Tabla | Dimensiones | Resultado |
+|---|---|---|
+| Viajes | tercero, cliente, finca, capataz | tipo de viaje + precio |
+| Horas de servicio | tercero, cliente, finca, tarea | **unidad base** + precio |
+| Combustible | tercero | precio por litro |
+| Horas de reparación | tercero | precio por hora |
+| Seguros | maquinaria, tercero | importe de la cuota |
 
-### 2.3 Períodos y diferimiento
+- **Gana la regla más específica** (más dimensiones cargadas). Empate = ambiguo, lo resuelve el liquidador.
+- **Sin tarifa, el hecho no entra al recibo**: queda listado aparte, nunca paga cero en silencio.
+- **La unidad base de las horas de servicio la elige el liquidador**: se paga la hora de máquina o la hora de jornal según lo pactado, no según el dato. El sistema de campo carga las dos y no son iguales (8.079 contra 9.312 horas en 2026).
+- **Los seguros no llegan por archivo**: los carga a mano, dentro de la app, quien tiene los seguros a cargo. Es un cambio respecto del plan del 09-09, que asumía un Excel mensual.
 
-- La **quincena efectiva es un campo manual con motivo** en las cuatro tablas de gasto. No se puede derivar: además de la llegada tardía, existe la excepción comercial (no descontarle algo a un tercero esta quincena para ayudarlo).
-- **Emitir el recibo congela** ese recibo y cierra la quincena para ese tercero. Se puede reabrir con motivo.
+### 3.3 Períodos y diferimiento
+
+- La **quincena efectiva es un campo manual con motivo** en todas las tablas de hechos. No se puede derivar: además de la llegada tardía existe la excepción comercial.
+- **Emitir el recibo congela** ese recibo y cierra la quincena para ese Tercero. Se puede reabrir con motivo.
 - El sistema **propone** diferir lo que llegó después de la emisión; la decisión es del liquidador.
-- **Seguros**: se imputan enteros a la 2da quincena del mes. Se unifica también para los colectivos propios de la empresa, que hoy se parten al medio.
+- **Seguros**: se imputan enteros a la 2da quincena del mes.
 
-### 2.4 Horas de taller
+### 3.4 Horas de reparación
 
-- Se cobran **solo las aprobadas**. Las pendientes esperan; cuando se aprueben entran en la quincena que esté abierta. Las rechazadas no se cobran nunca. Con eso no hace falta ningún mecanismo de crédito ni reversión.
-- El tablero de alertas muestra, para la quincena que se está por liquidar, **cuántas aprobadas, pendientes y rechazadas hay**, para poder reclamar antes de liquidar y no después.
-- El módulo lee la app del taller **automáticamente** y guarda su propia copia, para que el recibo no dependa de que la fuente conteste y quede congelado al emitirse.
+- Se cobran **solo las aprobadas**. Las pendientes esperan; cuando se aprueben entran en la quincena que esté abierta. Las rechazadas no se cobran nunca.
+- El tablero muestra cuántas aprobadas, pendientes y rechazadas hay, para reclamar antes de liquidar.
+- El módulo lee la app del taller **automáticamente** y guarda su propia copia, para que el recibo quede congelado al emitirse.
 
-### 2.5 La cuenta y el recibo
+### 3.5 La cuenta y el recibo
 
-- **No hay una sección aparte para cargar pagos.** Se trabaja sobre la grilla de la quincena, con los datos del sistema de campo ya cruzados contra el maestro de precios, marcando los estados ahí mismo. El importe pagado es un campo de la fila; el sistema guarda un **registro de auditoría** de cada cambio, como ya hace Preliquidación con los ajustes manuales.
-- El recibo tiene tres bloques: **esta quincena** (el neto), **saldo anterior** (solo las quincenas que aplican al saldo) y **en revisión** (las que están en discusión, listadas sin sumar).
-- La consulta del detalle de la cuenta es **una pantalla del módulo, para el liquidador**. Los terceros no acceden al sistema.
-- **Salida en PDF**, con un botón para generar toda la grilla de la quincena de una y otro para un tercero puntual. Requiere una dependencia nueva (`reportlab`, pura Python) — a aprobar según la regla de stack de `GUIA-MODULOS.md`.
-- **WhatsApp se manda a mano**, como hoy. Automatizarlo es la API de WhatsApp Business: alta en Meta, plantillas aprobadas, número dedicado y costo por conversación. El sistema saca el trabajo de armar los números, no el de adjuntar un archivo.
+- **No hay una sección aparte para cargar pagos.** Se trabaja sobre la grilla de la quincena, marcando los estados ahí mismo, con registro de auditoría de cada cambio.
+- El recibo tiene tres bloques: **esta quincena** (el neto), **saldo anterior** y **en revisión** (listado sin sumar).
+- **Salida en PDF**, individual y en lote. Requiere `reportlab` — a aprobar según la regla de stack.
+- **WhatsApp se manda a mano**, como hoy.
 
-### 2.6 Conciliación de combustible
+### 3.6 Combustible y estaciones de servicio
 
-- Se cruza por **número de vale**, que en el sistema de campo está presente en el 99% de las cargas y es casi siempre numérico.
-- Cada estación exporta un formato distinto y el vale aparece con otro nombre de columna en cada una. **Se sube el archivo tal cual y se mapean las columnas una vez por estación**; el mapeo queda guardado. Si una estación cambia el formato, el módulo no encuentra la columna y lo dice — falla a la vista, no en silencio.
-- Los archivos traen **toda la empresa**, no solo colectivos: hay que filtrar por patente, normalizando espacios.
-- La **flota liviana queda afuera** del módulo: no hay tercero a quien descontarle.
-- Devuelve tres listas: facturado y no cargado, cargado y no facturado, y diferencias de litros. **No cambia la liquidación**; sirve para que el sistema de campo esté completo antes de emitir.
+- Se cruza por **número de vale**: 1.325 cargas en el año, solo 12 sin vale.
+- Tres estaciones son el 94,6%. **Cada archivo viene con layout distinto**, así que el mapeo de columnas se configura una vez por estación y queda guardado.
+- **La Angostura no manda archivo digital**: llega por foto y se carga a mano en la app.
+- En la grilla de la quincena, cada carga muestra **si su vale aparece en lo facturado por la estación**.
+- La **flota liviana queda afuera**.
 
-### 2.7 Carga del histórico
+### 3.7 Nada de histórico
 
-- **2026 entra congelado tal como se liquidó**, hasta la **1ra quincena de agosto** inclusive, que es hasta donde los números coinciden con los del liquidador. Precios tipeados, seguros como se cobraron, repuestos con la fecha vieja.
-- **El módulo empieza a calcular de verdad desde una quincena de corte** a definir, cuando el desarrollo esté listo.
-- El script de importación **se vuelve a correr** para extender el histórico congelado hasta la quincena del cambio, porque mientras se desarrolla se sigue liquidando en el Excel.
-- Las reglas nuevas **no se aplican retroactivamente**. Un saldo que un tercero ya saldó no se mueve solo. Si interesa cuantificar lo que las reglas viejas dejaron sin cobrar, se hace como **informe aparte**, sin tocar saldos.
-- La conciliación con el liquidador se hace **después** de importar, comparando en pantalla lo que da el módulo contra lo que dice el Excel.
+**No se migra nada.** El módulo arranca liquidando, no importando. La prueba de que funciona es que **agosto de 2026 dé lo mismo que la liquidación hecha a mano**. Esto reemplaza al plan del 09-09, que cargaba 2026 congelado hasta la 1ra de agosto.
+
+Consecuencia: se cae la etapa de importación entera, y con ella la conciliación posterior con el liquidador. Queda un solo criterio de aceptación, más simple y más exigente.
 
 ---
 
-## 3. Correcciones que el módulo introduce
+## 4. Correcciones que el módulo introduce
 
-Encontradas midiendo sobre los datos reales durante el grilling. Todas cambian números respecto del Excel actual, y por eso el histórico entra congelado y estas reglas rigen solo desde el corte.
+Encontradas midiendo sobre los datos reales. Cambian números respecto del Excel.
 
 | Qué | Estado hoy |
 |---|---|
-| **Fecha de los repuestos** | La consulta usa la fecha del encabezado del movimiento, pero la correcta es la de la descarga a la maquinaria. Medido sobre las 1.320 líneas de terceros de 2026: el 69% tiene las dos fechas distintas y el **46% cae en otra quincena** según cuál se use. El cruce de año existe pero no cae en 2026: son 60 líneas con encabezado de noviembre de 2025 y descarga en enero de 2026, que se ven recién si la medición incluye 2025. La consulta ya trae las dos (`fecha` y `fecha_descarga`); el filtro se cambia en la quincena de corte |
-| **Seguros** | Se liquidan por un circuito separado del Excel. El módulo los absorbe para que salga todo junto |
-| **Máquinas sin cubrir** | El sistema de compras tiene máquinas de terceros que la app del taller no tiene, entre ellas la de un transportista cuyos repuestos hoy no llegan a su recibo |
-| **Precios inconsistentes** | Con el precio tipeado por fila, hay grupos de viajes idénticos (mismo bus, día, destino y tipo) con dos precios distintos alternados. La tabla de tarifas los elimina |
-| **Cargas sin origen registrado** | Al menos una estación de servicio no figura en el catálogo del sistema de campo ni tiene una sola carga registrada. A confirmar si esas cargas se registran de otra forma |
+| **Fecha de los repuestos** | La consulta usa la fecha del encabezado del movimiento; la correcta es la de la descarga a la maquinaria. Medido sobre 2026: el 69% de las 1.320 líneas tiene las dos fechas distintas y el **46% cae en otra quincena**. Hay 60 líneas con encabezado de noviembre de 2025 y descarga en enero de 2026 |
+| **Seguros** | Se liquidan por un circuito separado del Excel. El módulo los absorbe |
+| **Máquinas sin cubrir** | El sistema de compras tiene máquinas de terceros que la app del taller no tiene |
+| **Precios inconsistentes** | Con el precio tipeado por fila hay grupos de viajes idénticos con dos precios distintos alternados. El tarifario los elimina |
+| **Ids duplicados** | 3 máquinas existen en compras y en el taller con id distinto; una tiene 27 líneas de repuestos este año que quedan de un lado solo |
 
 ---
 
-## 4. Modelo de datos (borrador)
+## 5. Modelo de datos (borrador)
 
-Todas las tablas con prefijo `terceros_`, en `migrations/terceros/001_crear_tablas.sql`. El padrón de terceros, colectivos y maquinaria **no se replica**: vive en los sistemas de origen.
+Todas con prefijo `terceros_`, en `migrations/terceros/001_crear_tablas.sql`. El padrón de terceros, colectivos y maquinaria **no se replica**.
 
 | Tabla | Qué guarda |
 |---|---|
-| `terceros_viaje` | El viaje traído del sistema de campo, congelado, con su precio y tipo aplicados, el origen (campo o manual), estado, quincena efectiva y motivo |
-| `terceros_carga_combustible` | Ídem para las cargas, con litros, vale, precio aplicado |
-| `terceros_repuesto` | Ídem para las salidas del sistema de compras, con el tercero resuelto y la marca de "no cobrar" con motivo |
-| `terceros_hora_taller` | Copia de las horas aprobadas de la app del taller, con valor de hora aplicado |
-| `terceros_seguro` | Las filas del archivo mensual, con tipo, sujeto, tercero e importe |
-| `terceros_tarifa_viaje` | La regla por quincena: seis dimensiones opcionales → tipo y precio, con marca de heredada |
-| `terceros_precio_combustible` | Precio por litro por quincena y tercero |
-| `terceros_valor_hora_taller` | Valor de la hora con vigencia desde una fecha |
-| `terceros_liquidacion` | La cabecera por tercero y quincena: totales, neto, pagado, saldo, estado, aplica al saldo, emisión |
+| `terceros_liquidacion` | La cabecera por quincena: cuándo se generó, su estado |
+| `terceros_viaje` | El viaje traído del sistema de campo, congelado, con su tarifa aplicada |
+| `terceros_hora_servicio` | Las horas de maquinaria de tercero, con su unidad base y precio aplicados |
+| `terceros_carga_combustible` | Las cargas, con litros, vale y precio aplicado |
+| `terceros_repuesto` | Las salidas del sistema de compras, con el tercero resuelto y la marca de "no cobrar" con motivo |
+| `terceros_hora_reparacion` | Copia de las horas aprobadas de la app del taller, con su precio |
+| `terceros_seguro` | La cuota de cada póliza de la quincena |
+| `terceros_tarifa_viaje` | tercero, cliente, finca, capataz → tipo y precio, con marca de heredada |
+| `terceros_tarifa_servicio` | tercero, cliente, finca, tarea → unidad base y precio |
+| `terceros_precio_combustible` | Precio por litro, por quincena y tercero |
+| `terceros_precio_reparacion` | Precio de la hora de taller, por quincena y tercero |
+| `terceros_precio_seguro` | Importe de la cuota, por maquinaria y tercero |
+| `terceros_recibo` | Por tercero y quincena: totales, neto, pagado, saldo, estado, emisión |
 | `terceros_ajuste` | Ajustes manuales con signo y motivo |
-| `terceros_auditoria` | Registro de cambios manuales, como el `ajuste_manual` de Preliquidación |
-| `terceros_mapeo_estacion` | El mapeo de columnas guardado por estación para la conciliación |
+| `terceros_auditoria` | Registro de cambios manuales |
+| `terceros_estacion_archivo` | Lo facturado por cada estación, con el mapeo de columnas guardado |
 
 ---
 
-## 5. Etapas
+## 6. Etapas
 
-Sigue el orden sugerido en la sección 9 de `GUIA-MODULOS.md`: primero lo que se puede validar contra el Excel, después lo que agrega valor nuevo. **Se construye en paralelo al ajuste de los sistemas de origen**, no después: las pantallas de alertas son la herramienta con la que ese ajuste se hace.
+Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a partir de la 6, es el mismo: **agosto de 2026 da lo mismo que la liquidación hecha a mano**.
 
 | # | Qué | Termina cuando |
 |---|---|---|
-| 1 | ~~Las cuatro consultas dentro del módulo, en SQL parametrizado, con tests que fijan lo que devuelven~~ | **Hecho (2026-09-10).** Ver abajo |
-| 2 | ~~Ingesta y pantallas de solo lectura: viajes, cargas, repuestos y horas de la quincena, con filtros~~ | **Hecho (2026-09-14).** Falta que el liquidador las mire y confirme |
-| 3 | ~~**Alertas de cruce** entre los tres sistemas~~ | **Hecho (2026-09-16).** Falta que empiece la limpieza, que es de otras personas |
-| 4 | Tablas propias, migración 001, tarifas y cálculo del neto, con tests de cada regla | Una quincena calcula igual que el Excel |
-| 5 | Importación del histórico congelado y de las tarifas ya tipeadas | 2026 hasta la 1ra de agosto está adentro y concilia |
-| 6 | Cuenta corriente, estados, emisión y congelado del recibo | Se puede cerrar una quincena completa |
-| 7 | Recibo en PDF, individual y en lote | El liquidador manda una quincena real desde el sistema |
-| 8 | Conciliación de combustible contra las estaciones | Se detecta un vale no cargado antes de emitir |
-| 9 | Panel gerencial bajo `/api/terceros/gerencial` | Al final, con todo lo anterior en uso |
+| 1 | ~~Las cuatro consultas de origen, en SQL parametrizado, con tests~~ | **Hecho (2026-09-10)** |
+| 2 | ~~Ingesta y pantallas de solo lectura de la quincena~~ | **Hecho (2026-09-14)** |
+| 3 | ~~Alertas de cruce entre los tres sistemas~~ | **Hecho (2026-09-16).** Pasan a ser parte de las Verificaciones |
+| 4 | **La quinta consulta: Horas de servicio** (cosechas y pulverizadas), con sus tests | Las horas de agosto coinciden con las que hoy se liquidan a mano |
+| 5 | **Tablas propias, migración 001 y generar la quincena**: el Inicio pasa a ser un dashboard como el de Preliquidación, y generar trae las cinco fuentes y las congela | Se genera agosto y quedan todos los hechos guardados |
+| 6 | **Tarifario**: las cinco tablas, por quincena, con copia y herencia | Se cargan las tarifas de agosto sin tipear fila por fila |
+| 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista | El neto de agosto coincide, tercero por tercero |
+| 8 | **La grilla**: una sola pantalla filtrable por concepto, cliente, tercero y capataz, con exportar a Excel. Reemplaza las cuatro pantallas de la etapa 2 | El liquidador revisa agosto entero desde ahí |
+| 9 | **Verificaciones por fuente**: duplicados en cada origen, más los cruces de la etapa 3 reorganizados | Se detecta un duplicado real antes de liquidar |
+| 10 | **Estaciones de servicio**: subida de archivos con mapeo por estación, carga manual de La Angostura, y la marca del vale en la grilla | Se detecta un vale facturado y no cargado |
+| 11 | **Cuenta corriente y recibo**: saldo, estados, emisión, congelado y PDF | Se manda una quincena real desde el sistema |
+| 12 | **Panel gerencial** bajo `/api/terceros/gerencial` | Al final, con todo lo anterior en uso |
 
-Cada etapa termina con un PR mergeado. A partir de la 2, con el usuario real mirándola.
+### Etapas 1 a 3 — cómo quedaron
 
-### Etapa 1 — cómo quedó (2026-09-10)
+**Etapa 1** (2026-09-10). Las cuatro consultas viven en `app/modulos/terceros/services/`. Tres son SQL contra el sistema de campo y el de compras; la cuarta baja el Sheet de la app del taller con `httpx` + `openpyxl`, sin dependencias nuevas, con la URL en `TALLER_SHEET_URL` fuera del repo. `scripts/validar_terceros_etapa1.py` las compara contra el Excel: `07-2Q` y `08-1Q` coinciden exacto, fila por fila y en los totales.
 
-Las cuatro consultas viven en `app/modulos/terceros/services/`, acotadas a una Quincena en
-lugar de "el año en curso":
+**Etapa 2** (2026-09-14). El módulo se activó al tener sus primeras pantallas. Un endpoint por conjunto y ninguno que los junte: hubo un `/resumen` y se sacó porque pedía los cuatro orígenes en serie y tardaba 15 segundos. Con cuatro, el navegador los pide en paralelo — 21,6 s a 12,1 s medidos. Estas pantallas las reemplaza la etapa 8.
 
-| Consulta | Dónde | Origen |
-|---|---|---|
-| `ConsultaExternaService.viajes` | `consulta_externa.py` | Sistema de campo |
-| `ConsultaExternaService.cargas_combustible` | `consulta_externa.py` | Sistema de campo |
-| `ConsultaExternaService.repuestos` | `consulta_externa.py` | Sistema de compras (La Falda) |
-| `ConsultaTallerService.horas_quincena` | `consulta_taller.py` | Sheet publicado de la app del taller |
-
-La cuarta no es SQL: baja el Sheet publicado y lo lee con `openpyxl`, sin dependencias nuevas
-(`httpx` y `openpyxl` ya estaban). La URL viene por `TALLER_SHEET_URL` y no está en el repo. La
-descarga está separada del parseo para que la lógica se pueda testear sin salir a la red.
-
-**Cómo se comprueba.** `scripts/validar_terceros_etapa1.py` compara las cuatro consultas contra
-las hojas de aterrizaje del Excel. Necesita las bases, la URL del Sheet y el Excel de `fuentes/`,
-así que no es un test: los 47 tests de `tests/terceros/` cubren lo que sí se puede probar sin
-bases —el rango de fechas de cada quincena, a qué base va cada consulta, el contrato de columnas
-y toda la lógica del lector del Sheet.
-
-```bash
-python scripts/validar_terceros_etapa1.py --quincena 2026-08-01
-```
-
-Las dos últimas quincenas que el Excel cubre completas coinciden **exacto**, fila por fila y en
-los totales:
-
-| Quincena | Viajes | Combustible | Repuestos | Horas de taller |
-|---|---|---|---|---|
-| `07-2Q` | 677 filas / 605,25 viajes | 119 filas / 17.505 l | 27 filas / $826.784,208 | 32 filas / 98,5 hs |
-| `08-1Q` | 756 filas / 667 viajes | 130 filas / 19.387 l | 43 filas / $1.475.648,11 | 54 filas / 133 hs |
-
-Lo que la etapa dejó a la vista está en la sección 6, "Salidos de la etapa 1".
-
-### Etapa 3 — cómo quedó (2026-09-16)
-
-`GET /api/terceros/alertas` y la pantalla **Alertas**. No lleva quincena: un problema de
-cruce es del maestro, no de un período. Sí lleva año, y para una sola cosa — saber si una
-máquina descolgada tuvo movimiento.
-
-Seis tipos de alerta, cada una diciendo **en qué sistema se corrige**, que es lo que el
-liquidador necesita para saber a quién avisarle:
-
-| Tipo | Qué detecta | Hoy |
-|---|---|---|
-| `id_duplicado` | La misma máquina con dos `id_maquina` distintos entre compras y el taller | 3 |
-| `sin_par_en_taller` | Compras le carga repuestos y el taller no la tiene en su maestro | 1 |
-| `sin_par_en_compras` | El taller la tiene como de terceros y compras no la reconoce | 14 |
-| `patente_inconsistente` | El colectivo lleva una patente en su columna y otra en la descripción | 3 |
-| `propiedad_invalida` | La propiedad no dice TERCEROS ni PROPIO | 2 |
-| `dueno_casi_duplicado` | Dos dueños cuyo nombre difiere en una letra | 2 |
-
-**Dos criterios que hacen que la lista sea corta**, y que salieron de medir:
-
-- *Sólo se alerta de lo que alguien puede accionar.* De las 11 máquinas que compras tiene y
-  el taller no, únicamente 2 tuvieron repuestos en el año. Listar las otras 9 entierra las
-  que importan.
-- *La falta estructural no se lista fila por fila.* 43 de las 46 maquinarias de terceros del
-  sistema de campo no cruzan con nada. Eso no son 43 tareas: es una sola, y es cambiar el
-  origen. Va como una medición aparte, arriba de la lista.
-
-**Una excepción deliberada a "nada se resuelve por parecido"**: cuando una máquina no tiene
-par, la alerta sugiere la ficha del otro sistema cuyo nombre más se le parece (umbral 0,85).
-No cruza nada ni decide nada — agrega la frase "quizá sea esta", que es la diferencia entre
-una tarea que alguien puede hacer y un misterio. Caso real: «COMEDOR CITRSVIL N° 1» del
-taller ahora dice que probablemente sea la 961 de compras, con el nombre mal tipeado.
-
-**Verificación**: 38 tests nuevos (406 en total, suite completa en verde), `npm run build`
-sin errores, y smoke real con el servidor levantado contra las tres bases y el Sheet —
-`/alertas` responde 200 en 4,6 s con 25 alertas, 401 sin token, 403 con el rol de otro
-módulo y 422 con un año disparatado. **Sin probar en el navegador**, como las de la etapa 2.
-
-### Etapa 2 — cómo quedó (2026-09-14)
-
-El módulo **se activó**: dejó de ser un molde al tener sus primeras pantallas reales, que es
-la condición que fija `CONTEXT.md` en "Módulo activo". Cinco pantallas, todas de solo lectura:
-una portada con el resumen de la quincena y el tablero de horas, y una por conjunto (Viajes,
-Combustible, Repuestos, Horas de taller) con buscador y orden por columna.
-
-**Un endpoint por conjunto, ninguno que los junte.** Hubo un `/resumen` que devolvía las
-cuatro cifras de la portada y se sacó: pedía los cuatro orígenes en serie y tardaba 15
-segundos, que es lo primero que el liquidador ve al entrar. Con cuatro endpoints el navegador
-los pide en paralelo (21,6 s → 12,1 s medidos), cada tarjeta aparece cuando llega la suya —las
-tres primeras en menos de 3 segundos—, el conjunto que falla no voltea a los demás, y al abrir
-su pantalla los datos ya están en caché. El costo es que la portada trae las filas para contar
-cuatro números; a este volumen sale más barato que esperar.
-
-`/horas-taller` sí devuelve dos cosas juntas (`horas` y `estados`) porque salen de la misma
-lectura: el Sheet pesa 1,3 MB y tarda unos seis segundos, y pedirlas por separado lo bajaba
-dos veces.
-
-**Lo que todavía no hace**: no calcula ni guarda nada. Sin tarifas, sin neto, sin recibo. Las
-horas pendientes se muestran con su estado pero no se decide nada con ellas.
-
-**Verificación**: 91 tests nuevos (368 en total, suite completa en verde), `npm run build` sin
-errores, y smoke test real contra las tres bases y el Sheet con el servidor levantado — las
-cuatro rutas responden 200 con los números de la quincena, 401 sin token, 403 con el rol de
-otro módulo y 422 con una fecha que no es inicio de quincena. **Sin probar en el navegador**:
-no hay con qué manejarlo desde acá, así que la interfaz está construida y compilada pero
-nadie la miró andando todavía.
+**Etapa 3** (2026-09-16). `GET /api/terceros/alertas` y la pantalla de alertas, con seis tipos y el sistema donde se corrige cada uno. Dos criterios que salieron de medir: solo se alerta de lo accionable (de 11 máquinas sin par, 2 tenían movimiento) y la falta estructural no se lista fila por fila (43 de 46 maquinarias no cruzan, pero es una sola tarea). Esta pantalla se reorganiza en la etapa 9.
 
 ---
 
-## 6. Pendientes de confirmar
+## 7. Pendientes
+
+**Decisiones**
+- **El rol de quien carga los seguros.** Hoy un módulo tiene `operador` y `gerente`. Quien carga los seguros no es ninguno de los dos: entra a una sola sección y no ve el resto. Agregar un tercer rol toca el núcleo, así que va en un PR aparte (regla 4 de `GUIA-MODULOS.md`).
+- **La quincena de corte**: desde cuándo el módulo liquida en serio.
+- **`reportlab`** como dependencia nueva para el PDF (etapa 11).
+- **Renombrar en el código lo que el glosario ya renombró**: hoy dice `horas_taller` y `/horas-taller` para lo que ahora es Hora de reparación. Conviene hacerlo antes de que crezca.
 
 **Con el sistema de campo y sus responsables**
-- El token del dueño en la descripción de la maquinaria. Hay máquinas de terceros marcadas como propias y al menos un tercero del taller que no existe en el catálogo.
-- Un colectivo aparece con dos dueños distintos: definir si es una venta del vehículo o un error de carga, y qué pasa con el histórico cuando un colectivo cambia de manos.
-- Casos donde se cargó el nombre del capataz en lugar del dueño. Ninguna validación automática los detecta.
+- El token del dueño en la descripción de la maquinaria.
+- Un colectivo aparece con dos dueños distintos: ¿venta del vehículo o error de carga?
+- Casos donde se cargó el nombre del capataz en lugar del dueño.
+- **TRANSPORTE ALFONSO** tiene la descripción entera vacía y 13 viajes en 2026 (todos de BONETTO, abril y mayo). Definir si es TERCEROS, PROPIO o una ficha de baja.
 
 **Con el liquidador**
-- Qué son los números de vale de cuatro dígitos que aparecen en el archivo de una de las estaciones, distintos de los de cinco dígitos que sí cruzan.
-- Si las cargas de la estación que no manda archivo digital se registran de alguna otra forma en el sistema de campo.
-- La quincena de corte a partir de la cual el módulo liquida en serio.
+- Los números de vale de cuatro dígitos de una de las estaciones.
+- Si las cargas de la estación que no manda archivo se registran de alguna otra forma.
 
-**Con quien arma el archivo de seguros**
-- La columna con el dueño escrito como lo escribe el sistema de campo, y el identificador de la maquinaria para las filas que no son de un colectivo.
+**Salidos de la etapa 1**
+- **Ninguna hora de reparación de agosto está aprobada**: las 53 de la 1ra quincena están todas en `Pendiente`. Con la regla de "solo se cobran las aprobadas", esa quincena no cobraría una sola hora. Hay que definir quién aprueba y cuándo.
+- **La heurística que deduce el tercero del nombre de la máquina falla** cuando el número de interno está separado del símbolo. No se afina: lo resuelve el campo propio del punto 3.1.
+- **466 líneas de "MANO DE OBRA"** de enero a junio, con dos precios unitarios multiplicados por las horas, que suman $337 millones. Parece el total de una factura tomado como precio unitario. Fuera de lo validado, pero a resolver.
 
-**Con Gero**
-- Aprobar `reportlab` como dependencia nueva para el PDF.
-- La app del taller está publicada en la web sin restricción y expone datos personales de los mecánicos. No lo introduce el módulo, pero conviene que lo sepa quien la administra.
+**Salidos de la etapa 2**
+- **Una línea de horas de reparación desapareció del Sheet** entre el 9 y el 14 de septiembre, de una quincena ya liquidada. No fue rechazada: se borró. Confirma que la etapa 11 tiene que congelar el recibo al emitirlo.
 
-**Salidos de la etapa 1** (medidos contra las bases reales, 2026-09-10)
-- **Ninguna hora de taller de agosto está aprobada**: las 54 de la 1ra quincena y las 58 de la 2da
-  están todas en `Pendiente`. Si se aplicara la regla de "solo se cobran las aprobadas" (ver
-  `CONTEXT-terceros.md`, "Hora de taller"), esa quincena no cobraría una sola hora. Hay que definir
-  con el liquidador y con el taller quién aprueba y cuándo, antes de la etapa 4.
-- **La heurística que deduce el tercero del nombre de la máquina falla cuando el número de interno
-  está separado del símbolo**: `TRACTOR DEUTZ N° 113 SOSA ALBERTO` devuelve el nombre entero de la
-  máquina en lugar de `SOSA ALBERTO`, porque ni `N°` ni `113` son a la vez "empieza con N" y "trae
-  dígitos". El Excel hace exactamente lo mismo, así que el número liquidado no cambia, pero ese
-  tercero aparece como uno propio. No se afina la heurística: es el caso que resuelve pedirle al
-  sistema de campo el dueño como campo propio (sección 2.1).
-- **Hay líneas de "MANO DE OBRA" con precio unitario de repuesto**: 466 líneas de 2026, todas de
-  enero a la 2da de junio, con dos precios unitarios ($207.200 y $247.933,88) multiplicados por las
-  horas, que suman $337 millones sobre un total de $370 millones del año. Parecen el importe total de
-  una factura de reparación tomado como precio por unidad. **No afecta lo validado**: no hay ninguna
-  de estas líneas en las quincenas que el Excel cubre (07-2Q y 08-1Q), porque la hoja `La Falda` solo
-  guarda los meses que se fueron pegando. Hay que resolverlo antes de la etapa 5, que importa el
-  histórico.
-
-**Salidos de la etapa 2** (2026-09-14)
-- **Una línea de horas de taller desapareció del Sheet**: el 9/09 la 1ra quincena de agosto
-  tenía 54 líneas y 133 horas; hoy tiene 53 y 132,5. La que falta es del 5 de agosto, 0,5 hs,
-  máquina de Franco Muñoz. No fue rechazada —las rechazadas se cuentan y siguen en cero—:
-  se borró. Es una quincena que ya se liquidó. Confirma dos cosas que hasta ahora eran
-  supuestos: que en la app del taller cualquiera puede borrar una línea sin dejar rastro (ver
-  `../taller/ESPECIFICACION-taller.md`, sección 8), y que **la etapa 6 tiene que congelar el
-  recibo al emitirlo**, porque el origen cambia debajo de uno.
-- **Ninguna hora de agosto sigue aprobada**: las 53 que quedan están en `Pendiente`, igual que
-  en la medición de la etapa 1. Refuerza el pendiente de definir quién aprueba y cuándo.
-
-**Salidos de la etapa 3** (medidos el 2026-09-16)
-- **El puente entre compras y el taller ya está roto.** Se suponía que el `id_maquina` era
-  común a los dos sistemas; hay 3 máquinas con el mismo nombre y distinto id, y una de ellas
-  —FUMIGADORA 400 LTS CITRUSVIL 570— tiene 27 líneas de repuestos este año. Mientras estén
-  duplicadas, sus repuestos y sus horas no se juntan en el mismo recibo. Es lo primero a
-  corregir antes de la etapa 4.
-- **La patente no sirve como puente para maquinaria: cruzan 3 de 46.** El resto no tiene
-  patente en ninguno de los dos sistemas. Es el número que respalda el pedido de la sección
-  2.1 — que el sistema de campo traiga el dueño (o un id) como campo propio. Sin eso, la
-  maquinaria de terceros del sistema de campo no se puede cruzar con nada, y no hay
-  heurística que lo arregle.
-- **Un colectivo tiene la patente de otro dueño.** DEMARCO, OSCAR lleva KPH682 en su
-  columna y HFU440 en la descripción, y HFU440 es de SALOMOM, FELIPE. Hay tres casos así.
-- **SALOMOM, FELIPE y SALOMON, FELIPE** son dos fichas con un colectivo cada una. Si son la
-  misma persona, está recibiendo dos recibos.
-
-**Sueltos, a resolver leyendo el Excel**
-- Ajustes manuales, detección de duplicados, carga manual de viajes que no vienen del sistema de campo, y el estado de cuenta anual.
+**Salidos de la etapa 3**
+- **El puente entre compras y el taller ya está roto**: 3 máquinas con el mismo nombre y distinto id, una con 27 líneas de repuestos este año. Es lo primero a corregir antes de calcular.
+- **Un colectivo lleva la patente de otro dueño** (DEMARCO, OSCAR con la de SALOMOM, FELIPE).
+- Las alertas del sistema de campo que estaban abiertas **se corrigieron el 2026-09-16**: las 3 patentes inconsistentes y una de las dos propiedades inválidas.
