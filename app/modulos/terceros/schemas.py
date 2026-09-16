@@ -73,7 +73,29 @@ class RepuestoResponse(BaseModel):
     propiedad_maquina: str | None = None
 
 
-class HoraTallerResponse(BaseModel):
+class HoraServicioResponse(BaseModel):
+    """Una máquina de un Tercero trabajando en una finca.
+
+    Trae las dos horas a propósito: cuál se paga lo decide la Unidad base de la
+    tarifa, no el dato. En 2026 la diferencia entre una y otra son 4.177 horas.
+    """
+    fecha: date
+    quincena_mes: str
+    planilla: str                    # de qué parte diario salió: COSECHA, MAQUINARIA, PULVERIZADA
+    cliente: str | None = None
+    finca: str | None = None
+    tarea: str | None = None
+    maquinaria: str | None = None
+    # Sale del último campo de la descripción de la maquinaria. Viene vacío
+    # cuando ahí hay una patente en vez de un nombre: el hueco se muestra, no se
+    # rellena, porque liquidarle horas a una patente sería peor.
+    tercero: str | None = None
+    supervisor: str | None = None
+    horas_jornal: Decimal
+    horas_maquina: Decimal
+
+
+class HoraReparacionResponse(BaseModel):
     fecha: date
     quincena_mes: str
     anio: int
@@ -106,14 +128,14 @@ class EstadoHorasResponse(BaseModel):
     horas_pendientes: float
 
 
-class HorasTallerResponse(BaseModel):
+class HorasReparacionResponse(BaseModel):
     """El listado y el tablero juntos, en una sola respuesta.
 
     Van juntos porque salen de la misma lectura: el Sheet de la app del taller
     pesa 1,3 MB y tarda unos seis segundos en bajar. Separarlos en dos
     endpoints hacía que la portada del módulo lo bajara dos veces.
     """
-    horas: list[HoraTallerResponse]
+    horas: list[HoraReparacionResponse]
     estados: EstadoHorasResponse
 
 

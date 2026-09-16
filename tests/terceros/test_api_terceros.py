@@ -52,6 +52,14 @@ HORA = {
     "horas": 2.0, "horas_preparacion": 1.0, "horas_traslado": 2.0,
     "horas_total": 5.0, "id_maquina": 735,
 }
+SERVICIO = {
+    "fecha": date(2026, 8, 16), "quincena_mes": "08-2Q", "planilla": "MAQUINARIA",
+    "cliente": "CITROMAX", "finca": "TAJAMAR 2", "tarea": "CARGA FRUTA POR BINS",
+    "maquinaria": "MANITOU MANITOU N°0060 BARRIOS", "tercero": "BARRIOS",
+    "supervisor": "MOLINA, ALFREDO FEDERICO",
+    # Las dos horas, distintas entre sí: es el caso que importa.
+    "horas_jornal": Decimal("8.00"), "horas_maquina": Decimal("6.00"),
+}
 ESTADOS = {"aprobadas": 1, "pendientes": 2, "rechazadas": 3,
            "horas_aprobadas": 5.0, "horas_pendientes": 9.5}
 
@@ -76,6 +84,9 @@ class ExternaFalsa:
 
     def repuestos(self, quincena):
         return self._responder(quincena, [REPUESTO])
+
+    def horas_servicio(self, quincena):
+        return self._responder(quincena, [SERVICIO])
 
     # ─── maestros, para /alertas ───
     def maquinarias_terceros_campo(self):
@@ -156,7 +167,7 @@ def _limpiar():
 
 # ─── Qué quincena se acepta ─────────────────────────────────────────────────
 
-@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-taller"])
+@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-reparacion", "horas-servicio"])
 def test_la_quincena_llega_al_servicio_como_fecha(ruta, cliente):
     c, externa, _ = cliente
     assert c.get(f"/api/terceros/{ruta}?quincena={Q}").status_code == 200
@@ -179,7 +190,7 @@ def test_sin_quincena_no_se_adivina_ninguna(cliente):
 
 # ─── Quién entra ────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-taller", "alertas"])
+@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-reparacion", "horas-servicio", "alertas"])
 def test_un_operador_de_otro_modulo_no_entra(ruta):
     otro = SimpleNamespace(id=2, nombre="X", email="x@t.com", rol="usuario", activo=True,
                            modulos=[SimpleNamespace(modulo="preliquidacion", rol="operador")])
@@ -212,10 +223,10 @@ def test_los_repuestos_traen_las_dos_fechas(cliente):
     assert fila["fecha_descarga"] == "2026-08-14"
 
 
-def test_las_horas_traen_listado_y_tablero_juntos(cliente):
+def test_las_reparaciones_traen_listado_y_tablero_juntos(cliente):
     """Una sola lectura del Sheet para las dos vistas."""
     c, _, taller = cliente
-    d = c.get(f"/api/terceros/horas-taller?quincena={Q}").json()
+    d = c.get(f"/api/terceros/horas-reparacion?quincena={Q}").json()
     assert d["horas"][0]["estado"] == "Pendiente"
     assert d["estados"] == ESTADOS
     assert taller.lecturas == 1
@@ -224,7 +235,7 @@ def test_las_horas_traen_listado_y_tablero_juntos(cliente):
 def test_el_tablero_cuenta_rechazadas_que_el_listado_no_muestra():
     """Las rechazadas no se cobran nunca, pero hay que verlas para reclamarlas."""
     c = _con_origenes(taller=TallerFalso(filas=[HORA]))
-    d = c.get(f"/api/terceros/horas-taller?quincena={Q}").json()
+    d = c.get(f"/api/terceros/horas-reparacion?quincena={Q}").json()
     assert len(d["horas"]) == 1
     assert d["estados"]["rechazadas"] == 3
 
@@ -252,11 +263,11 @@ def test_no_hay_un_endpoint_que_junte_los_cuatro_conjuntos():
     (httpx.ConnectError("sin red"), "no respondió"),
     (ValueError("La hoja 'BD_Horas' no tiene las columnas ['Horas']"), "no tiene las columnas"),
 ])
-def test_las_horas_explican_por_que_no_se_pudieron_leer(error, texto):
+def test_las_reparaciones_explican_por_que_no_se_pudieron_leer(error, texto):
     """Un 502 con el motivo, no un 500 mudo: el liquidador hace algo distinto
     según sea configuración, red o un cambio de formato del Sheet."""
     c = _con_origenes(taller=TallerFalso(error=error))
-    r = c.get(f"/api/terceros/horas-taller?quincena={Q}")
+    r = c.get(f"/api/terceros/horas-reparacion?quincena={Q}")
     assert r.status_code == 502
     assert texto in r.json()["detail"]
 
@@ -265,7 +276,7 @@ def test_que_el_taller_falle_no_afecta_a_los_otros_tres_conjuntos():
     """Cada conjunto es su propio pedido: que Google no conteste no puede dejar
     al liquidador sin ver sus viajes."""
     c = _con_origenes(taller=TallerFalso(error=httpx.ConnectError("sin red")))
-    assert c.get(f"/api/terceros/horas-taller?quincena={Q}").status_code == 502
+    assert c.get(f"/api/terceros/horas-reparacion?quincena={Q}").status_code == 502
     assert c.get(f"/api/terceros/viajes?quincena={Q}").status_code == 200
     assert c.get(f"/api/terceros/repuestos?quincena={Q}").status_code == 200
 
@@ -274,7 +285,7 @@ def test_un_error_de_programacion_no_se_disfraza_de_origen_caido():
     """Atrapar Exception acá escondería nuestros propios bugs detrás de un 502."""
     c = _con_origenes(taller=TallerFalso(error=TypeError("bug nuestro")))
     with pytest.raises(TypeError):
-        c.get(f"/api/terceros/horas-taller?quincena={Q}")
+        c.get(f"/api/terceros/horas-reparacion?quincena={Q}")
 
 
 # ─── Alertas de cruce ───────────────────────────────────────────────────────
@@ -332,4 +343,46 @@ def test_sin_el_maestro_del_taller_no_se_devuelven_alertas_a_medias():
 def test_un_año_disparatado_se_rechaza(anio, cliente):
     c, _, _ = cliente
     assert c.get(f"/api/terceros/alertas?anio={anio}").status_code == 422
+
+
+# ─── Horas de servicio ──────────────────────────────────────────────────────
+
+def test_las_horas_de_servicio_traen_las_dos_horas(cliente):
+    """Cuál se paga lo decide la Unidad base de la tarifa, no el dato: si la
+    consulta trajera una sola, esa elección no se podría hacer."""
+    c, _, _ = cliente
+    fila = c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]
+    assert fila["horas_jornal"] == "8.00"
+    assert fila["horas_maquina"] == "6.00"
+
+
+def test_las_horas_de_servicio_dicen_de_que_parte_diario_salieron(cliente):
+    """Las horas se cargan en tres planillas distintas del sistema de campo y
+    cada una las guarda en otro lado; saber de cuál vino una fila es lo que
+    permite rastrearla."""
+    c, _, _ = cliente
+    assert c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]["planilla"] == "MAQUINARIA"
+
+
+def test_las_horas_de_servicio_traen_el_tercero(cliente):
+    c, _, _ = cliente
+    assert c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]["tercero"] == "BARRIOS"
+
+
+def test_el_tercero_puede_venir_vacio_y_no_se_rellena():
+    """Cuando la descripción de la máquina trae una patente en vez de un nombre,
+    el hueco se muestra: liquidarle las horas a una patente sería peor."""
+    externa = ExternaFalsa()
+    externa.horas_servicio = lambda q: [dict(SERVICIO, tercero=None)]
+    c = _con_origenes(externa=externa)
+    assert c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]["tercero"] is None
+
+
+def test_servicio_y_reparacion_son_endpoints_distintos():
+    """Van en sentidos opuestos del recibo: una se paga y la otra se descuenta.
+    Que compartan nombre fue el error que el glosario corrigió."""
+    rutas = {r.path for r in app.routes}
+    assert "/api/terceros/horas-servicio" in rutas
+    assert "/api/terceros/horas-reparacion" in rutas
+    assert "/api/terceros/horas-taller" not in rutas
 

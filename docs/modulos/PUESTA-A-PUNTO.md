@@ -144,7 +144,7 @@ Después:
 python -m pytest -q
 ```
 
-Tiene que terminar en verde. Al día de hoy son 406 tests y tardan entre uno y cuatro minutos según la máquina. No necesitan las bases ni internet: usan SQLite en memoria y, donde hace falta un Excel, lo arman al vuelo.
+Tiene que terminar en verde. Al día de hoy son 414 tests y tardan entre uno y cuatro minutos según la máquina. No necesitan las bases ni internet: usan SQLite en memoria y, donde hace falta un Excel, lo arman al vuelo.
 
 Por último, arrancar el servidor:
 

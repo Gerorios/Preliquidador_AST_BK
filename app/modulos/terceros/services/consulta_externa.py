@@ -5,7 +5,8 @@ hoy alimentan las hojas de aterrizaje del Excel, traídas al módulo y acotadas
 a una Quincena en vez de a "el año en curso".
 
 Dos orígenes:
-  - Sistema de campo (get_db_externa): viajes y cargas de combustible.
+  - Sistema de campo (get_db_externa): viajes, cargas de combustible y horas de
+    servicio de la maquinaria de terceros.
   - Sistema de compras / La Falda (get_db_sueldos): repuestos y reparaciones.
 
 Las horas de taller no salen de una base sino del Google Sheet de la app del
@@ -277,6 +278,127 @@ ORDER BY ru.fecha, ru.maquina
 
 
 
+# ─── Horas de servicio (etapa 4) ────────────────────────────────────────────
+# La maquinaria del Tercero trabajando en las fincas. Es lo que se le PAGA por
+# el servicio de maquinaria — no confundir con la Hora de reparación, que es el
+# taller arreglándole la máquina y va con el signo contrario.
+#
+# La escribió el usuario contra Chinagro y se trae tal cual; lo único que se
+# cambió es el rango de fechas, que venía fijo en 2026.
+#
+# Las horas se registran en tres partes diarias distintas y cada una las guarda
+# en otro lugar, por eso el UNION de cuatro ramas:
+#   COSECHA      la máquina está en el detalle, la tarea en la cabecera
+#   MAQUINARIA   la tarea está en cada registro, no en la cabecera
+#   PULVERIZADA  cada registro lleva dos tractores, cada uno con sus horas; el
+#                turbo y la nodriza no tienen horas propias, así que no suman
+#
+# Las seis columnas de horas son varchar, vienen con espacios y hay registros
+# con texto adentro ('.50', '11playas muy lejo'). Por eso cada una se valida con
+# REGEXP antes de convertir, en vez de dejar que MySQL la tome como cero.
+#
+# El dueño sale del último campo de `descripcion`, que tiene la forma
+# PROPIEDAD;TIPO;MARCA;MODELO;NUMERO;DUEÑO. Cuando ese campo trae una patente en
+# vez de un nombre se devuelve NULL, para que el hueco se vea en lugar de
+# liquidarle las horas a una patente. En las máquinas con horas de 2026 está
+# cargado en todas.
+QUERY_HORAS_SERVICIO = text(f"""
+SELECT
+    DATE(h.fecha) AS fecha,
+    {QUINCENA_MES_EXPR.format(campo='h.fecha')} AS quincena_mes,
+    h.planilla,
+    clientes.nombre    AS cliente,
+    fincas.nombre      AS finca,
+    tareas.nombre      AS tarea,
+    maquinarias.nombre AS maquinaria,
+    NULLIF(
+        TRIM(REPLACE(REPLACE(
+            CASE
+                -- si el último campo es una patente, no es el dueño
+                WHEN TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', -1))
+                     REGEXP '^([A-Z]{{3}}[0-9]{{3}}|[A-Z]{{2}}[0-9]{{3}}[A-Z]{{2}})$' THEN ''
+                ELSE TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', -1))
+            END, ',', ' '), '  ', ' ')
+    ), '')             AS tercero,
+    usuarios_supervisor.`name` AS supervisor,
+    h.hsjornal         AS horas_jornal,
+    h.hsmaquina        AS horas_maquina
+FROM (
+    -- 1. Parte diario de COSECHA
+    SELECT
+        'COSECHA'      AS planilla,
+        pdc.fecha      AS fecha,
+        pdc.cliente    AS cliente,
+        pdc.finca      AS finca,
+        pdc.tarea      AS tarea,
+        pdc.supervisor AS supervisor,
+        r1.maquinaria  AS maquinaria,
+        CASE WHEN TRIM(r1.hsjornal)  REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(r1.hsjornal)  AS DECIMAL(10,2)) ELSE 0 END AS hsjornal,
+        CASE WHEN TRIM(r1.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(r1.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END AS hsmaquina
+    FROM laa_pdcosechasregistros1 r1
+        INNER JOIN laa_pdcosechas pdc ON pdc.id = r1.parent_id
+    WHERE r1.estado <> 9 AND pdc.estado <> 9
+
+    UNION ALL
+
+    -- 2. Parte diario de MAQUINARIA
+    SELECT
+        'MAQUINARIA', pdm.fecha, pdm.cliente, pdm.finca, mr.tarea,
+        pdm.supervisor, mr.maquinaria,
+        CASE WHEN TRIM(mr.hsjornal)  REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(mr.hsjornal)  AS DECIMAL(10,2)) ELSE 0 END,
+        CASE WHEN TRIM(mr.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(mr.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END
+    FROM laa_pdmaquinariasregistros mr
+        INNER JOIN laa_pdmaquinarias pdm ON pdm.id = mr.parent_id
+    WHERE mr.estado <> 9 AND pdm.estado <> 9
+
+    UNION ALL
+
+    -- 3. PULVERIZADAS, tractor 1
+    SELECT
+        'PULVERIZADA', pdp.fecha, pdp.cliente, pdp.finca, pdp.tarea,
+        pdp.supervisor, pr.tractor1,
+        CASE WHEN TRIM(pr.hsjornal1)  REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(pr.hsjornal1)  AS DECIMAL(10,2)) ELSE 0 END,
+        CASE WHEN TRIM(pr.hsmaquina1) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(pr.hsmaquina1) AS DECIMAL(10,2)) ELSE 0 END
+    FROM laa_pdpulverizadasregistros pr
+        INNER JOIN laa_pdpulverizadas pdp ON pdp.id = pr.parent_id
+    WHERE pr.estado <> 9 AND pdp.estado <> 9 AND pr.tractor1 IS NOT NULL
+
+    UNION ALL
+
+    -- 4. PULVERIZADAS, tractor 2
+    SELECT
+        'PULVERIZADA', pdp.fecha, pdp.cliente, pdp.finca, pdp.tarea,
+        pdp.supervisor, pr.tractor2,
+        CASE WHEN TRIM(pr.hsjornal2)  REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(pr.hsjornal2)  AS DECIMAL(10,2)) ELSE 0 END,
+        CASE WHEN TRIM(pr.hsmaquina2) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(pr.hsmaquina2) AS DECIMAL(10,2)) ELSE 0 END
+    FROM laa_pdpulverizadasregistros pr
+        INNER JOIN laa_pdpulverizadas pdp ON pdp.id = pr.parent_id
+    WHERE pr.estado <> 9 AND pdp.estado <> 9 AND pr.tractor2 IS NOT NULL
+) h
+    INNER JOIN laa_maquinarias maquinarias ON maquinarias.id = h.maquinaria
+    LEFT JOIN laa_clientes clientes ON clientes.id = h.cliente
+    LEFT JOIN laa_fincas fincas     ON fincas.id = h.finca
+    LEFT JOIN laa_tareas tareas     ON tareas.id = h.tarea
+    LEFT JOIN laa_supervisores supervisores ON supervisores.idusuario = h.supervisor
+    LEFT JOIN ast_users usuarios_supervisor ON usuarios_supervisor.id = supervisores.idusuario
+-- 'TERCERO' en singular existe en una máquina; dejarla afuera sería perderle las horas.
+WHERE TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', 1)) IN ('TERCEROS', 'TERCERO')
+  -- DATE(): la fecha viene como datetime con hora 03:00, y sin esto el
+  -- último día de la quincena queda afuera entero.
+  AND DATE(h.fecha) BETWEEN :fecha_desde AND :fecha_hasta
+  AND (h.hsmaquina > 0 OR h.hsjornal > 0)
+ORDER BY h.fecha, maquinarias.nombre
+""")
+
+
 # ─── Maestros, para las Alertas de cruce (etapa 3) ──────────────────────────
 # No alimentan ninguna liquidación: sirven para comparar los tres sistemas
 # entre sí y avisar dónde no se encuentran. Ver services/alertas_cruce.py.
@@ -347,6 +469,10 @@ COLUMNAS_CARGAS_COMBUSTIBLE = (
     "colectivo_patente", "colectivo_propiedad", "litros_cargados", "vale",
     "origen_combustible", "usuario_carga",
 )
+COLUMNAS_HORAS_SERVICIO = (
+    "fecha", "quincena_mes", "planilla", "cliente", "finca", "tarea",
+    "maquinaria", "tercero", "supervisor", "horas_jornal", "horas_maquina",
+)
 COLUMNAS_REPUESTOS = (
     "id_maquina", "maquina", "fecha", "fecha_descarga", "quincena_mes",
     "tipo_insumo", "rubro", "repuesto", "cantidad", "precargas",
@@ -375,6 +501,14 @@ class ConsultaExternaService:
 
     def repuestos(self, quincena: date) -> list[dict]:
         return self._traer(self.db_sueldos, QUERY_REPUESTOS, quincena)
+
+    def horas_servicio(self, quincena: date) -> list[dict]:
+        """Lo que la maquinaria del Tercero trabajó en las fincas.
+
+        Trae las dos horas —jornal y máquina— porque cuál se paga lo decide la
+        tarifa, no el dato: a veces se pacta por hora y a veces jornalizado. En
+        2026 la diferencia entre una y otra son 4.177 horas."""
+        return self._traer(self.db_externa, QUERY_HORAS_SERVICIO, quincena)
 
     @staticmethod
     def _traer(db: Session, query, quincena: date) -> list[dict]:

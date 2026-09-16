@@ -1,6 +1,6 @@
 # Plan de implementación — módulo Liquidación Terceros
 
-**Estado**: etapas 1 a 3 hechas (2026-09-10, 09-14 y 09-16). El plan se rehízo el **2026-09-16**, cuando apareció el segundo circuito —el servicio de maquinaria— y con él una forma distinta del módulo.
+**Estado**: etapas 1 a 4 hechas (2026-09-10, 09-14 y 09-16). El plan se rehízo el **2026-09-16**, cuando apareció el segundo circuito —el servicio de maquinaria— y con él una forma distinta del módulo.
 **Fecha de la decisión original**: 2026-09-09, sesión de grilling sobre el Excel que hoy resuelve el circuito.
 **Quién lo construye**: Pitu. Revisión y merge, Gero (regla 4 de `GUIA-MODULOS.md`).
 
@@ -33,7 +33,7 @@ El combustible solo alcanza al flete. Lo demás es común a los dos.
 
 **La distinción que más importa y la que más fácil se confunde**: la *Hora de reparación* es el mecánico de la empresa arreglando la máquina del Tercero (el Tercero nos debe) y la *Hora de servicio* es la máquina del Tercero trabajando en nuestras fincas (le pagamos). Las dos van en el mismo recibo, con signo opuesto. Antes las dos se llamaban "horas de taller".
 
-**Medido el 2026-09-16**: el servicio de maquinaria son 8.079 horas de máquina en 2026, 911 registros, 13 máquinas — y en pulverizadas otros 103 registros. Los dueños son los mismos que ya aparecen por repuestos y taller.
+**Medido el 2026-09-16** con la consulta del usuario: 2.244 registros en 2026, repartidos en tres partes diarios (cosecha 911, maquinaria 772, pulverizadas 561), 9 dueños. Son **17.560 horas de máquina** o **21.737 de jornal** según cuál se pague. Los dueños son los mismos que ya aparecen por repuestos y taller.
 
 ---
 
@@ -67,7 +67,7 @@ Cinco tablas, todas **por quincena**, con copia desde la quincena que se elija y
 
 - **Gana la regla más específica** (más dimensiones cargadas). Empate = ambiguo, lo resuelve el liquidador.
 - **Sin tarifa, el hecho no entra al recibo**: queda listado aparte, nunca paga cero en silencio.
-- **La unidad base de las horas de servicio la elige el liquidador**: se paga la hora de máquina o la hora de jornal según lo pactado, no según el dato. El sistema de campo carga las dos y no son iguales (8.079 contra 9.312 horas en 2026).
+- **La unidad base de las horas de servicio la elige el liquidador**: se paga la hora de máquina o la hora de jornal según lo pactado, no según el dato. El sistema de campo carga las dos y no son iguales: en 2026 son 17.560 horas de máquina contra 21.737 de jornal, **4.177 de diferencia**.
 - **Los seguros no llegan por archivo**: los carga a mano, dentro de la app, quien tiene los seguros a cargo. Es un cambio respecto del plan del 09-09, que asumía un Excel mensual.
 
 ### 3.3 Períodos y diferimiento
@@ -154,7 +154,7 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 | 1 | ~~Las cuatro consultas de origen, en SQL parametrizado, con tests~~ | **Hecho (2026-09-10)** |
 | 2 | ~~Ingesta y pantallas de solo lectura de la quincena~~ | **Hecho (2026-09-14)** |
 | 3 | ~~Alertas de cruce entre los tres sistemas~~ | **Hecho (2026-09-16).** Pasan a ser parte de las Verificaciones |
-| 4 | **La quinta consulta: Horas de servicio** (cosechas y pulverizadas), con sus tests | Las horas de agosto coinciden con las que hoy se liquidan a mano |
+| 4 | ~~**La quinta consulta: Horas de servicio**~~ | **Hecho (2026-09-16).** Ver abajo |
 | 5 | **Tablas propias, migración 001 y generar la quincena**: el Inicio pasa a ser un dashboard como el de Preliquidación, y generar trae las cinco fuentes y las congela | Se genera agosto y quedan todos los hechos guardados |
 | 6 | **Tarifario**: las cinco tablas, por quincena, con copia y herencia | Se cargan las tarifas de agosto sin tipear fila por fila |
 | 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista | El neto de agosto coincide, tercero por tercero |
@@ -170,6 +170,10 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 
 **Etapa 2** (2026-09-14). El módulo se activó al tener sus primeras pantallas. Un endpoint por conjunto y ninguno que los junte: hubo un `/resumen` y se sacó porque pedía los cuatro orígenes en serie y tardaba 15 segundos. Con cuatro, el navegador los pide en paralelo — 21,6 s a 12,1 s medidos. Estas pantallas las reemplaza la etapa 8.
 
+**Etapa 4** (2026-09-16). `GET /api/terceros/horas-servicio`. La consulta la escribió el usuario contra Chinagro y se trajo tal cual; lo único que se cambió es el rango de fechas, que venía fijo en 2026. Sale de **tres** partes diarios —cosecha, maquinaria y pulverizadas, esta última por sus dos tractores— que son 2.244 filas en 2026. Trae **las dos horas**, jornal y máquina, porque cuál se paga lo decide la Unidad base de la tarifa: entre una y otra hay 4.177 horas de diferencia. Agosto da 178 filas en la 1ra quincena y 162 en la 2da.
+
+En el mismo PR se renombró en el código lo que el glosario ya había renombrado: `/horas-taller` pasó a `/horas-reparacion`. Dejar el nombre viejo al lado del nuevo era exactamente la confusión que el glosario acababa de resolver.
+
 **Etapa 3** (2026-09-16). `GET /api/terceros/alertas` y la pantalla de alertas, con seis tipos y el sistema donde se corrige cada uno. Dos criterios que salieron de medir: solo se alerta de lo accionable (de 11 máquinas sin par, 2 tenían movimiento) y la falta estructural no se lista fila por fila (43 de 46 maquinarias no cruzan, pero es una sola tarea). Esta pantalla se reorganiza en la etapa 9.
 
 ---
@@ -180,7 +184,6 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 - **El rol de quien carga los seguros.** Hoy un módulo tiene `operador` y `gerente`. Quien carga los seguros no es ninguno de los dos: entra a una sola sección y no ve el resto. Agregar un tercer rol toca el núcleo, así que va en un PR aparte (regla 4 de `GUIA-MODULOS.md`).
 - **La quincena de corte**: desde cuándo el módulo liquida en serio.
 - **`reportlab`** como dependencia nueva para el PDF (etapa 11).
-- **Renombrar en el código lo que el glosario ya renombró**: hoy dice `horas_taller` y `/horas-taller` para lo que ahora es Hora de reparación. Conviene hacerlo antes de que crezca.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.

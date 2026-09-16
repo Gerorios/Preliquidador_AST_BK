@@ -36,7 +36,8 @@ from app.modulos.terceros.permisos import requiere_operativo
 from app.modulos.terceros.schemas import (
     AlertasResponse,
     CargaCombustibleResponse,
-    HorasTallerResponse,
+    HoraServicioResponse,
+    HorasReparacionResponse,
     QuincenaResponse,
     RepuestoResponse,
     ViajeResponse,
@@ -141,12 +142,31 @@ def listar_repuestos(
     return servicio.repuestos(quincena)
 
 
-@router.get("/horas-taller", response_model=HorasTallerResponse)
-def listar_horas_taller(
+@router.get("/horas-servicio", response_model=list[HoraServicioResponse])
+def listar_horas_servicio(
+    quincena: date = Depends(quincena_param),
+    servicio: ConsultaExternaService = Depends(get_consulta_externa),
+):
+    """Las horas que la maquinaria de los Terceros trabajó en las fincas.
+
+    Es lo que se les **paga** por el servicio de maquinaria. Salen de tres
+    partes diarios distintos del sistema de campo —cosecha, maquinaria y
+    pulverizadas— y vienen con las dos horas, jornal y máquina, porque cuál se
+    paga lo decide la tarifa y no el dato.
+    """
+    return servicio.horas_servicio(quincena)
+
+
+@router.get("/horas-reparacion", response_model=HorasReparacionResponse)
+def listar_horas_reparacion(
     quincena: date = Depends(quincena_param),
     servicio: ConsultaTallerService = Depends(get_consulta_taller),
 ):
-    """Las horas cobrables de la quincena, más el recuento por estado.
+    """Las horas de reparación cobrables de la quincena, más el recuento por estado.
+
+    Son las que el taller de la empresa le dedicó a la máquina del Tercero: se
+    le **descuentan**. No confundir con las Horas de servicio, que son su
+    máquina trabajando para nosotros y se le pagan.
 
     `horas` trae las aprobadas y las pendientes; las rechazadas no están porque
     no se cobran nunca. `estados` las cuenta a las tres: sirve para reclamarle
@@ -157,7 +177,7 @@ def listar_horas_taller(
     tarda unos seis segundos: pedirlas por separado lo bajaba dos veces.
     """
     try:
-        return HorasTallerResponse(
+        return HorasReparacionResponse(
             horas=servicio.horas_quincena(quincena),
             estados=servicio.estados_quincena(quincena),
         )

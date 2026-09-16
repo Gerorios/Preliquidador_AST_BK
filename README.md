@@ -309,10 +309,11 @@ Solo lectura: muestran lo que llega de los sistemas de origen para una quincena.
 | GET | `/viajes` | Viajes de la quincena (sistema de campo) |
 | GET | `/combustible` | Cargas de combustible de la quincena (sistema de campo) |
 | GET | `/repuestos` | Repuestos y reparaciones sobre máquinas de terceros (La Falda) |
-| GET | `/horas-taller` | Horas sobre máquinas de terceros + recuento por estado (Sheet de la app del taller; 502 si no se puede leer) |
+| GET | `/horas-servicio` | Horas que la maquinaria de los terceros trabajó en las fincas: se les **paga**. Sale de tres partes diarios del sistema de campo y trae las dos horas, jornal y máquina |
+| GET | `/horas-reparacion` | Horas que el taller le dedicó a máquinas de terceros: se les **descuenta**. Incluye el recuento por estado (Sheet de la app del taller; 502 si no se puede leer) |
 | GET | `/alertas` | Lo que no cruza entre los tres sistemas de origen, con el sistema donde se corrige cada cosa. Toma `?anio=` (por defecto el corriente) y **no** lleva quincena |
 
-Los cuatro listados toman `?quincena=AAAA-MM-DD` con el primer día de la quincena (el 1 o el 16); otra fecha devuelve 422. No hay un endpoint que junte los cuatro: se pedían en serie y tardaban 15 segundos, y el navegador los pide en paralelo.
+Los cinco listados toman `?quincena=AAAA-MM-DD` con el primer día de la quincena (el 1 o el 16); otra fecha devuelve 422. No hay un endpoint que junte los cuatro: se pedían en serie y tardaban 15 segundos, y el navegador los pide en paralelo.
 
 ### Asistente (`/api/asistente`)
 | Método | Ruta | Descripción |
