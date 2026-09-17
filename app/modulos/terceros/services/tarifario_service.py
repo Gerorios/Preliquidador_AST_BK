@@ -22,7 +22,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy.orm import Session
 
 from app.modulos.terceros.models import (
-    SIN_DIMENSION, TIPOS_VIAJE, UNIDADES_BASE,
+    SIN_DIMENSION, TIPOS_SEGURO, TIPOS_VIAJE, UNIDADES_BASE,
     PrecioCombustible, PrecioReparacion, PrecioSeguro,
     TarifaServicio, TarifaViaje,
 )
@@ -71,9 +71,10 @@ TIPOS = {
     },
     "seguros": {
         "modelo": PrecioSeguro,
-        "dimensiones": ("tercero", "maquinaria"),
-        "obligatorias": ("tercero", "maquinaria"),
-        "valores": ("importe",),
+        # El sujeto puede ser una máquina o una persona: el tipo dice cuál.
+        "dimensiones": ("tercero", "tipo_seguro", "sujeto"),
+        "obligatorias": ("tercero", "tipo_seguro", "sujeto"),
+        "valores": ("importe", "referencia"),
         "importe": "importe",
         "etiqueta": "precio del seguro",
     },
@@ -243,6 +244,10 @@ class TarifarioService:
         valores = {}
         for d in conf["dimensiones"]:
             texto = _texto(datos.get(d))
+            if d == "tipo_seguro" and texto and texto not in TIPOS_SEGURO:
+                raise TarifaInvalida(
+                    "El tipo de seguro tiene que ser uno de %s: dice si la póliza "
+                    "cubre una máquina o a una persona." % ", ".join(TIPOS_SEGURO))
             if not texto and d in conf["obligatorias"]:
                 raise TarifaInvalida(
                     "Falta %s: sin eso no se sabe a quién se le aplica este %s."
@@ -263,6 +268,14 @@ class TarifarioService:
                     "calcula el precio, por hora de máquina o por cantidad."
                     % ", ".join(UNIDADES_BASE)
                 )
+            return valor
+        if campo == "referencia":
+            return _texto(valor) or None
+        if campo == "tipo_seguro":
+            if valor not in TIPOS_SEGURO:
+                raise TarifaInvalida(
+                    "El tipo de seguro tiene que ser uno de %s: dice si la póliza "
+                    "cubre una máquina o a una persona." % ", ".join(TIPOS_SEGURO))
             return valor
         if campo == "tipo_viaje":
             if valor in (None, ""):

@@ -232,7 +232,9 @@ class TarifaResponse(BaseModel):
     finca: str | None = None
     capataz: str | None = None
     tarea: str | None = None
-    maquinaria: str | None = None
+    tipo_seguro: str | None = None
+    sujeto: str | None = None
+    referencia: str | None = None
 
     tipo_viaje: str | None = None
     unidad_base: str | None = None
@@ -248,7 +250,9 @@ class TarifaRequest(BaseModel):
     finca: str | None = None
     capataz: str | None = None
     tarea: str | None = None
-    maquinaria: str | None = None
+    tipo_seguro: str | None = None
+    sujeto: str | None = None
+    referencia: str | None = None
     tipo_viaje: str | None = None
     unidad_base: str | None = None
     precio: Decimal | None = None
@@ -271,4 +275,21 @@ class CopiadoConjunto(BaseModel):
     en_origen: int
     copiadas: int
     ya_estaban: int         # no se pisan: el destino manda
+
+
+class BienResponse(BaseModel):
+    """Un colectivo o una máquina de un Tercero: lo que se le puede asegurar.
+
+    Sale del sistema de campo, que es el maestro. Se ofrece como lista para que
+    quien carga los seguros elija en vez de tipear: un nombre tipeado tiene que
+    coincidir exacto con el del sistema o el seguro no se le imputa a nadie.
+    """
+    origen: str                  # 'colectivo' | 'maquinaria'
+    id_origen: int
+    # Vacío cuando el sistema de campo no lo trae. No se adivina: el hueco se
+    # muestra para que alguien lo corrija en el origen.
+    tercero: str | None = None
+    nombre: str
+    patente: str | None = None
+    detalle: str | None = None   # marca o tipo, para reconocerlo
 

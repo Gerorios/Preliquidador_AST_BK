@@ -36,6 +36,7 @@ from app.core.database import get_db_externa, get_db_propia, get_db_sueldos
 from app.modulos.terceros.permisos import requiere_operativo
 from app.modulos.terceros.schemas import (
     AlertasResponse,
+    BienResponse,
     CargaCombustibleResponse,
     CopiadoConjunto,
     CopiarRequest,
@@ -121,7 +122,8 @@ def get_tarifario(
 
 def _tarifa_a_dict(fila) -> dict:
     """La forma común de las cinco tablas, más su especificidad."""
-    campos = ("tercero", "cliente", "finca", "capataz", "tarea", "maquinaria",
+    campos = ("tercero", "cliente", "finca", "capataz", "tarea",
+              "tipo_seguro", "sujeto", "referencia",
               "tipo_viaje", "unidad_base", "precio", "importe")
     salida = {c: getattr(fila, c, None) for c in campos}
     # Una dimensión vacía se guarda como '' para que el índice único funcione,
@@ -181,6 +183,19 @@ def generar_liquidacion(
     except FALLAS_DE_ORIGEN as e:
         # Si un origen no contesta, no se guarda media quincena.
         raise HTTPException(status_code=502, detail=_mensaje_origen(e))
+
+
+@router.get("/bienes", response_model=list[BienResponse])
+def listar_bienes(
+    servicio: ConsultaExternaService = Depends(get_consulta_externa),
+):
+    """Los colectivos y la maquinaria de los terceros: lo que se asegura.
+
+    No lleva quincena: es el padrón del sistema de campo, no un movimiento. Lo
+    consume la pantalla de seguros, para que quien los carga elija de la lista
+    y el nombre coincida siempre con el que el módulo conoce.
+    """
+    return servicio.bienes_terceros()
 
 
 # ─── El Tarifario ───────────────────────────────────────────────────────────

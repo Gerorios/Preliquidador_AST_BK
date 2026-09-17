@@ -113,7 +113,14 @@ Precio por litro que se le descuenta a un Tercero. No depende de la estación ni
 Precio de la hora de mano de obra del taller, por Tercero.
 
 **Precio del seguro**:
-Importe de la cuota de una póliza, por Maquinaria de tercero y dueño. **Lo carga a mano quien tiene a cargo los seguros**, dentro de la app: no llega por archivo ni se deduce de ningún sistema.
+Importe de la cuota de una póliza, por Tercero, clase de póliza y sujeto cubierto. **Lo carga a mano quien tiene a cargo los seguros**, dentro de la app: no llega por archivo ni se deduce de ningún sistema. Se elige del Padrón de asegurables en vez de escribirse, porque un nombre tipeado tiene que coincidir exacto con el del sistema de campo o el seguro no se le imputa a nadie.
+
+**Sujeto del seguro**:
+Qué o a quién cubre una póliza: una máquina o un colectivo si es del automotor, una persona si es del chofer. Las tres clases —automotor, relación de dependencia y accidentes personales— se reparten entre esas dos naturalezas, y por eso el sujeto no es siempre un bien.
+_Avoid_: llamarlo "maquinaria" — deja afuera al chofer, que es la mitad de las pólizas
+
+**Padrón de asegurables**:
+La lista de todo lo que la empresa le asegura a los Terceros: sus Colectivos, su Maquinaria y sus choferes. Sale del sistema de campo, que es el maestro; los choferes no tienen padrón propio y se deducen de quién manejó cada colectivo en el último año.
 
 **Regla más específica**:
 Cuando dos Tarifas alcanzan al mismo hecho, gana **la que tiene más dimensiones cargadas**: una regla con más condiciones es una excepción deliberada sobre una más general. Si empatan en cantidad de dimensiones, el hecho queda **ambiguo** y lo resuelve el liquidador; el sistema no elige en silencio.

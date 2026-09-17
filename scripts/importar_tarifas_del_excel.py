@@ -151,11 +151,13 @@ def main() -> int:
             continue
         if args.aplicar:
             try:
-                # El Excel guarda el seguro por dueño y no por máquina. Se carga
-                # con la máquina en el mismo nombre para no inventar un dato que
-                # el origen no tiene.
+                # El Excel guarda el seguro por dueño, sin decir de qué máquina
+                # es ni de qué tipo. Se carga como AUTOMOTOR con el sujeto en el
+                # mismo nombre: es lo único que el origen dice, y rellenarlo con
+                # otra cosa sería inventar.
                 servicio.crear("seguros", quincena, {
-                    "tercero": tercero, "maquinaria": tercero, "importe": importe})
+                    "tercero": tercero, "tipo_seguro": "AUTOMOTOR",
+                    "sujeto": tercero, "importe": importe})
             except TarifaInvalida as e:
                 saltadas.append(("seguros", str(e)[:50], tercero, "", "", ""))
                 continue

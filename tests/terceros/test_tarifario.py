@@ -60,14 +60,48 @@ def test_la_misma_combinacion_en_otra_quincena_si_se_puede(s):
 def test_los_precios_por_tercero_exigen_el_tercero(tipo, s):
     campo = "importe" if tipo == "seguros" else "precio"
     with pytest.raises(TarifaInvalida) as e:
-        s.crear(tipo, Q, {campo: "100", "maquinaria": "X"})
+        s.crear(tipo, Q, {campo: "100", "sujeto": "X", "tipo_seguro": "AUTOMOTOR"})
     assert "tercero" in str(e.value)
 
 
-def test_el_seguro_exige_la_maquinaria(s):
+def test_el_seguro_exige_a_quien_cubre(s):
     with pytest.raises(TarifaInvalida) as e:
-        s.crear("seguros", Q, {"tercero": "BARRIOS", "importe": "5000"})
-    assert "maquinaria" in str(e.value)
+        s.crear("seguros", Q, {"tercero": "BARRIOS", "tipo_seguro": "AUTOMOTOR",
+                               "importe": "5000"})
+    assert "sujeto" in str(e.value)
+
+
+def test_el_seguro_de_una_maquina_y_el_de_su_chofer_conviven(s):
+    """Son dos pólizas distintas del mismo dueño: el tipo las separa."""
+    maquina = s.crear("seguros", Q, {
+        "tercero": "BARRIOS", "tipo_seguro": "AUTOMOTOR",
+        "sujeto": "MANITOU N°0046", "referencia": "ABC123", "importe": "45000"})
+    chofer = s.crear("seguros", Q, {
+        "tercero": "BARRIOS", "tipo_seguro": "RELACION_DEPENDENCIA",
+        "sujeto": "VERA, EMILIO", "referencia": "20434987351", "importe": "12000"})
+    assert maquina.id != chofer.id
+    assert len(s.listar("seguros", Q)) == 2
+
+
+def test_dos_polizas_del_mismo_tipo_sobre_el_mismo_sujeto_no(s):
+    datos = {"tercero": "BARRIOS", "tipo_seguro": "AUTOMOTOR", "sujeto": "MANITOU", "importe": "1"}
+    s.crear("seguros", Q, datos)
+    with pytest.raises(TarifaInvalida):
+        s.crear("seguros", Q, dict(datos, importe="2"))
+
+
+def test_un_tipo_de_seguro_inventado_se_rechaza(s):
+    with pytest.raises(TarifaInvalida) as e:
+        s.crear("seguros", Q, {"tercero": "A", "tipo_seguro": "GRANIZO",
+                               "sujeto": "X", "importe": "1"})
+    assert "máquina o a una persona" in str(e.value)
+
+
+def test_la_referencia_guarda_la_patente_o_el_cuil(s):
+    t = s.crear("seguros", Q, {"tercero": "A", "tipo_seguro": "ACCIDENTES_PERSONALES",
+                               "sujeto": "ROJAS, ANGEL", "referencia": "20123456789",
+                               "importe": "1"})
+    assert t.referencia == "20123456789"
 
 
 def test_un_precio_negativo_se_rechaza(s):

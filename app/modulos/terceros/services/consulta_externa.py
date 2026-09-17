@@ -462,6 +462,86 @@ WHERE pp.borrado <> 'S'
 GROUP BY pp.id_maquina
 """)
 
+# ─── Padrón de bienes de terceros (etapa 6) ─────────────────────────────────
+#
+# Todo lo que un Tercero tiene y la empresa le asegura: sus colectivos y su
+# maquinaria. Sirve para que quien carga los seguros elija de una lista en vez
+# de tipear el nombre — si lo tipea, tiene que coincidir exacto con el del
+# sistema de campo o el seguro no se le imputa a nadie.
+#
+# Sale del sistema de campo, que es el maestro. Dos orígenes distintos:
+#   colectivos   el `nombre` ES el del dueño y la patente está en su columna
+#   choferes     no hay padrón: se deducen de quién manejó sus colectivos
+#   maquinaria   el dueño es el último campo de `descripcion`… salvo en los
+#                vehículos, donde ese último campo es la patente. Cuando pasa
+#                eso el dueño vuelve vacío y se ve el hueco, en vez de dar por
+#                dueño a una patente.
+QUERY_BIENES_TERCEROS = text("""
+SELECT * FROM (
+    SELECT
+        'colectivo'                 AS origen,
+        c.id                        AS id_origen,
+        TRIM(c.nombre)              AS tercero,
+        TRIM(c.nombre)              AS nombre,
+        NULLIF(TRIM(c.patente), '') AS patente,
+        NULLIF(TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(c.descripcion, ';', 4), ';', -1)), '') AS detalle
+    FROM laa_colectivos c
+    WHERE c.estado <> 9
+      AND UPPER(TRIM(SUBSTRING_INDEX(c.descripcion, ';', 1))) LIKE '%%TERCERO%%'
+      AND UPPER(TRIM(c.nombre)) NOT LIKE 'SIN COLECTIVO%%'
+
+    UNION ALL
+
+    SELECT
+        'maquinaria',
+        m.id,
+        -- El último campo es el dueño, salvo cuando es una patente.
+        NULLIF(
+            CASE WHEN TRIM(SUBSTRING_INDEX(m.descripcion, ';', -1))
+                      REGEXP '^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2}|[A-Z][0-9]{3}[A-Z]{3})$'
+                 THEN ''
+                 ELSE TRIM(REPLACE(SUBSTRING_INDEX(m.descripcion, ';', -1), ',', ' '))
+            END, ''),
+        TRIM(m.nombre),
+        -- La patente puede estar en el último campo o embebida en el nombre.
+        NULLIF(
+            CASE WHEN TRIM(SUBSTRING_INDEX(m.descripcion, ';', -1))
+                      REGEXP '^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2}|[A-Z][0-9]{3}[A-Z]{3})$'
+                 THEN TRIM(SUBSTRING_INDEX(m.descripcion, ';', -1))
+                 ELSE ''
+            END, ''),
+        NULLIF(TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(m.descripcion, ';', 2), ';', -1)), '')
+    FROM laa_maquinarias m
+    WHERE m.estado <> 9
+      AND UPPER(TRIM(SUBSTRING_INDEX(m.descripcion, ';', 1))) LIKE '%%TERCERO%%'
+
+    UNION ALL
+
+    -- Los choferes de cada tercero. No hay un padrón de choferes por dueño en
+    -- ningún lado: se deducen de quién manejó sus colectivos. Por eso llevan
+    -- ventana de un año — un chofer que no maneja hace dos años no es suyo.
+    SELECT DISTINCT
+        'chofer',
+        u.id,
+        TRIM(col.nombre),
+        TRIM(u.name),
+        NULLIF(TRIM(u.username), ''),   -- el CUIL
+        'CHOFER'
+    FROM laa_pdcosechasregistros r
+    JOIN laa_pdcosechas p ON p.id = r.parent_id
+    JOIN laa_colectivos col ON col.id = r.colectivo
+    JOIN laa_legajos l ON l.id = r.chofer
+    JOIN ast_users u ON u.id = l.user
+    WHERE r.estado <> 9 AND p.estado <> 9
+      AND p.fecha >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+      AND UPPER(TRIM(SUBSTRING_INDEX(col.descripcion, ';', 1))) LIKE '%%TERCERO%%'
+      AND UPPER(TRIM(col.nombre)) NOT LIKE 'SIN COLECTIVO%%'
+      AND u.name IS NOT NULL
+) b
+ORDER BY (b.tercero IS NULL), b.tercero, b.origen, b.nombre
+""")
+
+
 # Las columnas que devuelve cada consulta. Están acá y no solo en el SQL porque
 # son el contrato de la etapa 1: son las mismas que hoy tienen las hojas de
 # aterrizaje del Excel, y los tests las fijan para que un cambio en el SELECT
@@ -536,6 +616,10 @@ class ConsultaExternaService:
 
     def maquinas_terceros_compras(self) -> list[dict]:
         return self._sin_parametros(self.db_sueldos, QUERY_MAQUINAS_TERCEROS_COMPRAS)
+
+    def bienes_terceros(self) -> list[dict]:
+        """Colectivos, maquinaria y choferes de terceros: lo que se asegura."""
+        return self._sin_parametros(self.db_externa, QUERY_BIENES_TERCEROS)
 
     def lineas_por_maquina(self, anio: int) -> dict[int, int]:
         """Cuántas líneas de repuestos tuvo cada máquina en el año."""

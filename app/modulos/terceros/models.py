@@ -305,22 +305,41 @@ class PrecioReparacion(Base):
     )
 
 
+# Las tres clases de póliza que llegan. La primera cubre una máquina o un
+# vehículo; las otras dos cubren a una persona.
+SEGURO_AUTOMOTOR = "AUTOMOTOR"
+SEGURO_RELACION_DEPENDENCIA = "RELACION_DEPENDENCIA"
+SEGURO_ACCIDENTES_PERSONALES = "ACCIDENTES_PERSONALES"
+TIPOS_SEGURO = (SEGURO_AUTOMOTOR, SEGURO_RELACION_DEPENDENCIA,
+                SEGURO_ACCIDENTES_PERSONALES)
+
+
 class PrecioSeguro(Base):
-    """La cuota de la póliza de una máquina. La carga a mano quien tiene los
-    seguros a cargo: no llega por archivo ni sale de ningún sistema."""
+    """La cuota de una póliza. La carga a mano quien tiene los seguros a cargo:
+    no llega por archivo ni sale de ningún sistema.
+
+    El sujeto no siempre es una máquina — el seguro del chofer cubre a una
+    persona. Por eso `sujeto` y no `maquinaria`: meter el nombre de alguien en
+    una columna que dice máquina deja la tabla ilegible para el que venga.
+    """
     __tablename__ = "terceros_precio_seguro"
 
-    id         = Column(Integer, primary_key=True, autoincrement=True)
-    quincena   = Column(Date, nullable=False, index=True)
-    tercero    = Column(String(150), nullable=False)
-    maquinaria = Column(String(200), nullable=False)
-    importe    = Column(Numeric(14, 2), nullable=False)
-    heredada   = Column(Boolean, nullable=False, default=False)
-    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
-    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    quincena    = Column(Date, nullable=False, index=True)
+    tercero     = Column(String(150), nullable=False)
+    tipo_seguro = Column(String(30), nullable=False)
+    # La máquina o la persona que cubre la póliza.
+    sujeto      = Column(String(200), nullable=False)
+    # Cómo se lo identifica: la patente si es un bien, el CUIL si es alguien.
+    referencia  = Column(String(60), nullable=True)
+    importe     = Column(Numeric(14, 2), nullable=False)
+    heredada    = Column(Boolean, nullable=False, default=False)
+    creado_en   = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por  = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
-    DIMENSIONES = ("tercero", "maquinaria")
+    DIMENSIONES = ("tercero", "tipo_seguro", "sujeto")
 
     __table_args__ = (
-        UniqueConstraint("quincena", "tercero", "maquinaria", name="uq_terceros_precio_seguro"),
+        UniqueConstraint("quincena", "tercero", "tipo_seguro", "sujeto",
+                         name="uq_terceros_precio_seguro"),
     )
