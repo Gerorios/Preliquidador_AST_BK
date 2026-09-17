@@ -93,6 +93,11 @@ class HoraServicioResponse(BaseModel):
     supervisor: str | None = None
     horas_jornal: Decimal
     horas_maquina: Decimal
+    # Cuánto midió la tarea y de qué son. Sólo la planilla de MAQUINARIA las
+    # carga. `unidad` dice qué mide la tarea (BINS, TANCADAS, HORAS…) y **no**
+    # cómo se paga: eso lo decide la Unidad base de la tarifa.
+    unidades: Decimal | None = None
+    unidad: str | None = None
 
 
 class HoraReparacionResponse(BaseModel):

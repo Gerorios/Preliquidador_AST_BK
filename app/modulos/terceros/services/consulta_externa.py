@@ -297,6 +297,13 @@ ORDER BY ru.fecha, ru.maquina
 # con texto adentro ('.50', '11playas muy lejo'). Por eso cada una se valida con
 # REGEXP antes de convertir, en vez de dejar que MySQL la tome como cero.
 #
+# `unidades` es cuánto midió la tarea y `unidad` de qué son: BINS, TANCADAS,
+# HORAS, HORAS TRACTOR o JORNAL. Sólo la planilla de MAQUINARIA las carga; en
+# cosecha y pulverizadas vienen vacías. Ojo con sumarlas sin mirar `unidad`:
+# mezclaría bins con tancadas y con horas. `unidad` es lo que la tarea mide,
+# **no** cómo se paga — eso lo decide la Unidad base de la tarifa, igual que el
+# Grupo de pago de Preliquidación (ver CONTEXT.md).
+#
 # El dueño sale del último campo de `descripcion`, que tiene la forma
 # PROPIEDAD;TIPO;MARCA;MODELO;NUMERO;DUEÑO. Cuando ese campo trae una patente en
 # vez de un nombre se devuelve NULL, para que el hueco se vea en lugar de
@@ -322,7 +329,9 @@ SELECT
     ), '')             AS tercero,
     usuarios_supervisor.`name` AS supervisor,
     h.hsjornal         AS horas_jornal,
-    h.hsmaquina        AS horas_maquina
+    h.hsmaquina        AS horas_maquina,
+    h.unidades         AS unidades,
+    tareas.unidad      AS unidad
 FROM (
     -- 1. Parte diario de COSECHA
     SELECT
@@ -336,7 +345,8 @@ FROM (
         CASE WHEN TRIM(r1.hsjornal)  REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(r1.hsjornal)  AS DECIMAL(10,2)) ELSE 0 END AS hsjornal,
         CASE WHEN TRIM(r1.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(r1.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END AS hsmaquina
+             THEN CAST(TRIM(r1.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END AS hsmaquina,
+        NULL AS unidades
     FROM laa_pdcosechasregistros1 r1
         INNER JOIN laa_pdcosechas pdc ON pdc.id = r1.parent_id
     WHERE r1.estado <> 9 AND pdc.estado <> 9
@@ -350,7 +360,9 @@ FROM (
         CASE WHEN TRIM(mr.hsjornal)  REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(mr.hsjornal)  AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(mr.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(mr.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END
+             THEN CAST(TRIM(mr.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END,
+        CASE WHEN TRIM(mr.unidades)  REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(mr.unidades)  AS DECIMAL(12,2)) ELSE NULL END
     FROM laa_pdmaquinariasregistros mr
         INNER JOIN laa_pdmaquinarias pdm ON pdm.id = mr.parent_id
     WHERE mr.estado <> 9 AND pdm.estado <> 9
@@ -364,7 +376,8 @@ FROM (
         CASE WHEN TRIM(pr.hsjornal1)  REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(pr.hsjornal1)  AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(pr.hsmaquina1) REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(pr.hsmaquina1) AS DECIMAL(10,2)) ELSE 0 END
+             THEN CAST(TRIM(pr.hsmaquina1) AS DECIMAL(10,2)) ELSE 0 END,
+        NULL
     FROM laa_pdpulverizadasregistros pr
         INNER JOIN laa_pdpulverizadas pdp ON pdp.id = pr.parent_id
     WHERE pr.estado <> 9 AND pdp.estado <> 9 AND pr.tractor1 IS NOT NULL
@@ -378,7 +391,8 @@ FROM (
         CASE WHEN TRIM(pr.hsjornal2)  REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(pr.hsjornal2)  AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(pr.hsmaquina2) REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(pr.hsmaquina2) AS DECIMAL(10,2)) ELSE 0 END
+             THEN CAST(TRIM(pr.hsmaquina2) AS DECIMAL(10,2)) ELSE 0 END,
+        NULL
     FROM laa_pdpulverizadasregistros pr
         INNER JOIN laa_pdpulverizadas pdp ON pdp.id = pr.parent_id
     WHERE pr.estado <> 9 AND pdp.estado <> 9 AND pr.tractor2 IS NOT NULL
@@ -394,7 +408,10 @@ WHERE TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', 1)) IN ('TERCEROS', 'TE
   -- DATE(): la fecha viene como datetime con hora 03:00, y sin esto el
   -- último día de la quincena queda afuera entero.
   AND DATE(h.fecha) BETWEEN :fecha_desde AND :fecha_hasta
-  AND (h.hsmaquina > 0 OR h.hsjornal > 0)
+  -- Los tres, no dos. Con sólo (máquina OR unidades) se caían 16 filas de
+  -- 2026 que tienen horas de jornal y nada más: 86 horas de trabajo real de 8
+  -- máquinas de terceros, que desaparecían sin que nadie se enterara.
+  AND (h.hsmaquina > 0 OR h.hsjornal > 0 OR h.unidades > 0)
 ORDER BY h.fecha, maquinarias.nombre
 """)
 
@@ -471,7 +488,8 @@ COLUMNAS_CARGAS_COMBUSTIBLE = (
 )
 COLUMNAS_HORAS_SERVICIO = (
     "fecha", "quincena_mes", "planilla", "cliente", "finca", "tarea",
-    "maquinaria", "tercero", "supervisor", "horas_jornal", "horas_maquina",
+    "maquinaria", "tercero", "supervisor",
+    "horas_jornal", "horas_maquina", "unidades", "unidad",
 )
 COLUMNAS_REPUESTOS = (
     "id_maquina", "maquina", "fecha", "fecha_descarga", "quincena_mes",
