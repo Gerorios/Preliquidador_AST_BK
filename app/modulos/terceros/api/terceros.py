@@ -151,8 +151,9 @@ def listar_horas_servicio(
 
     Es lo que se les **paga** por el servicio de maquinaria. Salen de tres
     partes diarios distintos del sistema de campo —cosecha, maquinaria y
-    pulverizadas— y vienen con las dos horas, jornal y máquina, porque cuál se
-    paga lo decide la tarifa y no el dato.
+    pulverizadas— y vienen con las dos medidas sobre las que se puede pactar:
+    la hora de máquina y la cantidad que midió la tarea. Cuál de las dos se
+    paga lo decide la Unidad base de la tarifa, no el dato.
     """
     return servicio.horas_servicio(quincena)
 

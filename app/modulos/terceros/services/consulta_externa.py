@@ -328,7 +328,6 @@ SELECT
             END, ',', ' '), '  ', ' ')
     ), '')             AS tercero,
     usuarios_supervisor.`name` AS supervisor,
-    h.hsjornal         AS horas_jornal,
     h.hsmaquina        AS horas_maquina,
     h.unidades         AS unidades,
     tareas.unidad      AS unidad
@@ -342,8 +341,6 @@ FROM (
         pdc.tarea      AS tarea,
         pdc.supervisor AS supervisor,
         r1.maquinaria  AS maquinaria,
-        CASE WHEN TRIM(r1.hsjornal)  REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(r1.hsjornal)  AS DECIMAL(10,2)) ELSE 0 END AS hsjornal,
         CASE WHEN TRIM(r1.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(r1.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END AS hsmaquina,
         NULL AS unidades
@@ -357,8 +354,6 @@ FROM (
     SELECT
         'MAQUINARIA', pdm.fecha, pdm.cliente, pdm.finca, mr.tarea,
         pdm.supervisor, mr.maquinaria,
-        CASE WHEN TRIM(mr.hsjornal)  REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(mr.hsjornal)  AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(mr.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(mr.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(mr.unidades)  REGEXP '^[0-9]*[.]?[0-9]+$'
@@ -373,8 +368,6 @@ FROM (
     SELECT
         'PULVERIZADA', pdp.fecha, pdp.cliente, pdp.finca, pdp.tarea,
         pdp.supervisor, pr.tractor1,
-        CASE WHEN TRIM(pr.hsjornal1)  REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(pr.hsjornal1)  AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(pr.hsmaquina1) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(pr.hsmaquina1) AS DECIMAL(10,2)) ELSE 0 END,
         NULL
@@ -388,8 +381,6 @@ FROM (
     SELECT
         'PULVERIZADA', pdp.fecha, pdp.cliente, pdp.finca, pdp.tarea,
         pdp.supervisor, pr.tractor2,
-        CASE WHEN TRIM(pr.hsjornal2)  REGEXP '^[0-9]*[.]?[0-9]+$'
-             THEN CAST(TRIM(pr.hsjornal2)  AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(pr.hsmaquina2) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(pr.hsmaquina2) AS DECIMAL(10,2)) ELSE 0 END,
         NULL
@@ -408,10 +399,10 @@ WHERE TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', 1)) IN ('TERCEROS', 'TE
   -- DATE(): la fecha viene como datetime con hora 03:00, y sin esto el
   -- último día de la quincena queda afuera entero.
   AND DATE(h.fecha) BETWEEN :fecha_desde AND :fecha_hasta
-  -- Los tres, no dos. Con sólo (máquina OR unidades) se caían 16 filas de
-  -- 2026 que tienen horas de jornal y nada más: 86 horas de trabajo real de 8
-  -- máquinas de terceros, que desaparecían sin que nadie se enterara.
-  AND (h.hsmaquina > 0 OR h.hsjornal > 0 OR h.unidades > 0)
+  -- Sin horas de máquina ni cantidad no hay nada sobre qué aplicar una tarifa,
+  -- así que la fila no es una línea a liquidar. En 2026 son 16 filas con horas
+  -- de jornal y nada más (86 horas): candidatas a una Verificación, no a pago.
+  AND (h.hsmaquina > 0 OR h.unidades > 0)
 ORDER BY h.fecha, maquinarias.nombre
 """)
 
@@ -488,8 +479,7 @@ COLUMNAS_CARGAS_COMBUSTIBLE = (
 )
 COLUMNAS_HORAS_SERVICIO = (
     "fecha", "quincena_mes", "planilla", "cliente", "finca", "tarea",
-    "maquinaria", "tercero", "supervisor",
-    "horas_jornal", "horas_maquina", "unidades", "unidad",
+    "maquinaria", "tercero", "supervisor", "horas_maquina", "unidades", "unidad",
 )
 COLUMNAS_REPUESTOS = (
     "id_maquina", "maquina", "fecha", "fecha_descarga", "quincena_mes",
@@ -523,9 +513,8 @@ class ConsultaExternaService:
     def horas_servicio(self, quincena: date) -> list[dict]:
         """Lo que la maquinaria del Tercero trabajó en las fincas.
 
-        Trae las dos horas —jornal y máquina— porque cuál se paga lo decide la
-        tarifa, no el dato: a veces se pacta por hora y a veces jornalizado. En
-        2026 la diferencia entre una y otra son 4.177 horas."""
+        Trae la hora de máquina y la cantidad que midió la tarea: sobre cuál de
+        las dos se paga decide la Unidad base de la tarifa, no el dato."""
         return self._traer(self.db_externa, QUERY_HORAS_SERVICIO, quincena)
 
     @staticmethod

@@ -76,8 +76,9 @@ class RepuestoResponse(BaseModel):
 class HoraServicioResponse(BaseModel):
     """Una máquina de un Tercero trabajando en una finca.
 
-    Trae las dos horas a propósito: cuál se paga lo decide la Unidad base de la
-    tarifa, no el dato. En 2026 la diferencia entre una y otra son 4.177 horas.
+    Trae las dos medidas sobre las que se puede pactar —la hora de máquina y la
+    cantidad que midió la tarea— porque cuál se paga lo decide la Unidad base de
+    la tarifa, no el dato.
     """
     fecha: date
     quincena_mes: str
@@ -91,7 +92,6 @@ class HoraServicioResponse(BaseModel):
     # rellena, porque liquidarle horas a una patente sería peor.
     tercero: str | None = None
     supervisor: str | None = None
-    horas_jornal: Decimal
     horas_maquina: Decimal
     # Cuánto midió la tarea y de qué son. Sólo la planilla de MAQUINARIA las
     # carga. `unidad` dice qué mide la tarea (BINS, TANCADAS, HORAS…) y **no**

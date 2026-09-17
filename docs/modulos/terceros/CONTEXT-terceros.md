@@ -99,8 +99,8 @@ Regla que determina el Tipo de viaje y el precio de un Viaje, sobre cuatro dimen
 Regla que determina el precio de una Hora de servicio, sobre cuatro dimensiones: tercero, cliente, finca y tarea. Además de un precio, fija la **Unidad base**.
 
 **Unidad base**:
-Sobre qué medida se calcula una Tarifa de servicio: la **hora de máquina**, la **hora de jornal** o la **cantidad** que midió la tarea. El sistema de campo carga las tres por cada trabajo y no coinciden; cuál se paga es lo pactado con cada Tercero, no una propiedad del dato. Es el mismo término y el mismo criterio que la Unidad base de Preliquidación (ver `CONTEXT.md`).
-_Avoid_: dar por sentado que se paga la hora de máquina
+Sobre qué medida se calcula una Tarifa de servicio: la **hora de máquina** o la **cantidad** que midió la tarea. Cuál de las dos es lo pactado con cada Tercero, no una propiedad del dato. La hora de jornal no se paga nunca, aunque el sistema de campo también la cargue. Es el mismo término y el mismo criterio que la Unidad base de Preliquidación (ver `CONTEXT.md`).
+_Avoid_: pagar por hora de jornal; dar por sentado que se paga la hora de máquina
 
 **Unidad de la tarea**:
 De qué son las cantidades que el sistema de campo carga en un trabajo: BINS, TANCADAS, HORAS, HORAS TRACTOR o JORNAL. Viene del catálogo de tareas y es **informativa**: dice qué mide la tarea, no cómo se paga. Una tarea medida en bins puede pagarse igual por hora — eso lo decide la Unidad base de la tarifa. Es el mismo papel que el Grupo de pago en Preliquidación.

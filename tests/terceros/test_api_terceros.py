@@ -57,9 +57,8 @@ SERVICIO = {
     "cliente": "CITROMAX", "finca": "TAJAMAR 2", "tarea": "CARGA FRUTA POR BINS",
     "maquinaria": "MANITOU MANITOU N°0060 BARRIOS", "tercero": "BARRIOS",
     "supervisor": "MOLINA, ALFREDO FEDERICO",
-    # Las tres medidas, distintas entre sí: es el caso que importa.
-    "horas_jornal": Decimal("8.00"), "horas_maquina": Decimal("6.00"),
-    "unidades": Decimal("297.00"), "unidad": "BINS",
+    # Las dos medidas, distintas entre sí: es el caso que importa.
+    "horas_maquina": Decimal("6.00"), "unidades": Decimal("297.00"), "unidad": "BINS",
 }
 ESTADOS = {"aprobadas": 1, "pendientes": 2, "rechazadas": 3,
            "horas_aprobadas": 5.0, "horas_pendientes": 9.5}
@@ -348,14 +347,14 @@ def test_un_año_disparatado_se_rechaza(anio, cliente):
 
 # ─── Horas de servicio ──────────────────────────────────────────────────────
 
-def test_las_horas_de_servicio_traen_las_tres_medidas(cliente):
+def test_las_horas_de_servicio_traen_las_dos_medidas(cliente):
     """Sobre cuál se paga decide la Unidad base de la tarifa, no el dato: si la
     consulta trajera una sola, esa elección no se podría hacer."""
     c, _, _ = cliente
     fila = c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]
-    assert fila["horas_jornal"] == "8.00"
     assert fila["horas_maquina"] == "6.00"
     assert fila["unidades"] == "297.00"
+    assert "horas_jornal" not in fila      # no se paga por jornal
 
 
 def test_la_unidad_dice_que_mide_la_tarea(cliente):
