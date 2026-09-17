@@ -205,3 +205,70 @@ class DetalleConjunto(BaseModel):
 class GenerarResponse(LiquidacionResponse):
     nueva: bool                            # False = era una actualización
     detalle: dict[str, DetalleConjunto]
+
+
+# ─── El Tarifario (etapa 6) ─────────────────────────────────────────────────
+
+class TarifaResponse(BaseModel):
+    """Una regla del tarifario.
+
+    Los cinco tarifarios comparten esta forma aunque no usen todos los campos:
+    una tarifa de viaje no tiene `maquinaria` y un seguro no tiene `capataz`.
+    Se devuelven en una sola forma para que la pantalla los trate igual; cuál
+    corresponde a cada tipo lo dice `dimensiones`.
+    """
+    id: int
+    quincena: date
+    # Vino copiada de otra quincena y nadie la confirmó. Paga igual, pero se
+    # resalta para no arrastrar un precio viejo si hubo aumento.
+    heredada: bool
+    creado_en: datetime
+    # Cuántas dimensiones tiene cargadas: entre dos reglas que alcanzan al mismo
+    # hecho, gana la de más.
+    especificidad: int
+
+    tercero: str | None = None
+    cliente: str | None = None
+    finca: str | None = None
+    capataz: str | None = None
+    tarea: str | None = None
+    maquinaria: str | None = None
+
+    tipo_viaje: str | None = None
+    unidad_base: str | None = None
+    precio: Decimal | None = None
+    importe: Decimal | None = None
+
+
+class TarifaRequest(BaseModel):
+    """Lo que se manda para crear o editar. Los campos que no apliquen al tipo
+    se ignoran; los que falten y sean obligatorios devuelven 422 con el motivo."""
+    tercero: str | None = None
+    cliente: str | None = None
+    finca: str | None = None
+    capataz: str | None = None
+    tarea: str | None = None
+    maquinaria: str | None = None
+    tipo_viaje: str | None = None
+    unidad_base: str | None = None
+    precio: Decimal | None = None
+    importe: Decimal | None = None
+
+
+class TarifarioResumen(BaseModel):
+    cargadas: int
+    heredadas: int          # cuántas están sin confirmar
+
+
+class CopiarRequest(BaseModel):
+    desde: date
+    hasta: date
+    # Vacío = los cinco tarifarios.
+    tipos: list[str] | None = None
+
+
+class CopiadoConjunto(BaseModel):
+    en_origen: int
+    copiadas: int
+    ya_estaban: int         # no se pisan: el destino manda
+

@@ -37,6 +37,8 @@ from app.modulos.terceros.permisos import requiere_operativo
 from app.modulos.terceros.schemas import (
     AlertasResponse,
     CargaCombustibleResponse,
+    CopiadoConjunto,
+    CopiarRequest,
     GenerarRequest,
     GenerarResponse,
     LiquidacionResponse,
@@ -44,11 +46,17 @@ from app.modulos.terceros.schemas import (
     HorasReparacionResponse,
     QuincenaResponse,
     RepuestoResponse,
+    TarifaRequest,
+    TarifaResponse,
+    TarifarioResumen,
     ViajeResponse,
 )
 from app.modulos.terceros.services import alertas_cruce, quincenas
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
 from app.modulos.terceros.services.liquidacion_service import LiquidacionService
+from app.modulos.terceros.services.tarifario_service import (
+    TIPOS as TIPOS_TARIFA, TarifaInvalida, TarifarioService, especificidad,
+)
 from app.modulos.terceros.services.consulta_taller import (
     ConsultaTallerService,
     TallerNoConfigurado,
@@ -105,6 +113,27 @@ def get_consulta_taller() -> ConsultaTallerService:
     return ConsultaTallerService()
 
 
+def get_tarifario(
+    db_propia: Session = Depends(get_db_propia),
+) -> TarifarioService:
+    return TarifarioService(db_propia)
+
+
+def _tarifa_a_dict(fila) -> dict:
+    """La forma común de las cinco tablas, más su especificidad."""
+    campos = ("tercero", "cliente", "finca", "capataz", "tarea", "maquinaria",
+              "tipo_viaje", "unidad_base", "precio", "importe")
+    salida = {c: getattr(fila, c, None) for c in campos}
+    # Una dimensión vacía se guarda como '' para que el índice único funcione,
+    # pero hacia afuera es "no aplica": se devuelve como null.
+    for d in fila.DIMENSIONES:
+        if salida.get(d) == "":
+            salida[d] = None
+    salida.update(id=fila.id, quincena=fila.quincena, heredada=fila.heredada,
+                  creado_en=fila.creado_en, especificidad=especificidad(fila))
+    return salida
+
+
 def get_liquidacion(
     db_propia: Session = Depends(get_db_propia),
     externa: ConsultaExternaService = Depends(get_consulta_externa),
@@ -152,6 +181,113 @@ def generar_liquidacion(
     except FALLAS_DE_ORIGEN as e:
         # Si un origen no contesta, no se guarda media quincena.
         raise HTTPException(status_code=502, detail=_mensaje_origen(e))
+
+
+# ─── El Tarifario ───────────────────────────────────────────────────────────
+#
+# Un solo juego de endpoints para los cinco tarifarios: cambia el `tipo` de la
+# ruta. Las cinco tablas tienen dimensiones distintas pero el mismo circuito —
+# cargar, editar, confirmar, borrar y copiar de otra quincena—, así que cinco
+# juegos de endpoints iguales serían cinco lugares donde arreglar el mismo bug.
+
+@router.get("/tarifario/resumen", response_model=dict[str, TarifarioResumen])
+def resumen_tarifario(
+    quincena: date = Depends(quincena_param),
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    """Cuántas reglas tiene cada tarifario y cuántas están sin confirmar."""
+    return servicio.resumen(quincena)
+
+
+@router.post("/tarifario/copiar", response_model=dict[str, CopiadoConjunto])
+def copiar_tarifario(
+    req: CopiarRequest,
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    """Trae las reglas de otra quincena, marcadas como heredadas.
+
+    Lo que ya exista en el destino **no se toca**: copiar es traer lo que falta,
+    nunca pisar un precio que alguien ya pactó para esta quincena.
+    """
+    for q in (req.desde, req.hasta):
+        if not quincenas.es_inicio_valido(q):
+            raise HTTPException(
+                status_code=422,
+                detail="Una quincena se identifica por su primer día: el 1 o el 16 del mes.")
+    try:
+        return servicio.copiar(req.desde, req.hasta, tuple(req.tipos) if req.tipos else None)
+    except TarifaInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.get("/tarifario/{tipo}", response_model=list[TarifaResponse])
+def listar_tarifas(
+    tipo: str,
+    quincena: date = Depends(quincena_param),
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    """Las reglas de ese tarifario, de la más general a la más específica."""
+    try:
+        return [_tarifa_a_dict(f) for f in servicio.listar(tipo, quincena)]
+    except TarifaInvalida as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/tarifario/{tipo}", response_model=TarifaResponse, status_code=201)
+def crear_tarifa(
+    tipo: str,
+    req: TarifaRequest,
+    quincena: date = Depends(quincena_param),
+    usuario=Depends(get_usuario_actual),
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    try:
+        fila = servicio.crear(tipo, quincena, req.model_dump(exclude_none=True),
+                              usuario_id=getattr(usuario, "id", None))
+    except TarifaInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return _tarifa_a_dict(fila)
+
+
+@router.patch("/tarifario/{tipo}/{id_}", response_model=TarifaResponse)
+def actualizar_tarifa(
+    tipo: str,
+    id_: int,
+    req: TarifaRequest,
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    """Cambiar un precio **confirma** la regla: si estaba heredada deja de
+    estarlo, porque alguien la miró y decidió."""
+    try:
+        fila = servicio.actualizar(tipo, id_, req.model_dump(exclude_none=True))
+    except TarifaInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return _tarifa_a_dict(fila)
+
+
+@router.post("/tarifario/{tipo}/{id_}/confirmar", response_model=TarifaResponse)
+def confirmar_tarifa(
+    tipo: str,
+    id_: int,
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    """Dejar el precio como está, pero dicho por una persona."""
+    try:
+        return _tarifa_a_dict(servicio.confirmar(tipo, id_))
+    except TarifaInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.delete("/tarifario/{tipo}/{id_}", status_code=204)
+def eliminar_tarifa(
+    tipo: str,
+    id_: int,
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    try:
+        servicio.eliminar(tipo, id_)
+    except TarifaInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.get("/quincenas", response_model=list[QuincenaResponse])

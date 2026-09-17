@@ -1,6 +1,6 @@
 # Plan de implementación — módulo Liquidación Terceros
 
-**Estado**: etapas 1 a 5 hechas (del 2026-09-10 al 09-17). El plan se rehízo el **2026-09-16**, cuando apareció el segundo circuito —el servicio de maquinaria— y con él una forma distinta del módulo.
+**Estado**: etapas 1 a 6 hechas (del 2026-09-10 al 09-17). El plan se rehízo el **2026-09-16**, cuando apareció el segundo circuito —el servicio de maquinaria— y con él una forma distinta del módulo.
 **Fecha de la decisión original**: 2026-09-09, sesión de grilling sobre el Excel que hoy resuelve el circuito.
 **Quién lo construye**: Pitu. Revisión y merge, Gero (regla 4 de `GUIA-MODULOS.md`).
 
@@ -156,7 +156,7 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 | 3 | ~~Alertas de cruce entre los tres sistemas~~ | **Hecho (2026-09-16).** Pasan a ser parte de las Verificaciones |
 | 4 | ~~**La quinta consulta: Horas de servicio**~~ | **Hecho (2026-09-16).** Ver abajo |
 | 5 | ~~**Tablas propias, migración 001 y generar la quincena**~~ | **Hecho (2026-09-17).** Ver abajo |
-| 6 | **Tarifario**: las cinco tablas, por quincena, con copia y herencia | Se cargan las tarifas de agosto sin tipear fila por fila |
+| 6 | ~~**Tarifario**: las cinco tablas, por quincena, con copia y herencia~~ | **Hecho (2026-09-17).** Ver abajo |
 | 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista | El neto de agosto coincide, tercero por tercero |
 | 8 | **La grilla**: una sola pantalla filtrable por concepto, cliente, tercero y capataz, con exportar a Excel. Reemplaza las cuatro pantallas de la etapa 2 | El liquidador revisa agosto entero desde ahí |
 | 9 | **Verificaciones por fuente**: duplicados en cada origen, más los cruces de la etapa 3 reorganizados | Se detecta un duplicado real antes de liquidar |
@@ -169,6 +169,12 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 **Etapa 1** (2026-09-10). Las cuatro consultas viven en `app/modulos/terceros/services/`. Tres son SQL contra el sistema de campo y el de compras; la cuarta baja el Sheet de la app del taller con `httpx` + `openpyxl`, sin dependencias nuevas, con la URL en `TALLER_SHEET_URL` fuera del repo. `scripts/validar_terceros_etapa1.py` las compara contra el Excel: `07-2Q` y `08-1Q` coinciden exacto, fila por fila y en los totales.
 
 **Etapa 2** (2026-09-14). El módulo se activó al tener sus primeras pantallas. Un endpoint por conjunto y ninguno que los junte: hubo un `/resumen` y se sacó porque pedía los cuatro orígenes en serie y tardaba 15 segundos. Con cuatro, el navegador los pide en paralelo — 21,6 s a 12,1 s medidos. Estas pantallas las reemplaza la etapa 8.
+
+**Etapa 6** (2026-09-17). `migrations/terceros/002_tarifario.sql` y la pantalla Tarifario, con las cinco tablas en solapas. Un solo juego de endpoints para los cinco (`/tarifario/{tipo}`) y una sola pantalla que arma sus columnas desde un descriptor: cinco circuitos iguales serían cinco lugares donde arreglar el mismo bug.
+
+**Las dimensiones vacías se guardan como `''` y no como `NULL`.** Es la decisión menos obvia de la migración: en MySQL un UNIQUE deja pasar varias filas con NULL, así que con dimensiones nullable se podrían cargar dos reglas idénticas — justo el empate que el módulo no sabe resolver. Con `''` el índice único lo impide. Hacia afuera la API las devuelve como `null`, que es lo que significan.
+
+**Copiar no pisa el destino**: trae sólo lo que falta, marcado como heredado. Editar un precio lo confirma —si alguien lo tocó, ya no es un precio arrastrado sin mirar— y también hay un botón de confirmar para dejarlo igual pero dicho por una persona.
 
 **Etapa 5** (2026-09-17). `migrations/terceros/001_crear_tablas.sql` crea seis tablas: la cabecera de la quincena y una por conjunto. El Inicio pasa a ser el tablero de quincenas, con generar y actualizar.
 

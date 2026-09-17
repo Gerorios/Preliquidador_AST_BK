@@ -307,6 +307,11 @@ Desde la etapa 5 el módulo tiene tablas propias (`terceros_*`): **generar** tra
 |---|---|---|
 | GET | `/liquidaciones` | Las quincenas ya generadas, con cuántas filas quedó cada conjunto |
 | POST | `/liquidaciones/generar` | Trae las cinco fuentes de una quincena y las guarda. Si ya existe **reconcilia**: suma lo nuevo, saca lo que no está y respeta lo cargado a mano |
+| GET | `/tarifario/resumen` | Cuántas reglas tiene cada tarifario y cuántas están sin confirmar |
+| GET/POST | `/tarifario/{tipo}` | Las reglas de un tarifario y el alta. `tipo`: `viajes`, `servicio`, `combustible`, `reparacion`, `seguros` |
+| PATCH/DELETE | `/tarifario/{tipo}/{id}` | Editar (editar **confirma** la regla) y borrar |
+| POST | `/tarifario/{tipo}/{id}/confirmar` | Dejar el precio como está, pero dicho por una persona |
+| POST | `/tarifario/copiar` | Trae las reglas de otra quincena marcadas como heredadas. **No pisa** lo que ya exista en el destino |
 | GET | `/quincenas` | Quincenas elegibles del selector, calculadas por calendario |
 | GET | `/viajes` | Viajes de la quincena (sistema de campo) |
 | GET | `/combustible` | Cargas de combustible de la quincena (sistema de campo) |
@@ -328,5 +333,5 @@ Los cinco listados toman `?quincena=AAAA-MM-DD` con el primer día de la quincen
 
 - **Tabla `usuarios`**: versionada en `migrations/core/000_usuarios.sql`; `core/001` la actualiza (rol admin|usuario). El PR 5 (Administración de usuarios) no agrega ninguna migración: `email` ya era `UNIQUE NOT NULL`, y el alta desde el padrón reusa esa columna con el email sintético `<cuil>@usuarios.laasturianasrl.com.ar` (ver `app/core/identidad.py`).
 - **BD externa y BD de sueldos**: solo lectura, nunca se escribe en ellas.
-- **Migraciones**: SQL manual versionado, organizado por carpeta. `migrations/core/` (núcleo, compartido por todos los módulos): `000_usuarios.sql`, `001_usuario_modulo.sql`. `migrations/terceros/`: `001_crear_tablas.sql` (las seis tablas del módulo; los precios llegan con la etapa 7). `migrations/preliquidacion/`: `000_esquema_base.sql` (tiene FK a `usuarios`) y luego ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad. ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible. En una base nueva, el orden es `core/000` → `preliquidacion/000` → `core/001` → las `ws` que falten según el estado. Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
+- **Migraciones**: SQL manual versionado, organizado por carpeta. `migrations/core/` (núcleo, compartido por todos los módulos): `000_usuarios.sql`, `001_usuario_modulo.sql`. `migrations/terceros/`: `001_crear_tablas.sql` (los hechos de la quincena) y `002_tarifario.sql` (los cinco tarifarios). Los importes calculados llegan con la etapa 7. `migrations/preliquidacion/`: `000_esquema_base.sql` (tiene FK a `usuarios`) y luego ws1→ws2→ws3→ws5→ws7→ws8→ws9→ws10→ws11→ws12→ws13→ws14→ws15→ws16 + fix de trazabilidad. ws9/ws10 son índices de performance diferibles y ws12 son vistas de reporting; el resto no es diferible. En una base nueva, el orden es `core/000` → `preliquidacion/000` → `core/001` → las `ws` que falten según el estado. Las migraciones de cada módulo viven en `migrations/<modulo>/`; las nuevas de preliquidación siguen la numeración `wsN`, las de módulos nuevos empiezan en `001_`.
 - **Documentación**: `docs/DOCUMENTACION.md` (funcional), `docs/AYUDA.md` (uso), `docs/adr/` (decisiones), `CONTEXT.md` (dominio), `docs/DEPLOY.md` (producción), `docs/modulos/GUIA-MODULOS.md` (cómo incorporar un módulo).

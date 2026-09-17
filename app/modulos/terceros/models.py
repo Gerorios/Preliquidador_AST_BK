@@ -1,22 +1,28 @@
 """Modelos SQLAlchemy del módulo Liquidación Terceros.
 
-Espejo de `migrations/terceros/001_crear_tablas.sql`. **La fuente de verdad del
-esquema es la migración, no esto** (regla 9 de GUIA-MODULOS): acá se declara lo
-mismo para que el ORM pueda leer y escribir, y para que el chequeo de tablas
-faltantes del arranque cubra al módulo.
+Espejo de las migraciones de `migrations/terceros/`. **La fuente de verdad del
+esquema son ellas, no esto** (regla 9 de GUIA-MODULOS): acá se declara lo mismo
+para que el ORM pueda leer y escribir, y para que el chequeo de tablas faltantes
+del arranque cubra al módulo.
 
-Qué guardan: la foto de lo que las cinco fuentes tenían cuando se generó la
-quincena. Los precios no están: se calculan en la etapa 7 y llegan con su
-propia migración.
+Son dos familias:
 
-Todas las tablas de hechos tienen `quincena_efectiva` y `motivo_efectiva`, que
-es trabajo manual del liquidador: al regenerar, las filas que las tienen
-cargadas se protegen y se borran últimas.
+  - **Los hechos** (001): la foto de lo que las cinco fuentes tenían cuando se
+    generó la quincena. Todos tienen `quincena_efectiva` y `motivo_efectiva`,
+    que es trabajo manual del liquidador: al regenerar, las filas que las tienen
+    cargadas se protegen y se borran últimas.
+
+  - **El tarifario** (002): los precios que se pactan con cada tercero, por
+    quincena. Nada de acá sale de un sistema: todo se carga a mano.
+
+Lo que todavía no está es el cálculo — aplicarle a cada hecho su tarifa es la
+etapa 7, y las columnas del importe van con la migración de esa etapa.
 """
 from datetime import datetime
 
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -182,3 +188,139 @@ class HoraReparacion(Base):
     motivo_efectiva   = Column(String(255), nullable=True)
 
     liquidacion = relationship("Liquidacion", back_populates="reparaciones")
+
+# ─── El Tarifario (etapa 6) ─────────────────────────────────────────────────
+#
+# Cinco tablas, una por cada cosa que se paga o se descuenta, todas por
+# quincena. Las dimensiones que no participan se guardan como '' y no como
+# NULL: en MySQL un UNIQUE deja pasar varias filas con NULL, y dos reglas
+# idénticas son justo el empate que el módulo no sabe resolver. Con '' el
+# índice único lo impide (ver migrations/terceros/002_tarifario.sql).
+#
+# La regla más específica es la que tiene más dimensiones distintas de ''.
+
+SIN_DIMENSION = ""
+
+# Sobre qué medida se calcula una Tarifa de servicio. Los mismos valores que la
+# Unidad base de Preliquidación, a propósito: es el mismo concepto.
+UNIDAD_HORA_MAQUINA = "hsmaquina"
+UNIDAD_CANTIDAD = "unidades"
+UNIDADES_BASE = (UNIDAD_HORA_MAQUINA, UNIDAD_CANTIDAD)
+
+TIPO_VIAJE_CORTO = "CORTO"
+TIPO_VIAJE_LARGO = "LARGO"
+TIPOS_VIAJE = (TIPO_VIAJE_CORTO, TIPO_VIAJE_LARGO)
+
+
+class TarifaViaje(Base):
+    """Cuánto se le paga un viaje a un tercero, y si es corto o largo.
+
+    El tipo no es clave de la regla sino su resultado: la misma regla que fija
+    el precio fija el tipo. No se deduce del destino — un mismo cliente y finca
+    tiene viajes de los dos tipos.
+    """
+    __tablename__ = "terceros_tarifa_viaje"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    quincena   = Column(Date, nullable=False, index=True)
+    tercero    = Column(String(150), nullable=False, default=SIN_DIMENSION)
+    cliente    = Column(String(150), nullable=False, default=SIN_DIMENSION)
+    finca      = Column(String(150), nullable=False, default=SIN_DIMENSION)
+    capataz    = Column(String(150), nullable=False, default=SIN_DIMENSION)
+    tipo_viaje = Column(String(10), nullable=True)
+    precio     = Column(Numeric(14, 2), nullable=False)
+    # Vino copiada de otra quincena y nadie la confirmó. Paga igual.
+    heredada   = Column(Boolean, nullable=False, default=False)
+    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    DIMENSIONES = ("tercero", "cliente", "finca", "capataz")
+
+    __table_args__ = (
+        UniqueConstraint("quincena", "tercero", "cliente", "finca", "capataz",
+                         name="uq_terceros_tarifa_viaje"),
+    )
+
+
+class TarifaServicio(Base):
+    """Cuánto se le paga al tercero por el trabajo de su maquinaria."""
+    __tablename__ = "terceros_tarifa_servicio"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    quincena    = Column(Date, nullable=False, index=True)
+    tercero     = Column(String(150), nullable=False, default=SIN_DIMENSION)
+    cliente     = Column(String(150), nullable=False, default=SIN_DIMENSION)
+    finca       = Column(String(150), nullable=False, default=SIN_DIMENSION)
+    tarea       = Column(String(200), nullable=False, default=SIN_DIMENSION)
+    # 'hsmaquina' o 'unidades': qué se multiplica por el precio.
+    unidad_base = Column(String(20), nullable=False)
+    precio      = Column(Numeric(14, 2), nullable=False)
+    heredada    = Column(Boolean, nullable=False, default=False)
+    creado_en   = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por  = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    DIMENSIONES = ("tercero", "cliente", "finca", "tarea")
+
+    __table_args__ = (
+        UniqueConstraint("quincena", "tercero", "cliente", "finca", "tarea",
+                         name="uq_terceros_tarifa_servicio"),
+    )
+
+
+class PrecioCombustible(Base):
+    """Precio por litro que se le descuenta a un tercero."""
+    __tablename__ = "terceros_precio_combustible"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    quincena   = Column(Date, nullable=False, index=True)
+    tercero    = Column(String(150), nullable=False)
+    precio     = Column(Numeric(14, 4), nullable=False)
+    heredada   = Column(Boolean, nullable=False, default=False)
+    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    DIMENSIONES = ("tercero",)
+
+    __table_args__ = (
+        UniqueConstraint("quincena", "tercero", name="uq_terceros_precio_combustible"),
+    )
+
+
+class PrecioReparacion(Base):
+    """Precio de la hora de taller, por tercero."""
+    __tablename__ = "terceros_precio_reparacion"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    quincena   = Column(Date, nullable=False, index=True)
+    tercero    = Column(String(150), nullable=False)
+    precio     = Column(Numeric(14, 2), nullable=False)
+    heredada   = Column(Boolean, nullable=False, default=False)
+    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    DIMENSIONES = ("tercero",)
+
+    __table_args__ = (
+        UniqueConstraint("quincena", "tercero", name="uq_terceros_precio_reparacion"),
+    )
+
+
+class PrecioSeguro(Base):
+    """La cuota de la póliza de una máquina. La carga a mano quien tiene los
+    seguros a cargo: no llega por archivo ni sale de ningún sistema."""
+    __tablename__ = "terceros_precio_seguro"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    quincena   = Column(Date, nullable=False, index=True)
+    tercero    = Column(String(150), nullable=False)
+    maquinaria = Column(String(200), nullable=False)
+    importe    = Column(Numeric(14, 2), nullable=False)
+    heredada   = Column(Boolean, nullable=False, default=False)
+    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    DIMENSIONES = ("tercero", "maquinaria")
+
+    __table_args__ = (
+        UniqueConstraint("quincena", "tercero", "maquinaria", name="uq_terceros_precio_seguro"),
+    )
