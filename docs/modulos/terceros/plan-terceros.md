@@ -217,6 +217,26 @@ En el mismo PR se renombró en el código lo que el glosario ya había renombrad
 **Salidos de la etapa 2**
 - **Una línea de horas de reparación desapareció del Sheet** entre el 9 y el 14 de septiembre, de una quincena ya liquidada. No fue rechazada: se borró. Confirma que la etapa 11 tiene que congelar el recibo al emitirlo.
 
+**Salidos de importar el tarifario de agosto** (2026-09-17)
+
+`scripts/importar_tarifas_del_excel.py` deriva las reglas del tarifario de los precios que hoy
+están tipeados fila por fila. Agosto entero entró en **424 tarifas** (191 + 151 de viajes, 53 de
+combustible, 25 de reparación, 4 de seguros). Lo que no entró, porque no se adivina:
+
+- **Tres combinaciones de viaje con dos precios distintos en la misma quincena**: GODOY a ALSA
+  SAN ANDRES ($180.000 y $190.000), ARANDA a LA CORUÑA LA FALDA ($200.000 y $220.000) y BUSTOS a
+  CITRUSVIL LOS NOGALES ($185.000 y $210.000). Es exactamente lo que anticipa la sección 4.
+- **Seis dueños con dos precios de combustible en la misma quincena**, y tres parecen error de
+  tipeo más que negociación: CORNEJO con $239.000 contra $2.399 (dos ceros de más), EMPRESA 0001
+  con $17.200 contra $2.035,24, y QUIROGA con una carga sin precio.
+- **El precio de la hora de reparación es uno solo para todos** ($15.000 desde enero). El tarifario
+  lo quiere por tercero, así que el importador se lo carga igual a cada uno; en cuanto se pacte
+  distinto con alguien, la tabla ya lo soporta.
+- **Los seguros del Excel son sólo los de la empresa** (EMPRESA 0001 y 0002), no los de los 32
+  dueños que releva el grilling: esos van por el circuito separado que el módulo todavía no
+  absorbió. Y se cargan por dueño, no por máquina, así que el importador repite el nombre en las
+  dos columnas para no inventar un dato que el origen no tiene.
+
 **Salidos de la etapa 3**
 - **El puente entre compras y el taller ya está roto**: 3 máquinas con el mismo nombre y distinto id, una con 27 líneas de repuestos este año. Es lo primero a corregir antes de calcular.
 - **Un colectivo lleva la patente de otro dueño** (DEMARCO, OSCAR con la de SALOMOM, FELIPE).
