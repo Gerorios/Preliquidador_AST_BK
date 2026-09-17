@@ -10,7 +10,7 @@ cargado, un repuesto puede no tener factura previa y quedarse sin precio.
 Ninguno se rellena con un valor inventado; la pantalla los muestra vacíos para
 que se vean.
 """
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -172,3 +172,36 @@ class AlertasResponse(BaseModel):
     anio: int               # el año sobre el que se midió el movimiento
     alertas: list[AlertaResponse]
     maquinaria_campo: MaquinariaCampoResumen
+
+# ─── La quincena generada (etapa 5) ─────────────────────────────────────────
+
+class LiquidacionResponse(BaseModel):
+    """Una quincena traída de los orígenes y guardada.
+
+    Generar no congela nada: se puede volver a actualizar mientras el recibo no
+    se haya emitido. `actualizada_en` en None significa que se generó y no se
+    volvió a tocar.
+    """
+    id: int
+    quincena: date
+    generada_en: datetime
+    actualizada_en: datetime | None = None
+    filas: dict[str, int]          # cuántas quedaron por conjunto
+    total_filas: int
+
+
+class GenerarRequest(BaseModel):
+    quincena: date
+
+
+class DetalleConjunto(BaseModel):
+    """Qué pasó con un conjunto al reconciliar."""
+    origen: int            # cuántas filas tenía el origen
+    insertadas: int
+    borradas: int
+    sin_cambios: int
+
+
+class GenerarResponse(LiquidacionResponse):
+    nueva: bool                            # False = era una actualización
+    detalle: dict[str, DetalleConjunto]

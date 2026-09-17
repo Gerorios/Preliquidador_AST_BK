@@ -6,7 +6,7 @@
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: la etapa 0 está completa y **Liquidación Terceros** lleva cuatro etapas: las consultas de origen (2026-09-10 y 09-16), las pantallas de solo lectura (2026-09-14) y las alertas de cruce (2026-09-16). El módulo está **activo** desde la segunda. Su dominio está relevado: el glosario en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y el plan por etapas en [`terceros/plan-terceros.md`](terceros/plan-terceros.md).
+**Estado**: la etapa 0 está completa y **Liquidación Terceros** lleva cinco etapas: las consultas de origen, las pantallas de solo lectura, las verificaciones de cruce y —desde el 2026-09-17— tablas propias con generar y actualizar la quincena. El módulo está **activo** desde la segunda. Su dominio está relevado: el glosario en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y el plan por etapas en [`terceros/plan-terceros.md`](terceros/plan-terceros.md).
 
 ---
 
@@ -544,5 +544,5 @@ Lo que quedó sin resolver y quién lo resuelve.
 | `docs/AYUDA.md` | Ayuda de uso del preliquidador, la que consume el asistente |
 | `docs/superpowers/plans/` | Planes de implementación de features anteriores. Sirven como ejemplo de cómo se planifica acá |
 | `migrations/preliquidacion/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
-| `tests/` | 414 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
+| `tests/` | 433 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
 | Frontend `README.md` | Stack, estructura y convenciones del front |

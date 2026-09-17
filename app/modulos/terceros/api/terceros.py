@@ -31,11 +31,15 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db_externa, get_db_sueldos
+from app.core.auth import get_usuario_actual
+from app.core.database import get_db_externa, get_db_propia, get_db_sueldos
 from app.modulos.terceros.permisos import requiere_operativo
 from app.modulos.terceros.schemas import (
     AlertasResponse,
     CargaCombustibleResponse,
+    GenerarRequest,
+    GenerarResponse,
+    LiquidacionResponse,
     HoraServicioResponse,
     HorasReparacionResponse,
     QuincenaResponse,
@@ -44,6 +48,7 @@ from app.modulos.terceros.schemas import (
 )
 from app.modulos.terceros.services import alertas_cruce, quincenas
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
+from app.modulos.terceros.services.liquidacion_service import LiquidacionService
 from app.modulos.terceros.services.consulta_taller import (
     ConsultaTallerService,
     TallerNoConfigurado,
@@ -100,9 +105,53 @@ def get_consulta_taller() -> ConsultaTallerService:
     return ConsultaTallerService()
 
 
+def get_liquidacion(
+    db_propia: Session = Depends(get_db_propia),
+    externa: ConsultaExternaService = Depends(get_consulta_externa),
+    taller: ConsultaTallerService = Depends(get_consulta_taller),
+) -> LiquidacionService:
+    return LiquidacionService(db_propia, externa, taller)
+
+
 @router.get("/")
 def estado():
     return {"modulo": "terceros", "estado": "en construcción"}
+
+
+@router.get("/liquidaciones", response_model=list[LiquidacionResponse])
+def listar_liquidaciones(
+    servicio: LiquidacionService = Depends(get_liquidacion),
+):
+    """Las quincenas ya generadas, de la más nueva a la más vieja."""
+    return servicio.listar()
+
+
+@router.post("/liquidaciones/generar", response_model=GenerarResponse)
+def generar_liquidacion(
+    req: GenerarRequest,
+    usuario=Depends(get_usuario_actual),
+    servicio: LiquidacionService = Depends(get_liquidacion),
+):
+    """Trae las cinco fuentes de esa quincena y las guarda.
+
+    Si la quincena ya existe **no la rehace**: reconcilia. Suma lo que apareció
+    en el origen, saca lo que ya no está, y deja donde está lo que el liquidador
+    cargó a mano. Por eso se puede apretar todas las veces que haga falta
+    mientras el recibo no esté emitido.
+
+    Tarda: son dos bases y un Google Sheet. La lentitud es de una sola vez, no
+    de cada pantalla, que es justamente para lo que sirve guardar.
+    """
+    if not quincenas.es_inicio_valido(req.quincena):
+        raise HTTPException(
+            status_code=422,
+            detail="Una quincena se identifica por su primer día: el 1 o el 16 del mes.",
+        )
+    try:
+        return servicio.generar(req.quincena, usuario_id=getattr(usuario, "id", None))
+    except FALLAS_DE_ORIGEN as e:
+        # Si un origen no contesta, no se guarda media quincena.
+        raise HTTPException(status_code=502, detail=_mensaje_origen(e))
 
 
 @router.get("/quincenas", response_model=list[QuincenaResponse])
