@@ -1,3 +1,4 @@
+import threading
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,6 +8,7 @@ from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
 from app.core.auth import get_usuario_actual
 from app.modulos.preliquidacion.permisos import requiere_operativo
 from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.services.consulta_externa import ExternaNoDisponible
 from app.modulos.preliquidacion.schemas import (
     PreliquidacionGenerarRequest, PreliquidacionResponse,
     LineaResponse, LineaUpdateRequest,
@@ -38,12 +40,30 @@ def get_service(
     return PreliquidacionService(db_propia, db_externa, db_sueldos)
 
 
+# Candado de proceso: una sola generación/actualización por quincena a la vez.
+# Incidente 2026-09-18: con la externa bloqueada se acumularon 7 corridas de la
+# misma quincena; cada una calcula el diff contra la base ANTES de que las otras
+# escriban, así que pueden insertar las mismas líneas dos veces. Alcanza con un
+# candado en memoria porque uvicorn corre con --workers 1 (deploy/); si algún
+# día hay más de un worker, esto tiene que pasar a la base.
+_GENERACIONES_EN_CURSO: set = set()
+_CANDADO_GENERACIONES = threading.Lock()
+
+
 @router.post("/generar", response_model=MensajeResponse)
 def generar(
     req: PreliquidacionGenerarRequest,
     usuario=Depends(get_usuario_actual),
     service: PreliquidacionService = Depends(get_service),
 ):
+    with _CANDADO_GENERACIONES:
+        if req.quincena in _GENERACIONES_EN_CURSO:
+            raise HTTPException(
+                status_code=409,
+                detail="Ya hay una generación en curso para esta quincena. "
+                       "Esperá a que termine antes de volver a intentar.",
+            )
+        _GENERACIONES_EN_CURSO.add(req.quincena)
     try:
         resultado = service.generar(quincena=req.quincena, usuario_id=usuario.id)
         stats = service.estadisticas(resultado["preliquidacion_id"])
@@ -58,10 +78,15 @@ def generar(
                 f"{stats['duplicados']} duplicados"
             ),
         )
+    except ExternaNoDisponible as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        with _CANDADO_GENERACIONES:
+            _GENERACIONES_EN_CURSO.discard(req.quincena)
 
 
 @router.post("/refrescar-sueldos", response_model=MensajeResponse)

@@ -27,6 +27,21 @@ def get_db_sueldos():
 
 # ─── BD Externa (solo lectura) ───────────────────────────────────────────────
 
+# Tope de lectura SOLO en la externa (servidor de ADCP, fuera de nuestro
+# control). Incidente 2026-09-18: ese servidor quedó bloqueado 12 min y la
+# consulta principal (2 s normalmente) colgó hasta 719 s; el front cortó a los
+# 300 s sin mensaje útil. Con read_timeout, pymysql corta la espera y levanta
+# OperationalError 2013, que el módulo traduce a un error claro para el usuario.
+# La propia no lleva tope: escribe, y no queremos cortarla a mitad de un commit.
+CONNECT_ARGS_EXTERNA = {"read_timeout": 60, "connect_timeout": 10}
+
+
+class ExternaNoDisponible(Exception):
+    """La base externa (ADCP) no respondió: venció el read_timeout o el servidor
+    no está. Vive en el núcleo porque el engine que la origina es del núcleo y
+    main.py la convierte en 503 para cualquier módulo (ADR-0013: el núcleo no
+    importa módulos). El mensaje está pensado para mostrárselo al usuario tal cual."""
+
 engine_externa = create_engine(
     settings.url_externa,
     pool_pre_ping=True,
@@ -34,6 +49,7 @@ engine_externa = create_engine(
     pool_size=5,
     max_overflow=10,
     echo=False,
+    connect_args=CONNECT_ARGS_EXTERNA,
 )
 
 SessionExterna = sessionmaker(bind=engine_externa, autocommit=False, autoflush=False)

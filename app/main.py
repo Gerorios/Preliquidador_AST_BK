@@ -70,6 +70,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# La base externa (ADCP) no respondió (read_timeout vencido o servidor caído):
+# 503 con el mensaje de la excepción, para cualquier módulo que la consulte.
+# Sin esto, cada endpoint sin try/except devolvía 500 con el texto crudo de
+# pymysql ("Lost connection to MySQL server during query").
+from app.core.database import ExternaNoDisponible  # noqa: E402
+from fastapi import Request  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+
+
+@app.exception_handler(ExternaNoDisponible)
+async def _externa_no_disponible(_: Request, exc: ExternaNoDisponible):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
 # Comprime respuestas grandes (ej. /lineas de una quincena: ~1.3 MB de JSON
 # que gzip baja a ~150 KB). Las chicas (<1 KB) no pagan el overhead.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
