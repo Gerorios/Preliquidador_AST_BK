@@ -118,7 +118,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now preliquidacion
 sudo systemctl status preliquidacion        # verificar que esté "active (running)"
 ```
-> **Workers:** arrancar con **1 worker** (el cache del maestro de sueldos —15-19k empleados— es por proceso; el diseño asume single-worker). Con pocos usuarios alcanza. Si más adelante notás que las requests se encolan detrás de un "generar quincena" largo, subí a `--workers 2`, teniendo en cuenta que el cache de sueldos pasa a ser por worker (el botón "refrescar sueldos" refresca solo el worker que atiende; ante la duda, reiniciar el servicio).
+> **Workers:** arrancar con **1 worker** (el cache del maestro de sueldos —15-19k empleados— es por proceso, y el candado que impide dos "generar quincena" simultáneos de la misma quincena también vive en memoria del proceso; el diseño asume single-worker). Con pocos usuarios alcanza. Si más adelante notás que las requests se encolan detrás de un "generar quincena" largo, subí a `--workers 2`, teniendo en cuenta que el cache de sueldos pasa a ser por worker (el botón "refrescar sueldos" refresca solo el worker que atiende; ante la duda, reiniciar el servicio).
 
 ### 4. Frontend (estático)
 En tu máquina (o en el VPS): `npm run build` en el repo del front, y copiar `dist/` al VPS:
