@@ -4,9 +4,11 @@ Servicio de consulta a la BD externa (solo lectura).
 from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 import time
 
 from app.core.quincena import calcular_rango_quincena  # noqa: F401 — reexport, la usan otros servicios
+from app.core.database import ExternaNoDisponible  # noqa: F401 — reexport, la levanta _ejecutar
 
 
 # Expresión reutilizable para extraer el grupo_pago desde tareas.descripcion
@@ -244,43 +246,52 @@ class ConsultaExternaService:
     def __init__(self, db_externa: Session):
         self.db = db_externa
 
+    def _ejecutar(self, query, params=None):
+        """Todas las consultas a la externa pasan por acá: si venció el
+        read_timeout (ver app/core/database.py) o el servidor de ADCP no está,
+        pymysql levanta OperationalError y acá se traduce a ExternaNoDisponible,
+        con un mensaje que el liquidador entienda en vez del "Lost connection to
+        MySQL server". Devuelve (filas, columnas, segundos del execute, segundos
+        del fetchall)."""
+        t0 = time.time()
+        try:
+            resultado = self.db.execute(query, params or {})
+            t1 = time.time()
+            filas = resultado.fetchall()
+        except OperationalError as e:
+            print(f"[EXTERNA] sin respuesta tras {time.time()-t0:.1f}s: {e.orig}")
+            raise ExternaNoDisponible(
+                "La base de datos de campo (ADCP) no respondió a tiempo. "
+                "Reintentá en unos minutos."
+            ) from e
+        return filas, resultado.keys(), t1 - t0, time.time() - t1
+
     def obtener_tareas_quincena(self, quincena: date) -> list[dict]:
         fecha_desde, fecha_hasta = calcular_rango_quincena(quincena)
-
-        t0 = time.time()
-        resultado = self.db.execute(
-            QUERY_PRINCIPAL,
-            {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}
+        filas, columnas, t_exec, t_fetch = self._ejecutar(
+            QUERY_PRINCIPAL, {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}
         )
-        t1 = time.time()
-        filas = resultado.fetchall()
-        t2 = time.time()
-
-        print(f"[TIMING] execute: {t1-t0:.2f}s | fetchall: {t2-t1:.2f}s | total: {t2-t0:.2f}s")
-
-        columnas = resultado.keys()
+        print(f"[TIMING] execute: {t_exec:.2f}s | fetchall: {t_fetch:.2f}s | total: {t_exec+t_fetch:.2f}s")
         return [dict(zip(columnas, fila)) for fila in filas]
 
     def obtener_clientes(self) -> list[str]:
-        resultado = self.db.execute(QUERY_CLIENTES)
-        return [fila[0] for fila in resultado.fetchall()]
+        filas, *_ = self._ejecutar(QUERY_CLIENTES)
+        return [fila[0] for fila in filas]
 
     def obtener_fincas(self, cliente_nombre: str) -> list[str]:
-        resultado = self.db.execute(
-            QUERY_FINCAS_POR_CLIENTE, {"cliente_nombre": cliente_nombre}
-        )
-        return [fila[0] for fila in resultado.fetchall()]
+        filas, *_ = self._ejecutar(QUERY_FINCAS_POR_CLIENTE, {"cliente_nombre": cliente_nombre})
+        return [fila[0] for fila in filas]
 
     def obtener_tareas(self) -> list[dict]:
-        resultado = self.db.execute(QUERY_TAREAS)
+        filas, *_ = self._ejecutar(QUERY_TAREAS)
         return [
             {"nombre": fila[0], "grupo_tarea": fila[1], "grupo_pago": fila[2], "grupo_factura": fila[3]}
-            for fila in resultado.fetchall()
+            for fila in filas
         ]
 
     def obtener_legajos(self) -> list[dict]:
-        resultado = self.db.execute(QUERY_LEGAJOS)
+        filas, *_ = self._ejecutar(QUERY_LEGAJOS)
         return [
             {"nombre": fila[0], "cuil": fila[1], "legajo": fila[2]}
-            for fila in resultado.fetchall()
+            for fila in filas
         ]
