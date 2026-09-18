@@ -1,11 +1,12 @@
 from datetime import date
-from typing import Optional
+from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
 from app.core.auth import get_usuario_actual
+from app.core.quincena import Quincena
 from app.modulos.preliquidacion.permisos import requiere_conceptos
 from app.modulos.preliquidacion.models import ConceptoLiquidacion, Preliquidacion
 from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
@@ -408,8 +409,10 @@ def eliminar_concepto(concepto_id: int, db: Session = Depends(get_db_propia)):
 @router.post("/conceptos/copiar", response_model=MensajeResponse,
              dependencies=[Depends(requiere_conceptos)])
 def copiar_quincena(
-    quincena_origen: date = Query(...),
-    quincena_destino: date = Query(...),
+    # Annotated[Quincena, Query()] y no `Quincena = Query(...)`: con la segunda
+    # forma FastAPI descarta el validador y un 17 pasa (ver app/core/quincena.py).
+    quincena_origen: Annotated[Quincena, Query()],
+    quincena_destino: Annotated[Quincena, Query()],
     db: Session = Depends(get_db_propia),
 ):
     """Copia todos los conceptos de una quincena a otra. Omite los que ya existen."""

@@ -2,11 +2,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.core.quincena import Quincena
 from app.modulos.preliquidacion.models import TipoConcepto, UnidadBaseConcepto
 
 
 class PreliquidacionGenerarRequest(BaseModel):
-    quincena: date
+    quincena: Quincena  # día 1 o 16; otra fecha es 422 (ver app/core/quincena.py)
 
 
 class PreliquidacionResponse(BaseModel):
@@ -139,7 +140,7 @@ class ConceptoUnifResponse(BaseModel):
 
 
 class ConceptoUnifRequest(BaseModel):
-    quincena: date
+    quincena: Quincena
     tarea_nombre: str
     cliente_nombre: Optional[str] = None   # NULL = común (o por supervisor)
     finca_nombre: Optional[str] = None     # NULL con cliente = por cliente (cualquier finca)
