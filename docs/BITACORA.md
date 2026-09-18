@@ -442,3 +442,66 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
   traducir.
 - La aserción de que `engine_propia` no tiene `read_timeout` es vacía:
   `create_connect_args` no refleja `connect_args`.
+
+## 2026-09-18 — PR #49, la API rechaza quincenas que no empiezan el 1 o el 16
+
+**Mergeado**
+- PR #49 (backend) — `fix(preliquidacion)`: las tres entradas que escriben
+  (generar preliquidación, alta de concepto, copiar conceptos entre quincenas)
+  devuelven 422 "La quincena debe empezar el 1 o el 16 del mes, no el 17" ante
+  cualquier otra fecha. Sin PR hermano en el front.
+
+**Por frontera**
+- Núcleo: `app/core/quincena.py` gana `validar_quincena` y el tipo
+  `Quincena = Annotated[date, AfterValidator(validar_quincena)]`, que sirve en
+  esquemas Pydantic y en parámetros de FastAPI. Tests en
+  `tests/core/test_quincena.py`.
+- Preliquidación: `schemas.py` pasa `PreliquidacionGenerarRequest.quincena` y
+  `ConceptoUnifRequest.quincena` de `date` a `Quincena`; `api/precios.py`
+  cambia los dos Query de `copiar_quincena` a `Annotated[Quincena, Query()]`.
+  Tests en `tests/preliquidacion/test_validar_quincena_api.py`.
+- Docs: plan en `docs/superpowers/plans/2026-09-18-validar-quincena.md`.
+
+**Origen**
+- Deuda que dejó la revisión del PR #48 (anotada como pendiente en la entrada
+  anterior). `calcular_rango_quincena` normalizaba en silencio cualquier día
+  distinto de 1 a la segunda quincena, pero `Preliquidacion.quincena` es única
+  por fecha cruda: generar con 16/9 y después con 17/9 creaba dos
+  preliquidaciones con las mismas 110 líneas, y un concepto cargado al 17/9 no
+  se aplicaba a la del 16/9. Producción estaba limpia (6 preliquidaciones,
+  todas día 1 o 16) porque el front sólo ofrece esas dos fechas.
+
+**Decisiones**
+- **Rechazar con 422, no normalizar.** Porqué: una fecha que no es inicio de
+  quincena viene de un cliente que está mal; normalizarla lo escondería.
+- **El tipo `Quincena` vive en el núcleo**, junto a la definición del término
+  (`app/core/quincena.py`), no en el módulo.
+- **Sólo las tres entradas de escritura en este PR.** Porqué: los ~16
+  parámetros de lectura de precios y gerencial devuelven vacío con una fecha
+  mala, sin crear datos. Cubrirlos es mecánico y queda para otro PR si se
+  quiere.
+- **Trampa de FastAPI, documentada en el código:** en parámetros Query hay que
+  escribir `Annotated[Quincena, Query()]`. Con `Quincena = Query(...)` FastAPI
+  0.136 descarta el validador y un 17 pasa. Lo detectó el test de copiar en
+  rojo; queda comentado en el núcleo y en el endpoint.
+- Descartado: tocar el front. Porqué: ya manda 01 o 16.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-18 ~18:15 UTC, con OK del
+  usuario; health ok.
+- Migraciones: ninguna. Sin cambio de contrato con el front. Rollback: revertir
+  el merge.
+- Tests: 294 en verde (284 + 10 nuevos). Smoke real con la app completa y las
+  bases reales: generar 17/9 → 422; copiar destino 17/9 → 422; generar 16/9 →
+  200 con "0 nuevas · 0 eliminadas · 110 sin cambios".
+
+**Pendiente**
+- Los ~16 parámetros de lectura (precios y gerencial) siguen aceptando
+  cualquier fecha; devuelven vacío, no crean datos.
+- El interceptor del front muestra `detail` cuando es texto u objeto con
+  `mensaje`; el 422 de FastAPI trae una lista, así que si alguna vez llegara se
+  vería "Request failed with status 422". Hoy no puede llegar desde el front.
+- Siguen abiertos del PR #48: la clave del candado no se normaliza (ahora un
+  17 ya no entra, así que el caso 16/17 concurrente desaparece por esta vía),
+  `except OperationalError` amplio, el `db_externa.execute` crudo en
+  `precios.py`, y la aserción vacía sobre `engine_propia`.
