@@ -366,3 +366,79 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
   `main`. No se puede ensayar desde un worktree, porque git no permite tener
   `main` checkouteada dos veces. Se prueba en el checkout principal o la primera
   vez que se dispare de verdad.
+
+## 2026-09-18 — Tope de lectura en la externa y candado por quincena
+
+**Mergeado**
+- PR #48 (backend_preliquidacion) — dos barandas para "Generar / Actualizar
+  quincena" a raíz del incidente del mismo día: `read_timeout=60` y
+  `connect_timeout=10` en la conexión a la base externa de ADCP
+  (`vps2.adcp.com.ar`), con 503 "La base de datos de campo (ADCP) no respondió
+  a tiempo" si la consulta se traba; y un candado por quincena que devuelve 409
+  "Ya hay una generación en curso para esta quincena" a la segunda corrida
+  concurrente. Sin PR hermano en el front.
+
+**Por frontera**
+- Núcleo: `app/core/database.py` gana la excepción `ExternaNoDisponible`, junto
+  al engine que la origina. `app/main.py` suma un handler global que la traduce
+  a 503 para cualquier módulo.
+- Preliquidación: `services/consulta_externa.py` pasa todas sus consultas a la
+  externa por un helper que traduce `OperationalError` a `ExternaNoDisponible`
+  (no sólo la consulta principal: también catálogo de tareas, clientes, fincas).
+  `api/preliquidacion.py` incorpora el candado en memoria por quincena, que se
+  libera siempre, también si la corrida falla. Tests nuevos:
+  `tests/preliquidacion/test_consulta_externa_timeout.py` y 7 casos en
+  `test_generar_api.py`.
+- Prod y Datos: `docs/DEPLOY.md` anota que el candado, igual que el cache de
+  sueldos, vive en memoria del proceso y que el diseño asume `--workers 1`.
+- Docs: plan en `docs/superpowers/plans/2026-09-18-externa-timeout-y-concurrencia.md`.
+
+**Incidente que lo originó**
+- 2026-09-18, 15:45 a 15:57: el servidor de ADCP quedó bloqueado 12 minutos
+  (llegó a su tope de 151 conexiones; nosotros sólo tenemos SELECT ahí). La
+  consulta principal, que tarda 2 s, tardó entre 73 y 719 s. El front cortó a
+  los 300 s con "timeout of 300000ms exceeded" sin decir qué pasaba y se
+  acumularon 7 corridas simultáneas de la misma quincena, que se liberaron
+  todas en el mismo segundo. No duplicaron líneas esta vez (1998 y 110 líneas,
+  igual al campo), pero cada corrida calcula el diff antes de que las otras
+  escriban, así que la carrera existe.
+
+**Decisiones**
+- Tope de **60 s**. Porqué: la consulta normal tarda 2 s, hay margen de sobra y
+  el usuario se entera en un minuto en vez de en cinco; el front (300 s) y
+  nginx (300 s) ya no llegan a cortar.
+- El tope va **sólo en la externa**. Porqué: la base propia escribe y cortarla
+  a mitad de un commit es peor que esperar; la de sueldos no participa en este
+  flujo.
+- `ExternaNoDisponible` vive en el **núcleo** con handler en `main.py`, no en el
+  módulo. Porqué: así cualquier módulo recibe el 503 sin que el núcleo importe
+  módulos (ADR-0013). Surgió de la revisión: la primera versión traducía sólo la
+  consulta principal y un corte en las demás seguía dando 500 con "Lost
+  connection to MySQL server".
+- Candado **en memoria del proceso**, no en la base. Porqué: el deploy corre con
+  `--workers 1`, anotado en `docs/DEPLOY.md` y en el código. Si algún día hay
+  más workers, pasa a la base.
+- Descartado: tocar el front. Porqué: el interceptor de `api.js` ya muestra
+  `detail` de cualquier error y el botón ya se deshabilita mientras espera.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-18 ~17:45 UTC, con OK del usuario.
+- Migraciones: ninguna. Sin cambio de contrato con el front. Rollback: revertir
+  el merge.
+- Tests: 284 en verde (277 + 7 nuevos). Smoke real contra ADCP con
+  `read_timeout=1` y `SELECT SLEEP(10)`: corta a 1,00 s exacto, sin reintentos,
+  y llega al usuario como `ExternaNoDisponible`. La consulta real con tope de 60
+  sigue devolviendo las 1998 filas en ~2 s.
+
+**Pendiente**
+- Deuda preexistente, más seria que el candado: `Preliquidacion.quincena` guarda
+  la fecha cruda, así que generar con 09-16 y después con 09-17 crea dos
+  preliquidaciones con las mismas líneas. Amerita su propio fix.
+- La clave del candado tampoco se normaliza a inicio de quincena: 09-16 y 09-17
+  concurrentes esquivan el 409.
+- `except OperationalError` es amplio: un error de credenciales (1045) también
+  diría "reintentá en unos minutos"; la causa real queda en el log del servidor.
+- Un `db_externa.execute` crudo en `precios.py`, fuera del servicio, sigue sin
+  traducir.
+- La aserción de que `engine_propia` no tiene `read_timeout` es vacía:
+  `create_connect_args` no refleja `connect_args`.
