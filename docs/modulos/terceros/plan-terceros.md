@@ -238,29 +238,38 @@ Los 7 dueños unificados explican la mayoría.
 tiene tabla de unificación. Vale la regla 3.1 — el maestro es el origen, y una
 segunda tabla sería un segundo lugar donde la verdad puede quedar vieja.
 
-**El desacuerdo es mucho más chico de lo que parecía: 13 patentes de 121.**
+**El sistema de campo casi no tiene nada mal.** Auditado por sí solo, sin
+compararlo contra el Excel, `laa_colectivos` tiene **dos errores** en 218 fichas:
 
-La primera medición dio 30 y estaba mal: comparaba contra `colectivo_nombre` del
-Excel, que es una **foto de Chinagro del día en que se bajó la fila**, no lo que
-Chinagro dice hoy. Contra la base viva, 107 de las 121 patentes ya coinciden.
+| | |
+|---|---|
+| `HZM978` | Está en **dos fichas**, `LUCERO, MAXIMO` (id 12) y `QUIROGA, ELIO` (id 97), con la descripción idéntica palabra por palabra. Una sobra |
+| id 256 | Ficha `USAR`, sin patente, descripción cortada en `MERCEDES `. Quedó a medio cargar. Sin viajes |
 
-Las 14 patentes que parecían tener dos dueños tampoco son un problema: en las
-14, **la ficha de hoy coincide exactamente con el dueño de la última
-liquidación**. Eran cambios de mano ya registrados, no contradicciones.
+Lo demás que había salido no eran errores del sistema de campo:
 
-Lo que queda, en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`:
+- Las 7 fichas `SIN COLECTIVO <cliente>` son marcadores, y las consultas del
+  módulo ya las excluyen.
+- `CABRERA, OSCAR` / `ESTEBAN` / `ROGELIO` son tres personas distintas que se
+  parecen, no una cargada tres veces.
+- `VERA, OSCAR HERIBERTO` y `GODOY, RENE ADRIAN` figuran como dueños y
+  también como capataces. Es la misma persona con dos roles, no un error.
 
-| Qué pasa | Patentes | Ejemplo |
+**Lo que había que arreglar era nuestro.** El importador de tarifas tomaba el
+dueño de `Colectivo_Unificado`, la columna que el liquidador mantiene a mano en
+el Excel. Ahora ata cada fila a su **patente** y usa el nombre que la ficha tenga
+hoy en el sistema de campo. Resultado sobre agosto:
+
+| | Antes | Después |
 |---|---|---|
-| Una letra de diferencia | 4 | `MARELLI, HUGO` / `MARELI, HUGO` |
-| Uno tiene el nombre completo | 6 | `VERA, OSCAR HERIBERTO` / `VERA, OSCAR` |
-| Nombres distintos, hay que confirmar | 3 | `ECHENIQUE, HORACIO` / `ECHENIQUE, ADRIAN` |
-| Sin ficha viva en el sistema de campo | 1 | `GQQ599`, con viajes hasta julio |
+| Viajes con precio, 08-1Q | 689 de 756 | **749 de 756** |
+| Viajes con precio, 08-2Q | 614 de 672 | **663 de 672** |
+| Del total del Excel, 08-1Q | 70 % | **94,1 %** |
+| Del total del Excel, 08-2Q | 76 % | **96,4 %** |
 
-**No siempre el que está mal es Chinagro.** En `HKN204` el sistema de campo dice
-`MIRANDA, JULIO` y el Excel liquida `MIRANDA, JULIIO`, con dos íes. Ahí lo que
-hay que corregir es el tarifario, no la ficha. Por eso la planilla muestra las
-dos columnas y no dice cuál gana: eso lo decide quien conoce a la gente.
+Lo que falta para el 100 % ya no es identidad: son las combinaciones que tienen
+**dos precios distintos en la misma quincena** y que el importador se niega a
+adivinar. Las resuelve el liquidador en el tarifario, que es donde va.
 
 **Lo que hubo que arreglar para que la corrección llegue.** El dueño no está en
 la clave de reconciliación —la clave de un viaje usa la patente—, así que una
@@ -281,7 +290,7 @@ elegida no funcionaba: se corregía Chinagro y el módulo nunca se enteraba.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.
-- **13 patentes donde el dueño de la ficha y el de la liquidación no coinciden**, más 1 sin ficha viva. La lista está en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`. Es lo que bloquea la aceptación de la etapa 7. En una de las 13 el que está mal es el tarifario y no la ficha.
+- **`HZM978` está en dos fichas** (`LUCERO, MAXIMO` id 12 y `QUIROGA, ELIO` id 97) con la misma descripción, y la ficha `USAR` (id 256) quedó a medio cargar. Son los dos únicos errores del maestro de colectivos.
 - Casos donde se cargó el nombre del capataz en lugar del dueño.
 - **TRANSPORTE ALFONSO** tiene la descripción entera vacía y 13 viajes en 2026 (todos de BONETTO, abril y mayo). Definir si es TERCEROS, PROPIO o una ficha de baja.
 

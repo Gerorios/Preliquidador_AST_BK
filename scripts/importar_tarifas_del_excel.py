@@ -7,6 +7,12 @@ unos 6.600 precios escritos a mano por año, y de ahí salen las reglas del
 tarifario. No sustituye al trabajo del liquidador — sirve para arrancar con lo
 ya pactado en vez de tipear todo de nuevo.
 
+**El dueño sale del sistema de campo, no del Excel.** El Excel tiene una columna
+`Colectivo_Unificado` que el liquidador mantiene a mano; el maestro es Chinagro.
+Así que cada fila se ata a su patente y el tercero de la tarifa es el nombre que
+la ficha de ese colectivo tenga hoy. Si no, la tarifa quedaría a nombre de
+alguien que el módulo nunca va a ver, y todos los hechos saldrían SIN_TARIFA.
+
 **Lo que no es consistente no se importa.** Si una misma combinación tiene dos
 precios distintos en la misma quincena, el script no elige: lo lista y sigue.
 Adivinar ahí sería meter en el sistema un precio que nadie decidió.
@@ -29,12 +35,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import openpyxl  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
-from app.core.database import SessionPropia  # noqa: E402
+from app.core.database import (  # noqa: E402
+    SessionExterna, SessionPropia, SessionSueldos,
+)
 from app.modulos.terceros.models import (  # noqa: E402
     HoraReparacion, Liquidacion,
 )
+from app.modulos.terceros.services.consulta_externa import (  # noqa: E402
+    ConsultaExternaService,
+)
 from app.modulos.terceros.services.tarifario_service import (  # noqa: E402
-    TarifaInvalida, TarifarioService,
+    TIPOS, TarifaInvalida, TarifarioService,
 )
 
 EXCEL = Path("docs/modulos/terceros/fuentes/Liquidacion_Fletes_Master_68 (2).xlsx")
@@ -52,11 +63,46 @@ def _d(v):
     return None if v in (None, "") else Decimal(str(v))
 
 
+def _patente(v) -> str:
+    """Las patentes llegan con espacios y a veces con guiones."""
+    import re
+    return re.sub(r"[^A-Z0-9]", "", _t(v).upper())
+
+
+def duenos_del_campo() -> dict:
+    """Patente → dueño, según la ficha del colectivo en el sistema de campo."""
+    svc = ConsultaExternaService(SessionExterna(), SessionSueldos())
+    salida = {}
+    for c in svc.colectivos_campo():
+        patente = _patente(c.get("patente"))
+        nombre = _t(c.get("nombre"))
+        if patente and nombre:
+            salida[patente] = nombre
+    return salida
+
+
 def leer(wb, hoja):
     ws = wb[hoja]
     it = ws.iter_rows(values_only=True)
     cols = [str(c).strip() if c is not None else "" for c in next(it)]
     return [dict(zip(cols, f)) for f in it if f and any(v is not None for v in f)]
+
+
+def atar_al_campo(filas, duenos, columna_patente):
+    """Le pone a cada fila el dueño que hoy tiene su colectivo en Chinagro.
+
+    Las que no tienen ficha viva se descartan: una tarifa a nombre de alguien
+    que el módulo nunca va a leer no le sirve a nadie, y peor, tapa el hecho de
+    que ese colectivo no está en el maestro.
+    """
+    salida, sin_ficha = [], 0
+    for f in filas:
+        dueno = duenos.get(_patente(f.get(columna_patente)))
+        if not dueno:
+            sin_ficha += 1
+            continue
+        salida.append({**f, "tercero_campo": dueno})
+    return salida, sin_ficha
 
 
 def agrupar(filas, dimensiones, valor):
@@ -74,6 +120,8 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--quincena", required=True, help="primer día de la quincena, AAAA-MM-DD")
     ap.add_argument("--aplicar", action="store_true", help="escribir de verdad")
+    ap.add_argument("--reemplazar", action="store_true",
+                    help="borrar antes las tarifas que ya tenga esa quincena")
     args = ap.parse_args()
 
     from datetime import date
@@ -91,6 +139,18 @@ def main() -> int:
     wb = openpyxl.load_workbook(EXCEL, read_only=True, data_only=True)
     db = SessionPropia()
     servicio = TarifarioService(db)
+    duenos = duenos_del_campo()
+    print("Maestro de colectivos: %d patentes con ficha\n" % len(duenos))
+
+    if args.reemplazar and args.aplicar:
+        borradas = 0
+        for conf in TIPOS.values():
+            modelo = conf["modelo"]
+            borradas += (db.query(modelo)
+                         .filter(modelo.quincena == quincena)
+                         .delete(synchronize_session=False))
+        db.commit()
+        print("Se borraron %d tarifas que ya tenía la quincena.\n" % borradas)
     print("Quincena %s (%s) — %s\n" % (etq, quincena,
                                        "APLICANDO" if args.aplicar else "simulación"))
 
@@ -98,11 +158,12 @@ def main() -> int:
 
     # ─── Viajes ─────────────────────────────────────────────────────────────
     viajes = [f for f in leer(wb, "Viajes") if _t(f.get("Quincena_Liq")) == etq]
-    dims = ("Colectivo_Unificado", "cliente", "finca", "nombre_capataz")
+    viajes, huerfanos = atar_al_campo(viajes, duenos, "Patente_Norm")
+    dims = ("tercero_campo", "cliente", "finca", "nombre_capataz")
     reglas, ambiguas = agrupar(
         viajes, dims, lambda f: (_d(f.get("Precio_Viaje")), _t(f.get("Tipo_Viaje")).upper()))
-    print("VIAJES: %d filas → %d reglas, %d combinaciones ambiguas"
-          % (len(viajes), len(reglas), len(ambiguas)))
+    print("VIAJES: %d filas → %d reglas, %d combinaciones ambiguas, %d filas sin ficha"
+          % (len(viajes), len(reglas), len(ambiguas), huerfanos))
     for (tercero, cliente, finca, capataz), (precio, tipo) in reglas.items():
         if precio is None:
             saltadas.append(("viajes", "sin precio", tercero, cliente, finca, capataz))
@@ -123,10 +184,11 @@ def main() -> int:
 
     # ─── Combustible ────────────────────────────────────────────────────────
     comb = [f for f in leer(wb, "Combustible") if _t(f.get("Quincena_Liq")) == etq]
-    reglas, ambiguas = agrupar(comb, ("Colectivo_Unificado",),
+    comb, huerfanos = atar_al_campo(comb, duenos, "Patente_Norm")
+    reglas, ambiguas = agrupar(comb, ("tercero_campo",),
                                lambda f: _d(f.get("Precio_Combustible")))
-    print("COMBUSTIBLE: %d filas → %d precios, %d dueños ambiguos"
-          % (len(comb), len(reglas), len(ambiguas)))
+    print("COMBUSTIBLE: %d filas → %d precios, %d dueños ambiguos, %d filas sin ficha"
+          % (len(comb), len(reglas), len(ambiguas), huerfanos))
     for (tercero,), precio in reglas.items():
         if precio is None or not tercero:
             saltadas.append(("combustible", "sin precio o sin dueño", tercero, "", "", ""))
