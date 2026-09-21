@@ -311,3 +311,67 @@ def test_generar_de_nuevo_marca_cuando_se_actualizo(db):
     assert s.listar()[0]["actualizada_en"] is None
     s.generar(Q)
     assert s.listar()[0]["actualizada_en"] is not None
+
+
+# ─── Refrescar lo que el origen corrige ─────────────────────────────────────
+
+def test_actualizar_trae_la_correccion_del_dueno_hecha_en_el_origen(db):
+    """El dueño no está en la clave de un viaje —la clave usa la patente—, así
+    que sin refrescar, corregir la ficha en el sistema de campo no llegaba
+    nunca: la fila ya existía, no sobraba ni faltaba, y se quedaba vieja."""
+    mal = dict(viaje(), colectivo_nombre="MARELLI, HUGO")
+    armar(db, viajes=[mal]).generar(Q)
+    assert db.query(Viaje).one().tercero == "MARELLI, HUGO"
+
+    bien = dict(viaje(), colectivo_nombre="MARELI, HUGO")
+    r = armar(db, viajes=[bien]).generar(Q)
+
+    guardado = db.query(Viaje).one()
+    assert guardado.tercero == "MARELI, HUGO"
+    assert guardado.colectivo_nombre == "MARELI, HUGO"
+    assert r["detalle"]["viajes"]["refrescadas"] == 1
+    # No se rehízo: es la misma fila.
+    assert r["detalle"]["viajes"]["insertadas"] == 0
+    assert r["detalle"]["viajes"]["borradas"] == 0
+
+
+def test_refrescar_no_pisa_lo_que_el_liquidador_cargo_a_mano(db):
+    """Es lo que separa actualizar de rehacer."""
+    armar(db, viajes=[dict(viaje(), colectivo_nombre="MARELLI, HUGO")]).generar(Q)
+    fila = db.query(Viaje).one()
+    fila.quincena_efectiva = date(2026, 8, 16)
+    fila.motivo_efectiva = "llegó tarde"
+    db.commit()
+
+    armar(db, viajes=[dict(viaje(), colectivo_nombre="MARELI, HUGO")]).generar(Q)
+
+    fila = db.query(Viaje).one()
+    assert fila.tercero == "MARELI, HUGO"           # el origen manda
+    assert fila.quincena_efectiva == date(2026, 8, 16)  # la persona también
+    assert fila.motivo_efectiva == "llegó tarde"
+
+
+def test_una_marca_de_no_cobrar_sobrevive_a_una_actualizacion(db):
+    """El mapeo del origen trae `no_cobrar` en False siempre: refrescarlo sería
+    pisar la decisión de no cobrarle algo a alguien."""
+    armar(db, repuestos=[repuesto()]).generar(Q)
+    fila = db.query(Repuesto).one()
+    fila.no_cobrar = True
+    fila.motivo_no_cobrar = "lo puso la empresa"
+    db.commit()
+
+    # El origen cambia algo que sí es suyo, en la misma fila.
+    armar(db, repuestos=[dict(repuesto(), maquina="MAQUINARIA C. MUÑOZ")]).generar(Q)
+
+    fila = db.query(Repuesto).one()
+    assert fila.maquina == "MAQUINARIA C. MUÑOZ"
+    assert fila.no_cobrar is True
+    assert fila.motivo_no_cobrar == "lo puso la empresa"
+
+
+def test_si_el_origen_no_cambio_nada_no_se_refresca_nada(db):
+    """Actualizar dos veces seguidas no tiene que marcar cambios fantasma."""
+    armar(db, viajes=[viaje()]).generar(Q)
+    r = armar(db, viajes=[viaje()]).generar(Q)
+    assert r["detalle"]["viajes"]["refrescadas"] == 0
+    assert r["detalle"]["viajes"]["sin_cambios"] == 1

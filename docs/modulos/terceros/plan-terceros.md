@@ -232,8 +232,32 @@ strings lo arregla.
 | Viajes con precio | 689 de 756 | 614 de 672 |
 | Terceros con diferencia | 16 de 43 | 20 de 47 |
 
-Los 7 dueños unificados explican la mayoría. Dónde vive esa tabla —en el sistema
-de campo, como pide la regla 3.1, o en el módulo— **es una decisión abierta**.
+Los 7 dueños unificados explican la mayoría.
+
+**Decidido (2026-09-21): se corrige en el sistema de campo.** El módulo **no**
+tiene tabla de unificación. Vale la regla 3.1 — el maestro es el origen, y una
+segunda tabla sería un segundo lugar donde la verdad puede quedar vieja.
+
+La lista concreta salió en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`,
+y separa tres cosas que no se piden igual:
+
+| | Cuántas | Qué es |
+|---|---|---|
+| Fichas a corregir | 16 | El sistema de campo tiene un nombre y se liquida con otro. 4 son sólo puntuación (`QUIROGA,RAFAEL`, `ECHENIQUE ADRIAN`); las otras 12 son un nombre distinto y hay que confirmarlas antes de tocar |
+| Ventas | 5 patentes | El colectivo cambió de manos y los tramos de fecha son limpios. El sistema de campo tiene que tener el dueño **de hoy** |
+| A definir | 9 patentes | El Excel le asigna dos dueños distintos a la misma patente **en fechas que se pisan**. No es algo que el sistema de campo pueda corregir: alguien tiene que decir de quién es |
+
+`QUIROGA, ELIO` aparece de intruso en 6 patentes de otros dueños, siempre con
+pocos viajes contra muchos del dueño real. Tiene pinta de ser el que se elige
+por error en una lista desplegable, más que seis errores separados.
+
+**Lo que hubo que arreglar para que la corrección llegue.** El dueño no está en
+la clave de reconciliación —la clave de un viaje usa la patente—, así que una
+fila que ya existía no sobraba ni faltaba y se quedaba con el nombre viejo para
+siempre. Actualizar prometía "dejar la tabla igual al origen" y no lo cumplía.
+Ahora refresca los campos del origen sobre las filas que siguen, y **no toca lo
+manual**: quincena efectiva, motivo y la marca de no cobrar. Sin eso, la opción
+elegida no funcionaba: se corregía Chinagro y el módulo nunca se enteraba.
 
 ---
 
@@ -243,11 +267,10 @@ de campo, como pide la regla 3.1, o en el módulo— **es una decisión abierta*
 - **El rol de quien carga los seguros.** Hoy un módulo tiene `operador` y `gerente`. Quien carga los seguros no es ninguno de los dos: entra a una sola sección y no ve el resto. Agregar un tercer rol toca el núcleo, así que va en un PR aparte (regla 4 de `GUIA-MODULOS.md`).
 - **La quincena de corte**: desde cuándo el módulo liquida en serio.
 - **`reportlab`** como dependencia nueva para el PDF (etapa 11).
-- **Dónde vive la unificación de dueños.** El Excel unifica 7 de 53 dueños por colectivo, y sin eso agosto no cierra. La regla 3.1 dice que el maestro es el sistema de campo y que nada se resuelve por parecido; esto no es un parecido sino una decisión de negocio. Las dos salidas: que el sistema de campo corrija la ficha de cada colectivo, o que el módulo tenga una tabla de unificación con su responsable. Sin definirlo, la etapa 7 no se puede dar por aceptada.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.
-- Un colectivo aparece con dos dueños distintos: ¿venta del vehículo o error de carga?
+- **16 fichas de colectivo con el dueño mal, 5 ventas y 9 patentes a definir.** La lista está en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`. Es lo que bloquea la aceptación de la etapa 7.
 - Casos donde se cargó el nombre del capataz en lugar del dueño.
 - **TRANSPORTE ALFONSO** tiene la descripción entera vacía y 13 viajes en 2026 (todos de BONETTO, abril y mayo). Definir si es TERCEROS, PROPIO o una ficha de baja.
 

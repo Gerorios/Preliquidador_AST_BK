@@ -199,6 +199,9 @@ class DetalleConjunto(BaseModel):
     origen: int            # cuántas filas tenía el origen
     insertadas: int
     borradas: int
+    # Ya estaban, pero el origen les cambió algún dato que no es de la clave
+    # —el dueño de un colectivo, por ejemplo—. Lo manual nunca se refresca.
+    refrescadas: int = 0
     sin_cambios: int
 
 

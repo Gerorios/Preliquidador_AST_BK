@@ -190,6 +190,10 @@ CONJUNTOS = (
 
 # Lo que el liquidador carga a mano y que una actualización tiene que respetar.
 CAMPOS_MANUALES = ("quincena_efectiva", "motivo_efectiva", "motivo_no_cobrar")
+# `no_cobrar` va aparte porque su valor manual es False tanto como True: el
+# mapeo del origen lo trae siempre en False, así que refrescarlo sería pisar la
+# decisión de no cobrarle algo a alguien.
+NO_SE_REFRESCAN = CAMPOS_MANUALES + ("no_cobrar",)
 
 
 def tiene_trabajo_manual(fila) -> bool:
@@ -328,9 +332,32 @@ class LiquidacionService:
             self.db.bulk_insert_mappings(modelo, nuevas)
         insertadas = len(nuevas)
 
+        # Las que siguen: se les refrescan los campos que son del origen.
+        #
+        # Hace falta porque la clave no lleva todos los campos. El dueño de un
+        # colectivo, por ejemplo, no está en la clave de un viaje —la clave usa
+        # la patente—, así que cuando el sistema de campo corrige la ficha de
+        # un colectivo, sin esto la corrección no llegaba nunca: la fila ya
+        # existía, no sobraba ni faltaba, y se quedaba con el nombre viejo.
+        # Actualizar prometía "dejar la tabla igual al origen" y no lo cumplía.
+        #
+        # Lo manual no se toca: eso es lo que distingue actualizar de rehacer.
+        sin_borrar = {f.id for f in a_borrar}
+        refrescadas = 0
+        for clave, filas in guardadas.items():
+            quedan = [f for f in filas if f.id not in sin_borrar]
+            for fila, datos in zip(quedan, del_origen.get(clave, ())):
+                cambios = {c: v for c, v in datos.items()
+                           if c not in NO_SE_REFRESCAN and getattr(fila, c) != v}
+                if cambios:
+                    for campo, valor in cambios.items():
+                        setattr(fila, campo, valor)
+                    refrescadas += 1
+
         return {
             "origen": len(filas_origen),
             "insertadas": insertadas,
             "borradas": borradas,
-            "sin_cambios": len(filas_origen) - insertadas,
+            "refrescadas": refrescadas,
+            "sin_cambios": len(filas_origen) - insertadas - refrescadas,
         }
