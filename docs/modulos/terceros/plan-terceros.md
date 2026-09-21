@@ -238,18 +238,29 @@ Los 7 dueños unificados explican la mayoría.
 tiene tabla de unificación. Vale la regla 3.1 — el maestro es el origen, y una
 segunda tabla sería un segundo lugar donde la verdad puede quedar vieja.
 
-La lista concreta salió en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`,
-y separa tres cosas que no se piden igual:
+**El desacuerdo es mucho más chico de lo que parecía: 13 patentes de 121.**
 
-| | Cuántas | Qué es |
+La primera medición dio 30 y estaba mal: comparaba contra `colectivo_nombre` del
+Excel, que es una **foto de Chinagro del día en que se bajó la fila**, no lo que
+Chinagro dice hoy. Contra la base viva, 107 de las 121 patentes ya coinciden.
+
+Las 14 patentes que parecían tener dos dueños tampoco son un problema: en las
+14, **la ficha de hoy coincide exactamente con el dueño de la última
+liquidación**. Eran cambios de mano ya registrados, no contradicciones.
+
+Lo que queda, en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`:
+
+| Qué pasa | Patentes | Ejemplo |
 |---|---|---|
-| Fichas a corregir | 16 | El sistema de campo tiene un nombre y se liquida con otro. 4 son sólo puntuación (`QUIROGA,RAFAEL`, `ECHENIQUE ADRIAN`); las otras 12 son un nombre distinto y hay que confirmarlas antes de tocar |
-| Ventas | 5 patentes | El colectivo cambió de manos y los tramos de fecha son limpios. El sistema de campo tiene que tener el dueño **de hoy** |
-| A definir | 9 patentes | El Excel le asigna dos dueños distintos a la misma patente **en fechas que se pisan**. No es algo que el sistema de campo pueda corregir: alguien tiene que decir de quién es |
+| Una letra de diferencia | 4 | `MARELLI, HUGO` / `MARELI, HUGO` |
+| Uno tiene el nombre completo | 6 | `VERA, OSCAR HERIBERTO` / `VERA, OSCAR` |
+| Nombres distintos, hay que confirmar | 3 | `ECHENIQUE, HORACIO` / `ECHENIQUE, ADRIAN` |
+| Sin ficha viva en el sistema de campo | 1 | `GQQ599`, con viajes hasta julio |
 
-`QUIROGA, ELIO` aparece de intruso en 6 patentes de otros dueños, siempre con
-pocos viajes contra muchos del dueño real. Tiene pinta de ser el que se elige
-por error en una lista desplegable, más que seis errores separados.
+**No siempre el que está mal es Chinagro.** En `HKN204` el sistema de campo dice
+`MIRANDA, JULIO` y el Excel liquida `MIRANDA, JULIIO`, con dos íes. Ahí lo que
+hay que corregir es el tarifario, no la ficha. Por eso la planilla muestra las
+dos columnas y no dice cuál gana: eso lo decide quien conoce a la gente.
 
 **Lo que hubo que arreglar para que la corrección llegue.** El dueño no está en
 la clave de reconciliación —la clave de un viaje usa la patente—, así que una
@@ -270,7 +281,7 @@ elegida no funcionaba: se corregía Chinagro y el módulo nunca se enteraba.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.
-- **16 fichas de colectivo con el dueño mal, 5 ventas y 9 patentes a definir.** La lista está en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`. Es lo que bloquea la aceptación de la etapa 7.
+- **13 patentes donde el dueño de la ficha y el de la liquidación no coinciden**, más 1 sin ficha viva. La lista está en `fuentes/colectivos-a-corregir-en-el-sistema-de-campo.xlsx`. Es lo que bloquea la aceptación de la etapa 7. En una de las 13 el que está mal es el tarifario y no la ficha.
 - Casos donde se cargó el nombre del capataz en lugar del dueño.
 - **TRANSPORTE ALFONSO** tiene la descripción entera vacía y 13 viajes en 2026 (todos de BONETTO, abril y mayo). Definir si es TERCEROS, PROPIO o una ficha de baja.
 
