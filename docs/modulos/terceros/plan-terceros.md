@@ -87,7 +87,8 @@ Cinco tablas, todas **por quincena**, con copia desde la quincena que se elija y
 
 - **No hay una sección aparte para cargar pagos.** Se trabaja sobre la grilla de la quincena, marcando los estados ahí mismo, con registro de auditoría de cada cambio.
 - El recibo tiene tres bloques: **esta quincena**, **saldo anterior** y **en revisión** (listado sin sumar).
-- **El seguro va afuera del total a facturar** y se descuenta después. El bloque de la quincena cierra en Total a facturar, sigue el detalle de los seguros, y abajo el Total a pagar. Porqué: el Total a facturar es lo que el Tercero copia en su factura, y el seguro no es un servicio que él preste — es una cuota adelantada que se le recupera. Si entrara arriba facturaría de menos.
+- **Dónde va el seguro depende de para quién es el recibo.** En el del Tercero va **afuera** del total a facturar: el bloque cierra en Total a facturar, sigue el detalle de los seguros, y abajo el Total a pagar. En el de la empresa va **adentro** del cálculo, y hay un solo total. Porqué: el Total a facturar del Tercero es lo que él copia en su factura, y el seguro no es un servicio que él preste — es una cuota adelantada que se le recupera; si entrara arriba facturaría de menos. Adentro de la empresa esa distinción no hace falta, lo que se quiere ver es cuánto se paga.
+- **Los dos layouts cierran en el mismo número**: el Total a facturar del recibo de la empresa tiene que ser igual al Total a pagar del recibo del Tercero. Es un solo cálculo impreso de dos formas, y esa igualdad es el test.
 - **Salida en PDF**, individual y en lote. Requiere `reportlab` — a aprobar según la regla de stack.
 - **WhatsApp se manda a mano**, como hoy.
 
@@ -199,7 +200,6 @@ En el mismo PR se renombró en el código lo que el glosario ya había renombrad
 - **El rol de quien carga los seguros.** Hoy un módulo tiene `operador` y `gerente`. Quien carga los seguros no es ninguno de los dos: entra a una sola sección y no ve el resto. Agregar un tercer rol toca el núcleo, así que va en un PR aparte (regla 4 de `GUIA-MODULOS.md`).
 - **La quincena de corte**: desde cuándo el módulo liquida en serio.
 - **`reportlab`** como dependencia nueva para el PDF (etapa 11).
-- **El recibo "de la empresa".** En el del Tercero el seguro va después del Total a facturar. Pitu pidió que en el de la empresa se descuente antes. Falta definir qué documento es: la copia interna del mismo recibo —y entonces es otro layout del mismo cálculo— o el de los colectivos propios (`EMPRESA 0001` y `0002`), que no facturan nada y por eso no necesitan separar las dos cifras.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.

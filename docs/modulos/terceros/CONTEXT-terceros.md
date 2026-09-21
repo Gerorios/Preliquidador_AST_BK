@@ -86,6 +86,10 @@ Lo que el Tercero le factura a la empresa por la quincena:
 Positivo la empresa le paga al Tercero; negativo el Tercero le debe. Un Tercero que presta un solo servicio simplemente tiene el otro término en cero; no son dos recibos distintos.
 _Avoid_: "Neto a pagar" a secas — servía cuando el seguro iba adentro de un total único, y ahora son dos cifras que no dan lo mismo
 
+**Recibo de la empresa**:
+La misma liquidación vista desde adentro. Cambia una sola cosa: el Seguro entra **dentro** del cálculo del Total a facturar en vez de ir después. Por eso su Total a facturar **es** el Total a pagar del recibo del Tercero — que las dos cifras den igual es la comprobación de que el recibo está bien armado.
+_Avoid_: leerlo como otra liquidación; es otro layout del mismo cálculo, no otro número
+
 **Ajuste**:
 Corrección manual con signo sobre el Recibo, con motivo. Positivo le paga más, negativo le descuenta.
 
