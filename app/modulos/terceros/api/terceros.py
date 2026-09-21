@@ -25,7 +25,7 @@ Los listados devuelven la quincena entera sin paginar: son cientos de filas
 (756 viajes en la quincena más cargada de 2026) y el liquidador trabaja mirando
 el conjunto. Filtrar y ordenar es tarea de la pantalla, que ya las tiene.
 """
-from datetime import date
+from datetime import date, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -37,6 +37,7 @@ from app.modulos.terceros.permisos import requiere_operativo
 from app.modulos.terceros.schemas import (
     AlertasResponse,
     BienResponse,
+    CalcularResponse,
     CargaCombustibleResponse,
     CopiadoConjunto,
     CopiarRequest,
@@ -50,9 +51,13 @@ from app.modulos.terceros.schemas import (
     TarifaRequest,
     TarifaResponse,
     TarifarioResumen,
+    TotalTerceroResponse,
     ViajeResponse,
 )
 from app.modulos.terceros.services import alertas_cruce, quincenas
+from app.modulos.terceros.services.calculo_service import (
+    CalculoService, LiquidacionInexistente,
+)
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
 from app.modulos.terceros.services.liquidacion_service import LiquidacionService
 from app.modulos.terceros.services.tarifario_service import (
@@ -136,6 +141,12 @@ def _tarifa_a_dict(fila) -> dict:
     return salida
 
 
+def get_calculo(
+    db_propia: Session = Depends(get_db_propia),
+) -> CalculoService:
+    return CalculoService(db_propia)
+
+
 def get_liquidacion(
     db_propia: Session = Depends(get_db_propia),
     externa: ConsultaExternaService = Depends(get_consulta_externa),
@@ -162,8 +173,9 @@ def generar_liquidacion(
     req: GenerarRequest,
     usuario=Depends(get_usuario_actual),
     servicio: LiquidacionService = Depends(get_liquidacion),
+    calculo: CalculoService = Depends(get_calculo),
 ):
-    """Trae las cinco fuentes de esa quincena y las guarda.
+    """Trae las cinco fuentes de esa quincena, las guarda y les pone precio.
 
     Si la quincena ya existe **no la rehace**: reconcilia. Suma lo que apareció
     en el origen, saca lo que ya no está, y deja donde está lo que el liquidador
@@ -179,10 +191,65 @@ def generar_liquidacion(
             detail="Una quincena se identifica por su primer día: el 1 o el 16 del mes.",
         )
     try:
-        return servicio.generar(req.quincena, usuario_id=getattr(usuario, "id", None))
+        salida = servicio.generar(req.quincena, usuario_id=getattr(usuario, "id", None))
     except FALLAS_DE_ORIGEN as e:
         # Si un origen no contesta, no se guarda media quincena.
         raise HTTPException(status_code=502, detail=_mensaje_origen(e))
+    # Generar deja la quincena con los precios ya puestos. Sin esto el
+    # liquidador ve una pantalla de ceros y no sabe si es que no hay tarifas o
+    # que le falta apretar algo. Al lado de traer cinco orígenes, no se nota.
+    calculo.calcular(req.quincena)
+    return salida
+
+
+@router.post("/liquidaciones/calcular", response_model=CalcularResponse)
+def calcular_liquidacion(
+    req: GenerarRequest,
+    servicio: CalculoService = Depends(get_calculo),
+):
+    """Le aplica a cada hecho de la quincena la tarifa que le corresponde.
+
+    Se corre sola al generar, y a mano cada vez que se cargan o se corrigen
+    tarifas. Es idempetente: vuelve a mirar todo y reescribe el resultado, así
+    que apretarla de más no rompe nada.
+
+    Lo que queda sin precio **no vale cero**: queda con un estado que dice por
+    qué, y esos estados se consultan en `/liquidaciones/pendientes`.
+    """
+    try:
+        conjuntos = servicio.calcular(req.quincena)
+    except LiquidacionInexistente as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"quincena": req.quincena,
+            "calculada_en": datetime.now(),
+            "conjuntos": conjuntos}
+
+
+@router.get("/liquidaciones/totales", response_model=list[TotalTerceroResponse])
+def totales_de_la_quincena(
+    quincena: date = Depends(quincena_param),
+    servicio: CalculoService = Depends(get_calculo),
+):
+    """Por tercero: el Total a facturar y el Total a pagar de esa quincena.
+
+    Sólo suma lo que tiene precio. Un hecho sin tarifa no entra como cero:
+    directamente no entra, y aparece en `/liquidaciones/pendientes`.
+    """
+    return servicio.totales(quincena)
+
+
+@router.get("/liquidaciones/pendientes", response_model=dict[str, dict[str, int]])
+def pendientes_de_la_quincena(
+    quincena: date = Depends(quincena_param),
+    servicio: CalculoService = Depends(get_calculo),
+):
+    """Qué falta para poder liquidar, contado por concepto y por motivo.
+
+    Cada motivo se resuelve con alguien distinto —SIN_TERCERO lo arregla el
+    sistema de campo, SIN_TARIFA lo carga el liquidador, NO_APROBADA la aprueba
+    el taller—, así que se cuentan por separado y no como un total.
+    """
+    return servicio.pendientes(quincena)
 
 
 @router.get("/bienes", response_model=list[BienResponse])

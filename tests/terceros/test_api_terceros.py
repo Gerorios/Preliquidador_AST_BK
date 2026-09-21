@@ -5,7 +5,7 @@ test_consulta_taller. Acá se prueba lo que agrega la capa HTTP: qué quincena s
 acepta, quién entra, cómo se serializa, y qué pasa cuando un origen no contesta.
 Los servicios se reemplazan por dobles, así que no hay ni base ni red.
 """
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.core.auth import get_usuario_actual
 from app.main import app
 from app.modulos.terceros.api import terceros as api
+from app.modulos.terceros.services.calculo_service import LiquidacionInexistente
 from app.modulos.terceros.services.consulta_taller import TallerNoConfigurado
 
 Q = "2026-08-01"
@@ -404,3 +405,92 @@ def test_servicio_y_reparacion_son_endpoints_distintos():
     assert "/api/terceros/horas-reparacion" in rutas
     assert "/api/terceros/horas-taller" not in rutas
 
+
+
+# ─── El cálculo del neto (etapa 7) ──────────────────────────────────────────
+
+class CalculoFalso:
+    """Doble del servicio de cálculo: acá se prueba la capa HTTP, no la cuenta.
+    La cuenta está probada contra una base de verdad en test_calculo.py."""
+
+    def __init__(self, falta=False):
+        self.falta = falta
+        self.calculadas = []
+
+    def calcular(self, quincena):
+        if self.falta:
+            raise LiquidacionInexistente(
+                "La quincena del %s no está generada. Generala antes de "
+                "ponerle precios." % quincena)
+        self.calculadas.append(quincena)
+        return {"viajes": {"hechos": 756,
+                           "por_estado": {"CALCULADO": 689, "SIN_TARIFA": 67}}}
+
+    def totales(self, quincena):
+        return [{"tercero": "ARANDA, HUGO",
+                 "viajes": Decimal("200000"), "servicio": Decimal("0"),
+                 "combustible": Decimal("50000"), "repuestos": Decimal("0"),
+                 "reparacion": Decimal("0"), "seguros": Decimal("30000"),
+                 "total_a_facturar": Decimal("150000"),
+                 "total_a_pagar": Decimal("120000")}]
+
+    def pendientes(self, quincena):
+        return {"viajes": {"SIN_TARIFA": 67}, "reparacion": {"NO_APROBADA": 51}}
+
+
+def _con_calculo(calculo):
+    app.dependency_overrides[get_usuario_actual] = lambda: LIQUIDADOR
+    app.dependency_overrides[api.get_calculo] = lambda: calculo
+    return TestClient(app)
+
+
+def test_calcular_devuelve_cuantos_quedaron_en_cada_estado():
+    calculo = CalculoFalso()
+    r = _con_calculo(calculo).post("/api/terceros/liquidaciones/calcular",
+                                   json={"quincena": Q})
+    assert r.status_code == 200
+    assert calculo.calculadas == [date(2026, 8, 1)]
+    assert r.json()["conjuntos"]["viajes"]["por_estado"]["SIN_TARIFA"] == 67
+
+
+def test_calcular_una_quincena_que_nadie_genero_da_404():
+    r = _con_calculo(CalculoFalso(falta=True)).post(
+        "/api/terceros/liquidaciones/calcular", json={"quincena": Q})
+    assert r.status_code == 404
+    assert "Generala antes" in r.json()["detail"]
+
+
+def test_los_totales_traen_las_dos_cifras_del_recibo():
+    """El total a facturar no lleva los seguros; el total a pagar sí."""
+    fila = _con_calculo(CalculoFalso()).get(
+        f"/api/terceros/liquidaciones/totales?quincena={Q}").json()[0]
+    assert fila["total_a_facturar"] == "150000"
+    assert fila["seguros"] == "30000"
+    assert fila["total_a_pagar"] == "120000"
+
+
+def test_los_pendientes_vienen_separados_por_motivo():
+    """Cada motivo lo resuelve alguien distinto, así que no se suman."""
+    d = _con_calculo(CalculoFalso()).get(
+        f"/api/terceros/liquidaciones/pendientes?quincena={Q}").json()
+    assert d["viajes"] == {"SIN_TARIFA": 67}
+    assert d["reparacion"] == {"NO_APROBADA": 51}
+
+
+def test_generar_deja_la_quincena_con_los_precios_puestos():
+    """Sin esto el liquidador ve ceros y no sabe si faltan tarifas o un botón."""
+    calculo = CalculoFalso()
+    app.dependency_overrides[get_usuario_actual] = lambda: LIQUIDADOR
+    app.dependency_overrides[api.get_calculo] = lambda: calculo
+    app.dependency_overrides[api.get_liquidacion] = lambda: LiquidacionFalsa()
+    r = TestClient(app).post("/api/terceros/liquidaciones/generar",
+                             json={"quincena": Q})
+    assert r.status_code == 200
+    assert calculo.calculadas == [date(2026, 8, 1)]
+
+
+class LiquidacionFalsa:
+    def generar(self, quincena, usuario_id=None):
+        return {"id": 1, "quincena": quincena, "generada_en": datetime(2026, 9, 21, 10, 0),
+                "actualizada_en": None, "filas": {"viajes": 756}, "total_filas": 756,
+                "nueva": True, "detalle": {}}

@@ -207,6 +207,45 @@ class GenerarResponse(LiquidacionResponse):
     detalle: dict[str, DetalleConjunto]
 
 
+# ─── El cálculo del neto (etapa 7) ──────────────────────────────────────────
+
+class CalculoConjunto(BaseModel):
+    """Qué pasó con un conjunto al ponerle precios."""
+    hechos: int
+    # Cuántos quedaron en cada estado. Los que no son CALCULADO no suman al
+    # recibo y se resuelven con gente distinta según cuál sea.
+    por_estado: dict[str, int]
+
+
+class CalcularResponse(BaseModel):
+    quincena: date
+    calculada_en: datetime
+    conjuntos: dict[str, CalculoConjunto]
+
+
+class TotalTerceroResponse(BaseModel):
+    """Lo que le queda a un tercero en una quincena.
+
+    `total_a_facturar` **no lleva los seguros**: es la cifra que el Tercero
+    copia en su factura, y el seguro no es algo que él le venda a la empresa
+    sino una cuota que se le adelantó y se le recupera al pagarle. Recién
+    `total_a_pagar` se la descuenta.
+
+    En el recibo de la empresa el seguro va adentro del total a facturar, así
+    que ahí la cifra a mostrar es `total_a_pagar` — es el mismo cálculo con los
+    seguros en otro lugar, y las dos formas cierran en el mismo número.
+    """
+    tercero: str
+    viajes: Decimal
+    servicio: Decimal
+    combustible: Decimal
+    repuestos: Decimal
+    reparacion: Decimal
+    seguros: Decimal
+    total_a_facturar: Decimal
+    total_a_pagar: Decimal
+
+
 # ─── El Tarifario (etapa 6) ─────────────────────────────────────────────────
 
 class TarifaResponse(BaseModel):

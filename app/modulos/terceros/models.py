@@ -15,8 +15,9 @@ Son dos familias:
   - **El tarifario** (002): los precios que se pactan con cada tercero, por
     quincena. Nada de acá sale de un sistema: todo se carga a mano.
 
-Lo que todavía no está es el cálculo — aplicarle a cada hecho su tarifa es la
-etapa 7, y las columnas del importe van con la migración de esa etapa.
+  - **El cálculo** (004): a cada hecho se le pega la regla que lo alcanzó, el
+    precio y el importe. Se guarda y no se calcula al vuelo porque el recibo se
+    congela al emitirse, y porque la grilla filtra sobre estas columnas.
 """
 from datetime import datetime
 
@@ -31,6 +32,37 @@ from app.core.database import Base
 # ForeignKey("usuarios.id"), que SQLAlchemy resuelve por nombre, así que importar
 # este módulo tiene que registrar Usuario primero. No borrar.
 from app.core.models import Usuario  # noqa: F401
+
+# ─── Los estados del cálculo (etapa 7) ──────────────────────────────────────
+#
+# Cuatro de los seis dicen por qué una línea NO tiene importe, y son razones
+# distintas que resuelve gente distinta: un SIN_TERCERO lo arregla el sistema de
+# campo, un SIN_TARIFA lo carga el liquidador, una NO_APROBADA la aprueba el
+# taller. Por eso son estados con nombre y no un importe en NULL.
+#
+# Ninguno paga cero en silencio: los que no son CALCULADO se listan aparte.
+
+CALCULADO = "CALCULADO"
+SIN_TERCERO = "SIN_TERCERO"          # el hecho no tiene dueño resuelto
+SIN_TARIFA = "SIN_TARIFA"            # ninguna regla lo alcanza
+TARIFA_AMBIGUA = "TARIFA_AMBIGUA"    # dos reglas igual de específicas lo alcanzan
+NO_COBRAR = "NO_COBRAR"              # se decidió no cobrarlo (repuestos)
+NO_APROBADA = "NO_APROBADA"          # la hora de taller todavía no se aprobó
+# Hay tarifa, pero la línea no trae la medida que esa tarifa cobra: una tarea
+# pactada por cantidad sobre una planilla que sólo registró horas, por ejemplo.
+# Es un error de configuración del tarifario, no un cero.
+SIN_CANTIDAD = "SIN_CANTIDAD"
+
+ESTADOS_CALCULO = (CALCULADO, SIN_TERCERO, SIN_TARIFA, TARIFA_AMBIGUA,
+                   NO_COBRAR, NO_APROBADA, SIN_CANTIDAD)
+
+# El signo no vive en el dato: `importe` es siempre positivo en las cinco
+# tablas y el concepto decide de qué lado del recibo cae. Un viaje se paga y un
+# repuesto se descuenta, y eso no cambia nunca por fila. Guardarlo con signo
+# invitaría a que algún día entre un combustible en positivo y nadie lo note.
+SE_PAGA = ("viajes", "servicio")
+SE_DESCUENTA = ("combustible", "repuestos", "reparacion", "seguros")
+SIGNO = {**{c: 1 for c in SE_PAGA}, **{c: -1 for c in SE_DESCUENTA}}
 
 
 class Liquidacion(Base):
@@ -47,6 +79,9 @@ class Liquidacion(Base):
     generada_en    = Column(DateTime, nullable=False, default=datetime.now)
     generada_por   = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     actualizada_en = Column(DateTime, nullable=True)
+    # Distinta de `actualizada_en`: traer los hechos y ponerles precio son dos
+    # cosas, y la segunda se rehace sola cada vez que cambia una tarifa.
+    calculada_en   = Column(DateTime, nullable=True)
 
     viajes       = relationship("Viaje", back_populates="liquidacion", cascade="all, delete-orphan")
     horas_servicio = relationship("HoraServicio", back_populates="liquidacion", cascade="all, delete-orphan")
@@ -78,6 +113,13 @@ class Viaje(Base):
     cant_personas     = Column(Integer, nullable=True)
     quincena_efectiva = Column(Date, nullable=True)
     motivo_efectiva   = Column(String(255), nullable=True)
+    # El tipo de viaje no viene del origen: lo resuelve la misma regla que fija
+    # el precio, y se copia acá al calcular.
+    tarifa_id       = Column(Integer, nullable=True)
+    tipo_viaje      = Column(String(10), nullable=True)
+    precio_aplicado = Column(Numeric(14, 4), nullable=True)
+    importe         = Column(Numeric(14, 2), nullable=True)
+    estado_calculo  = Column(String(20), nullable=False, default=SIN_TARIFA)
 
     liquidacion = relationship("Liquidacion", back_populates="viajes")
 
@@ -105,6 +147,14 @@ class HoraServicio(Base):
     unidad         = Column(String(30), nullable=True)       # BINS, TANCADAS… informativa
     quincena_efectiva = Column(Date, nullable=True)
     motivo_efectiva   = Column(String(255), nullable=True)
+    tarifa_id       = Column(Integer, nullable=True)
+    # Cuál de las dos medidas eligió la tarifa, y cuánto valía. Sin esto,
+    # mirando la línea no se sabe sobre qué se multiplicó el precio.
+    unidad_base     = Column(String(20), nullable=True)
+    cantidad_base   = Column(Numeric(12, 2), nullable=True)
+    precio_aplicado = Column(Numeric(14, 4), nullable=True)
+    importe         = Column(Numeric(14, 2), nullable=True)
+    estado_calculo  = Column(String(20), nullable=False, default=SIN_TARIFA)
 
     liquidacion = relationship("Liquidacion", back_populates="horas_servicio")
 
@@ -127,6 +177,10 @@ class CargaCombustible(Base):
     usuario_carga     = Column(String(150), nullable=True)
     quincena_efectiva = Column(Date, nullable=True)
     motivo_efectiva   = Column(String(255), nullable=True)
+    tarifa_id       = Column(Integer, nullable=True)
+    precio_aplicado = Column(Numeric(14, 4), nullable=True)
+    importe         = Column(Numeric(14, 2), nullable=True)
+    estado_calculo  = Column(String(20), nullable=False, default=SIN_TARIFA)
 
     liquidacion = relationship("Liquidacion", back_populates="cargas")
 
@@ -159,6 +213,9 @@ class Repuesto(Base):
     motivo_no_cobrar = Column(String(255), nullable=True)
     quincena_efectiva = Column(Date, nullable=True)
     motivo_efectiva   = Column(String(255), nullable=True)
+    # No lleva tarifa_id: el repuesto no se tarifa, ya viene con su monto.
+    importe        = Column(Numeric(14, 2), nullable=True)
+    estado_calculo = Column(String(20), nullable=False, default=CALCULADO)
 
     liquidacion = relationship("Liquidacion", back_populates="repuestos")
 
@@ -186,6 +243,10 @@ class HoraReparacion(Base):
     horas_total       = Column(Numeric(10, 2), nullable=True)
     quincena_efectiva = Column(Date, nullable=True)
     motivo_efectiva   = Column(String(255), nullable=True)
+    tarifa_id       = Column(Integer, nullable=True)
+    precio_aplicado = Column(Numeric(14, 4), nullable=True)
+    importe         = Column(Numeric(14, 2), nullable=True)
+    estado_calculo  = Column(String(20), nullable=False, default=SIN_TARIFA)
 
     liquidacion = relationship("Liquidacion", back_populates="reparaciones")
 

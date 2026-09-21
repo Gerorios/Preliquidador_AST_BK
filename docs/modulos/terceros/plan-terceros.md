@@ -159,7 +159,7 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 | 4 | ~~**La quinta consulta: Horas de servicio**~~ | **Hecho (2026-09-16).** Ver abajo |
 | 5 | ~~**Tablas propias, migración 001 y generar la quincena**~~ | **Hecho (2026-09-17).** Ver abajo |
 | 6 | ~~**Tarifario**: las cinco tablas, por quincena, con copia y herencia~~ | **Hecho (2026-09-17).** Ver abajo |
-| 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista. Cierra en **dos cifras**: Total a facturar y, restándole los seguros, Total a pagar | Los dos totales de agosto coinciden, tercero por tercero |
+| 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista. Cierra en **dos cifras**: Total a facturar y, restándole los seguros, Total a pagar | El motor está (2026-09-21). **Falta la aceptación**: agosto todavía no coincide, ver abajo |
 | 8 | **La grilla**: una sola pantalla filtrable por concepto, cliente, tercero y capataz, con exportar a Excel. Reemplaza las cuatro pantallas de la etapa 2 | El liquidador revisa agosto entero desde ahí |
 | 9 | **Verificaciones por fuente**: duplicados en cada origen, más los cruces de la etapa 3 reorganizados | Se detecta un duplicado real antes de liquidar |
 | 10 | **Estaciones de servicio**: subida de archivos con mapeo por estación, carga manual de La Angostura, y la marca del vale en la grilla | Se detecta un vale facturado y no cargado |
@@ -194,12 +194,56 @@ En el mismo PR se renombró en el código lo que el glosario ya había renombrad
 
 ---
 
+### Etapa 7 — el motor está, la validación no
+
+**Hecho (2026-09-21).** `services/calculo_service.py` le aplica a cada hecho la
+regla más específica que lo alcanza; si dos empatan, el hecho queda
+`TARIFA_AMBIGUA` y no se elige por él. Migración `004_calculo.sql`. Agosto entero
+(1.928 hechos en las dos quincenas) se calcula en **3,2 s y 1,6 s**, y volver a
+correrlo da lo mismo.
+
+El importe **se guarda** en vez de calcularse al vuelo: el recibo de la etapa 11
+se congela al emitirse y no se congela algo que se recalcula en cada request, y
+la grilla de la etapa 8 filtra sobre esas columnas. El UPDATE va **por lote con
+un CASE**: con una fila por consulta, y la base en otro servidor, una quincena de
+750 viajes no terminaba en dos minutos.
+
+**Siete estados, y ninguno es un cero**: `CALCULADO`, `SIN_TERCERO`,
+`SIN_TARIFA`, `TARIFA_AMBIGUA`, `NO_COBRAR`, `NO_APROBADA`, `SIN_CANTIDAD`. Cada
+uno lo resuelve gente distinta, así que se cuentan por separado.
+
+**Lo que falta para dar la etapa por aceptada.** Agosto no coincide con el Excel,
+y la causa no es la cuenta: es la identidad del dueño.
+
+El Excel tiene una columna `Colectivo_Unificado` que **no existe en el sistema de
+campo**: la mantiene el liquidador a mano y unifica 7 de los 53 dueños. Nuestros
+hechos traen el nombre crudo de Chinagro, así que las tarifas —importadas con el
+nombre unificado— no los alcanzan y quedan `SIN_TARIFA`.
+
+No es un problema de tipeo. La unificación **no va por nombre sino por
+colectivo**: `QUIROGA, ELIO` aparece en el Excel repartido en tres dueños
+distintos (`QUIROGA, ELIO`, `QUIROGA, RAFAEL` y `ECHENIQUE, ADRIAN`) según de qué
+colectivo se trate. Eso es conocimiento del negocio —a quién le pertenece hoy
+cada unidad—, no una corrección de texto, y por eso ninguna normalización de
+strings lo arregla.
+
+| | 08-1Q | 08-2Q |
+|---|---|---|
+| Viajes con precio | 689 de 756 | 614 de 672 |
+| Terceros con diferencia | 16 de 43 | 20 de 47 |
+
+Los 7 dueños unificados explican la mayoría. Dónde vive esa tabla —en el sistema
+de campo, como pide la regla 3.1, o en el módulo— **es una decisión abierta**.
+
+---
+
 ## 7. Pendientes
 
 **Decisiones**
 - **El rol de quien carga los seguros.** Hoy un módulo tiene `operador` y `gerente`. Quien carga los seguros no es ninguno de los dos: entra a una sola sección y no ve el resto. Agregar un tercer rol toca el núcleo, así que va en un PR aparte (regla 4 de `GUIA-MODULOS.md`).
 - **La quincena de corte**: desde cuándo el módulo liquida en serio.
 - **`reportlab`** como dependencia nueva para el PDF (etapa 11).
+- **Dónde vive la unificación de dueños.** El Excel unifica 7 de 53 dueños por colectivo, y sin eso agosto no cierra. La regla 3.1 dice que el maestro es el sistema de campo y que nada se resuelve por parecido; esto no es un parecido sino una decisión de negocio. Las dos salidas: que el sistema de campo corrija la ficha de cada colectivo, o que el módulo tenga una tabla de unificación con su responsable. Sin definirlo, la etapa 7 no se puede dar por aceptada.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.
