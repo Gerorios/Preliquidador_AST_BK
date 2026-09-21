@@ -271,6 +271,22 @@ Lo que falta para el 100 % ya no es identidad: son las combinaciones que tienen
 **dos precios distintos en la misma quincena** y que el importador se niega a
 adivinar. Las resuelve el liquidador en el tarifario, que es donde va.
 
+**Los nombres, preguntados y contestados (2026-09-21).** Esto no se deduce de
+ningún dato y por eso se anota: cada vez que alguien mire estos nombres le van a
+volver a parecer errores.
+
+| Ficha del sistema de campo | Veredicto |
+|---|---|
+| `VERA, OSCAR HERIBERTO` | **Correcto.** El Excel lo acorta a `VERA, OSCAR`; el nombre bueno es el largo |
+| `MARELLI, HUGO` | **Correcto, va con dos L.** El Excel escribe `MARELI` con una, y ésa es la que está mal |
+| `PONCE, ORLANDO DANIEL` | **Correcto.** Es la misma persona que el Excel llama `PONCE, DANIEL` |
+| `ECHENIQUE, HORACIO` | **Correcto.** Es una sola persona, Echenique Horacio Adrian; el Excel la llama `ECHENIQUE, ADRIAN` |
+| `FUNES, ARIEL` en `EIW255` | **Mal.** Ese colectivo es de `OLMEDO, RICARDO` |
+
+De las cinco dudas, **cuatro eran del Excel y una sola del sistema de campo**.
+Como el tarifario ahora toma el dueño de la ficha, las cuatro del Excel ya no
+molestan a nadie: se corrigieron solas al cambiar de origen.
+
 **Lo que hubo que arreglar para que la corrección llegue.** El dueño no está en
 la clave de reconciliación —la clave de un viaje usa la patente—, así que una
 fila que ya existía no sobraba ni faltaba y se quedaba con el nombre viejo para
@@ -290,7 +306,10 @@ elegida no funcionaba: se corregía Chinagro y el módulo nunca se enteraba.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.
-- **`HZM978` está en dos fichas** (`LUCERO, MAXIMO` id 12 y `QUIROGA, ELIO` id 97) con la misma descripción, y la ficha `USAR` (id 256) quedó a medio cargar. Son los dos únicos errores del maestro de colectivos.
+- **Tres cosas, y son todas:**
+  1. `EIW255` dice `FUNES, ARIEL` y el colectivo es de `OLMEDO, RICARDO` (confirmado el 2026-09-21). `FUNES, ARIEL` tiene otras 3 fichas que sí son suyas, y `OLMEDO, RICARDO` todavía no existe como dueño en el maestro.
+  2. `HZM978` está en dos fichas, `LUCERO, MAXIMO` (id 12) y `QUIROGA, ELIO` (id 97), con la descripción idéntica. Una sobra.
+  3. La ficha `USAR` (id 256) quedó a medio cargar: sin patente y con la descripción cortada.
 - Casos donde se cargó el nombre del capataz en lugar del dueño.
 - **TRANSPORTE ALFONSO** tiene la descripción entera vacía y 13 viajes en 2026 (todos de BONETTO, abril y mayo). Definir si es TERCEROS, PROPIO o una ficha de baja.
 
