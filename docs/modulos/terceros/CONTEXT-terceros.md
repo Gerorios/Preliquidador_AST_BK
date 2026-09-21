@@ -66,7 +66,7 @@ Hora que un mecánico de la empresa dedicó a reparar una Maquinaria de tercero,
 _Avoid_: "hora de taller" (se confundía con la Hora de servicio, que va en el sentido contrario)
 
 **Seguro**:
-Cuota que la empresa le descuenta al Tercero por las pólizas que le cubre. Son de tres clases —del vehículo o la máquina (automotor), del chofer en relación de dependencia, y de accidentes personales— y **se imputan enteras a la 2da quincena del mes**, no se parten.
+Cuota que la empresa le descuenta al Tercero por las pólizas que le cubre. Son de tres clases —del vehículo o la máquina (automotor), del chofer en relación de dependencia, y de accidentes personales— y **se imputan enteras a la 2da quincena del mes**, no se parten. En el Recibo van **después del Total a facturar**, en su propio bloque: el Tercero no los factura.
 _Avoid_: pensar que es solo de los colectivos propios; alcanza a colectivos y a maquinaria de terceros
 
 ---
@@ -74,12 +74,17 @@ _Avoid_: pensar que es solo de los colectivos propios; alcanza a colectivos y a 
 ## El Recibo
 
 **Recibo**:
-El documento que se le manda a cada Tercero al cerrar la quincena, con el detalle de lo que se le paga y lo que se le descuenta, el saldo anterior y el total. Es lo que el Tercero usa para emitir su factura. Se emite uno por Tercero y por Quincena, y **una vez emitido queda congelado**: lo que llegue después va al siguiente.
+El documento que se le manda a cada Tercero al cerrar la quincena, con el detalle de lo que se le paga y lo que se le descuenta, el saldo anterior y el total. Es lo que el Tercero usa para emitir su factura. Se emite uno por Tercero y por Quincena, y **una vez emitido queda congelado**: lo que llegue después va al siguiente. Cierra con **dos cifras y no con una**: el Total a facturar, después el detalle de los Seguros, y recién entonces el Total a pagar.
 
-**Neto a pagar**:
-Lo que se le paga por los servicios que prestó, menos lo que consumió:
-`Viajes + Horas de servicio − Combustible − Repuestos − Horas de reparación − Seguros + Ajustes`.
+**Total a facturar**:
+Lo que el Tercero le factura a la empresa por la quincena:
+`Viajes + Horas de servicio − Combustible − Repuestos − Horas de reparación + Ajustes`.
+**El Seguro no entra acá.** Es la cifra que el Tercero copia en su factura, y el seguro no es algo que él le venda a la empresa: es una cuota que la empresa le adelantó y le recupera al pagarle. Meterlo adentro haría que facture de menos.
+
+**Total a pagar**:
+`Total a facturar − Seguros`. Es lo que la empresa efectivamente le transfiere, y no coincide con lo que el Tercero factura.
 Positivo la empresa le paga al Tercero; negativo el Tercero le debe. Un Tercero que presta un solo servicio simplemente tiene el otro término en cero; no son dos recibos distintos.
+_Avoid_: "Neto a pagar" a secas — servía cuando el seguro iba adentro de un total único, y ahora son dos cifras que no dan lo mismo
 
 **Ajuste**:
 Corrección manual con signo sobre el Recibo, con motivo. Positivo le paga más, negativo le descuenta.

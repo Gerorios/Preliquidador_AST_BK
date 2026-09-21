@@ -86,7 +86,8 @@ Cinco tablas, todas **por quincena**, con copia desde la quincena que se elija y
 ### 3.5 La cuenta y el recibo
 
 - **No hay una sección aparte para cargar pagos.** Se trabaja sobre la grilla de la quincena, marcando los estados ahí mismo, con registro de auditoría de cada cambio.
-- El recibo tiene tres bloques: **esta quincena** (el neto), **saldo anterior** y **en revisión** (listado sin sumar).
+- El recibo tiene tres bloques: **esta quincena**, **saldo anterior** y **en revisión** (listado sin sumar).
+- **El seguro va afuera del total a facturar** y se descuenta después. El bloque de la quincena cierra en Total a facturar, sigue el detalle de los seguros, y abajo el Total a pagar. Porqué: el Total a facturar es lo que el Tercero copia en su factura, y el seguro no es un servicio que él preste — es una cuota adelantada que se le recupera. Si entrara arriba facturaría de menos.
 - **Salida en PDF**, individual y en lote. Requiere `reportlab` — a aprobar según la regla de stack.
 - **WhatsApp se manda a mano**, como hoy.
 
@@ -157,7 +158,7 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 | 4 | ~~**La quinta consulta: Horas de servicio**~~ | **Hecho (2026-09-16).** Ver abajo |
 | 5 | ~~**Tablas propias, migración 001 y generar la quincena**~~ | **Hecho (2026-09-17).** Ver abajo |
 | 6 | ~~**Tarifario**: las cinco tablas, por quincena, con copia y herencia~~ | **Hecho (2026-09-17).** Ver abajo |
-| 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista | El neto de agosto coincide, tercero por tercero |
+| 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista. Cierra en **dos cifras**: Total a facturar y, restándole los seguros, Total a pagar | Los dos totales de agosto coinciden, tercero por tercero |
 | 8 | **La grilla**: una sola pantalla filtrable por concepto, cliente, tercero y capataz, con exportar a Excel. Reemplaza las cuatro pantallas de la etapa 2 | El liquidador revisa agosto entero desde ahí |
 | 9 | **Verificaciones por fuente**: duplicados en cada origen, más los cruces de la etapa 3 reorganizados | Se detecta un duplicado real antes de liquidar |
 | 10 | **Estaciones de servicio**: subida de archivos con mapeo por estación, carga manual de La Angostura, y la marca del vale en la grilla | Se detecta un vale facturado y no cargado |
@@ -198,6 +199,7 @@ En el mismo PR se renombró en el código lo que el glosario ya había renombrad
 - **El rol de quien carga los seguros.** Hoy un módulo tiene `operador` y `gerente`. Quien carga los seguros no es ninguno de los dos: entra a una sola sección y no ve el resto. Agregar un tercer rol toca el núcleo, así que va en un PR aparte (regla 4 de `GUIA-MODULOS.md`).
 - **La quincena de corte**: desde cuándo el módulo liquida en serio.
 - **`reportlab`** como dependencia nueva para el PDF (etapa 11).
+- **El recibo "de la empresa".** En el del Tercero el seguro va después del Total a facturar. Pitu pidió que en el de la empresa se descuente antes. Falta definir qué documento es: la copia interna del mismo recibo —y entonces es otro layout del mismo cálculo— o el de los colectivos propios (`EMPRESA 0001` y `0002`), que no facturan nada y por eso no necesitan separar las dos cifras.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.
