@@ -375,3 +375,21 @@ def test_si_el_origen_no_cambio_nada_no_se_refresca_nada(db):
     r = armar(db, viajes=[viaje()]).generar(Q)
     assert r["detalle"]["viajes"]["refrescadas"] == 0
     assert r["detalle"]["viajes"]["sin_cambios"] == 1
+
+
+def test_los_litros_que_llegan_como_texto_no_parecen_un_cambio(db):
+    """El sistema de campo manda los litros como `'150'` y se guardan como
+    Decimal('150.00'). Comparándolos crudos, cada carga parecía cambiar en cada
+    actualización: 130 refrescos falsos en una quincena de agosto."""
+    armar(db, cargas=[carga(litros="150")]).generar(Q)
+    r = armar(db, cargas=[carga(litros="150")]).generar(Q)
+    assert r["detalle"]["combustible"]["refrescadas"] == 0
+
+
+def test_un_cambio_de_verdad_en_un_numero_si_se_refresca(db):
+    """Y el mismo campo, cuando cambia en serio, tiene que llegar."""
+    armar(db, cargas=[carga(vale="60023", litros="150")]).generar(Q)
+    r = armar(db, cargas=[carga(vale="60023", litros="160")]).generar(Q)
+    # Los litros son parte de la clave, así que un cambio ahí es otra carga.
+    assert r["detalle"]["combustible"]["insertadas"] == 1
+    assert r["detalle"]["combustible"]["borradas"] == 1

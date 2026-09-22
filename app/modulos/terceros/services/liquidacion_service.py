@@ -202,20 +202,29 @@ def tiene_trabajo_manual(fila) -> bool:
     return any(getattr(fila, campo, None) for campo in CAMPOS_MANUALES)
 
 
+def _normalizar(v):
+    """Cómo se compara un valor del origen contra uno de la base.
+
+    Los dos lados tipan distinto para el mismo dato: los litros llegan del
+    sistema de campo como el texto `'150'` y están guardados como
+    `Decimal('150.00')`. Sin esto, cada carga de combustible parecería haber
+    cambiado en cada actualización.
+    """
+    if v is None:
+        return ""
+    if isinstance(v, (int,)) and not isinstance(v, bool):
+        return str(v)
+    try:
+        return str(float(v))          # Decimal, float, numérico en texto
+    except (TypeError, ValueError):
+        return str(v).strip().upper()
+
+
 def _clave(datos: dict, campos: tuple) -> tuple:
-    """La clave se arma con str() de cada campo para que un Decimal('6.00')
+    """La clave se arma normalizando cada campo, para que un Decimal('6.00')
     leído del origen y un Decimal('6.0000') leído de MySQL no parezcan hechos
     distintos."""
-    def normalizar(v):
-        if v is None:
-            return ""
-        if isinstance(v, (int,)) and not isinstance(v, bool):
-            return str(v)
-        try:
-            return str(float(v))          # Decimal, float, numérico en texto
-        except (TypeError, ValueError):
-            return str(v).strip().upper()
-    return tuple(normalizar(datos.get(c)) for c in campos)
+    return tuple(_normalizar(datos.get(c)) for c in campos)
 
 
 class LiquidacionService:
@@ -347,8 +356,11 @@ class LiquidacionService:
         for clave, filas in guardadas.items():
             quedan = [f for f in filas if f.id not in sin_borrar]
             for fila, datos in zip(quedan, del_origen.get(clave, ())):
-                cambios = {c: v for c, v in datos.items()
-                           if c not in NO_SE_REFRESCAN and getattr(fila, c) != v}
+                cambios = {
+                    c: v for c, v in datos.items()
+                    if c not in NO_SE_REFRESCAN
+                    and _normalizar(getattr(fila, c)) != _normalizar(v)
+                }
                 if cambios:
                     for campo, valor in cambios.items():
                         setattr(fila, campo, valor)
