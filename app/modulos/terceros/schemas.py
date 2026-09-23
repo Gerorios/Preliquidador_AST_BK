@@ -188,6 +188,9 @@ class LiquidacionResponse(BaseModel):
     actualizada_en: datetime | None = None
     filas: dict[str, int]          # cuántas quedaron por conjunto
     total_filas: int
+    # Cuánto suma cada rubro, y el neto. Es lo que se mira para comparar una
+    # quincena contra otra; la cantidad de filas no dice nada de eso.
+    importes: dict[str, Decimal] = {}
 
 
 class GenerarRequest(BaseModel):
@@ -349,6 +352,64 @@ class TarifaRequest(BaseModel):
     unidad_base: str | None = None
     precio: Decimal | None = None
     importe: Decimal | None = None
+
+
+class CombinacionResponse(BaseModel):
+    """Una combinación de dimensiones que la quincena tiene, con o sin precio.
+
+    Sirve para dos cosas: saber qué falta pactar (`sin_precio` > 0) y ofrecer
+    valores reales al cargar una regla, en vez de tipearlos. Un nombre tipeado a
+    mano tiene que coincidir exacto con el del sistema de campo o la regla no
+    alcanza a nada, y eso no se ve hasta que el recibo sale mal.
+
+    `lineas` y `cantidad` son para priorizar: una combinación de 17 líneas y 140
+    horas mueve el recibo mucho más que una de 1.
+    """
+    tercero: str | None = None
+    cliente: str | None = None
+    finca: str | None = None
+    capataz: str | None = None
+    tarea: str | None = None
+    lineas: int
+    cantidad: Decimal
+    # Cuántas de esas líneas todavía no tienen precio.
+    sin_precio: int = 0
+
+
+class ConfirmarEnLoteRequest(BaseModel):
+    """Varias reglas heredadas, dichas por una persona de una sola vez.
+
+    Copiar una quincena trae doscientas reglas marcadas como heredadas.
+    Confirmarlas de a una es exactamente el trabajo que copiar vino a evitar.
+    """
+    ids: list[int]
+
+
+class ActualizarEnLoteRequest(BaseModel):
+    """Un mismo valor para varias reglas a la vez.
+
+    El caso real: el precio del viaje sube y hay que tocarlo en cuarenta reglas
+    que no se diferencian en nada más.
+    """
+    ids: list[int]
+    datos: dict
+
+
+class TarifasEnLoteRequest(BaseModel):
+    """Varias reglas del mismo tarifario, de una.
+
+    Existe porque cargarlas de a una son cuarenta y cuatro requests y cuarenta y
+    cuatro recálculos de la misma quincena para llegar al mismo resultado.
+    """
+    tarifas: list[dict]
+
+
+class TarifasEnLoteResponse(BaseModel):
+    cargadas: int
+    # Las que no entraron, con el motivo. No se corta al primer error: si de
+    # cuarenta y cuatro una está repetida, las otras cuarenta y tres tienen que
+    # quedar cargadas igual.
+    rechazadas: list[str]
 
 
 class TarifarioResumen(BaseModel):

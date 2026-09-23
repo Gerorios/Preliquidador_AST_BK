@@ -422,3 +422,87 @@ def test_se_puede_pactar_una_tarifa_de_una_quincena_que_no_se_genero(db, tarifar
 def test_la_quincena_de_una_tarifa_se_puede_saber_antes_de_borrarla(tarifario):
     t = tarifario.crear("viajes", Q, {"tercero": "ARANDA", "precio": "100"})
     assert tarifario.quincena_de("viajes", t.id) == Q
+
+
+# ─── Lo que falta pactar ────────────────────────────────────────────────────
+
+def test_las_combinaciones_salen_con_o_sin_precio(db, calculo, tarifario):
+    """De acá salen dos cosas: qué falta pactar y qué valores ofrecerle al
+    liquidador cuando carga una regla, para que no los tipee."""
+    tarifario.crear("viajes", Q, {"tercero": "ARANDA, HUGO",
+                                  "capataz": "SOSA", "precio": "205000"})
+    viaje(db)                                  # tiene tarifa
+    viaje(db, capataz="OTRO")                  # no la tiene
+    viaje(db, capataz="OTRO")                  # la misma combinación otra vez
+    calculo.calcular(Q)
+
+    combis = calculo.combinaciones("viajes", Q)
+    assert len(combis) == 2
+    # De la que más líneas alcanza a la que menos: es el orden en que conviene
+    # pactarlas, porque la primera mueve más el recibo.
+    assert combis[0]["capataz"] == "OTRO"
+    assert combis[0]["lineas"] == 2 and combis[0]["sin_precio"] == 2
+    assert combis[1]["capataz"] == "SOSA"
+    assert combis[1]["sin_precio"] == 0
+
+
+def test_la_cantidad_de_una_combinacion_deja_anticipar_el_importe(db, calculo):
+    """Antes de pactar, el liquidador quiere saber sobre cuánto se multiplica."""
+    viaje(db, cantidad_viajes=Decimal("1"))
+    viaje(db, cantidad_viajes=Decimal("0.5"))
+    calculo.calcular(Q)
+
+    combi = calculo.combinaciones("viajes", Q)[0]
+    assert combi["lineas"] == 2
+    assert combi["cantidad"] == Decimal("1.5")
+
+
+def test_las_horas_de_servicio_se_miden_en_hora_maquina_antes_de_pactar(db, calculo):
+    """Sin tarifa no se sabe qué unidad se va a cobrar, y la hora de máquina es
+    la que siempre está y la que el liquidador tiene en la cabeza al pactar."""
+    db.add(HoraServicio(liquidacion_id=_liq(db).id, tercero="BARRIOS",
+                        tarea="BINS", horas_maquina=Decimal("8"),
+                        unidades=Decimal("297")))
+    db.commit()
+    calculo.calcular(Q)
+
+    combi = calculo.combinaciones("servicio", Q)[0]
+    assert combi["cantidad"] == Decimal("8")
+
+
+def test_un_tarifario_sin_hechos_no_tiene_combinaciones(calculo):
+    """Los seguros no tienen tabla de hechos: la tarifa es la línea."""
+    assert calculo.combinaciones("seguros", Q) == []
+
+
+# ─── Los importes de la portada ─────────────────────────────────────────────
+
+def test_la_portada_trae_lo_que_suma_cada_rubro_y_el_neto(db, calculo, tarifario):
+    tarifario.crear("viajes", Q, {"tercero": "ARANDA, HUGO", "precio": "200000"})
+    tarifario.crear("combustible", Q, {"tercero": "ARANDA, HUGO", "precio": "2000"})
+    tarifario.crear("seguros", Q, {"tercero": "ARANDA, HUGO", "tipo_seguro": "AUTOMOTOR",
+                                   "sujeto": "MERCEDES", "importe": "30000"})
+    viaje(db)
+    db.add(CargaCombustible(liquidacion_id=_liq(db).id, tercero="ARANDA, HUGO",
+                            litros=Decimal("25")))
+    db.commit()
+    calculo.calcular(Q)
+
+    datos = calculo.importes_por_quincena()[Q]
+    assert datos["viajes"] == Decimal("200000.00")
+    assert datos["combustible"] == Decimal("50000.00")
+    assert datos["seguros"] == Decimal("30000.00")
+    # El neto del recibo: lo que se paga menos lo que se descuenta.
+    assert datos["total"] == Decimal("120000.00")
+
+
+def test_lo_que_no_tiene_precio_no_infla_el_total_de_la_portada(db, calculo, tarifario):
+    """Una quincena a medio pactar se ve más barata, no más cara: lo que falta
+    no suma ni siquiera como cero."""
+    tarifario.crear("viajes", Q, {"tercero": "ARANDA, HUGO",
+                                  "capataz": "SOSA", "precio": "200000"})
+    viaje(db)
+    viaje(db, capataz="SIN PACTAR")
+    calculo.calcular(Q)
+
+    assert calculo.importes_por_quincena()[Q]["viajes"] == Decimal("200000.00")

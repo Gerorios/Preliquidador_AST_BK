@@ -382,6 +382,94 @@ class CalculoService:
                 .filter(PrecioSeguro.quincena == quincena)
                 .group_by(PrecioSeguro.tercero).all())
 
+    def importes_por_quincena(self) -> dict:
+        """Cuánto suma cada rubro en cada quincena. Es lo que muestra la portada.
+
+        Se hace con una consulta por concepto agrupando por quincena, y no una
+        consulta por quincena: con veinticuatro quincenas en la lista, lo
+        segundo son ciento cuarenta y cuatro viajes a una base que está en otro
+        servidor.
+        """
+        salida: dict = defaultdict(lambda: {c: CERO for c in SIGNO})
+
+        for concepto, conf in CONCEPTOS.items():
+            modelo = conf["modelo"]
+            quincena_liq = func.coalesce(modelo.quincena_efectiva, Liquidacion.quincena)
+            filas = (self.db.query(quincena_liq, func.sum(modelo.importe))
+                     .join(Liquidacion, Liquidacion.id == modelo.liquidacion_id)
+                     .filter(modelo.estado_calculo == CALCULADO)
+                     .group_by(quincena_liq).all())
+            for quincena, suma in filas:
+                salida[quincena][concepto] = suma or CERO
+
+        for quincena, suma in (self.db.query(PrecioSeguro.quincena,
+                                             func.sum(PrecioSeguro.importe))
+                               .group_by(PrecioSeguro.quincena).all()):
+            salida[quincena]["seguros"] = suma or CERO
+
+        # El total es el neto del recibo: lo que se paga menos lo que se
+        # descuenta, seguros incluidos. Es el número con el que se compara una
+        # quincena contra otra.
+        for datos in salida.values():
+            datos["total"] = sum((SIGNO[c] * datos[c] for c in SIGNO), CERO)
+        return dict(salida)
+
+    # ─── Lo que hay que cargar en el tarifario ──────────────────────────────
+
+    def combinaciones(self, tipo: str, quincena: date) -> list[dict]:
+        """Todas las combinaciones que la quincena tiene, con o sin precio.
+
+        Son las que el tarifario podría necesitar: sirven para saber qué falta
+        pactar y también para ofrecer valores reales al cargar una regla. Un
+        nombre tipeado a mano tiene que coincidir exacto con el del sistema de
+        campo o la regla no alcanza a nada, y eso no se ve hasta que el recibo
+        sale mal.
+
+        Vienen ordenadas por cuántas líneas alcanza cada una: la que más pesa
+        primero, porque es la que más mueve el número del recibo.
+        """
+        concepto = next((c for c, conf in CONCEPTOS.items()
+                         if conf["tarifario"] == tipo), None)
+        if concepto is None:
+            return []
+
+        conf = CONCEPTOS[concepto]
+        modelo = conf["modelo"]
+        quincena_liq = func.coalesce(modelo.quincena_efectiva, Liquidacion.quincena)
+        hechos = (self.db.query(modelo)
+                  .join(Liquidacion, Liquidacion.id == modelo.liquidacion_id)
+                  .filter(quincena_liq == quincena).all())
+
+        dimensiones = TIPOS[tipo]["dimensiones"]
+        grupos: dict[tuple, dict] = {}
+        for hecho in hechos:
+            valores = conf["dimensiones"](hecho)
+            clave = tuple(valores.get(d) for d in dimensiones)
+            if clave not in grupos:
+                grupos[clave] = {**{d: valores.get(d) for d in dimensiones},
+                                 "lineas": 0, "cantidad": CERO, "sin_precio": 0}
+            grupo = grupos[clave]
+            grupo["lineas"] += 1
+            if hecho.estado_calculo in (SIN_TARIFA, TARIFA_AMBIGUA):
+                grupo["sin_precio"] += 1
+            medida, _ = self._medida_cruda(concepto, hecho)
+            grupo["cantidad"] += Decimal(str(medida or 0))
+        return sorted(grupos.values(), key=lambda g: -g["lineas"])
+
+    def _medida_cruda(self, concepto: str, hecho):
+        """Cuánto mide el hecho, para poder anticipar qué va a dar el precio.
+
+        Sin tarifa todavía no se sabe qué unidad se va a cobrar, así que en
+        Horas de servicio se muestra la hora de máquina: es la medida que
+        siempre está, y la que el liquidador tiene en la cabeza al pactar.
+        """
+        if concepto == "servicio":
+            return hecho.horas_maquina, UNIDAD_HORA_MAQUINA
+        conf = CONCEPTOS[concepto]
+        if conf["cantidad"] is None:
+            return None, None
+        return conf["cantidad"](hecho, None)
+
     # ─── Lo que quedó sin calcular ──────────────────────────────────────────
 
     def pendientes(self, quincena: date) -> dict:

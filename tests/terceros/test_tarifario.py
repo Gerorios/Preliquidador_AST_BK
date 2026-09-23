@@ -260,3 +260,48 @@ def test_el_resumen_cuenta_cargadas_y_sin_confirmar(s):
 
     assert r["viajes"] == {"cargadas": 2, "heredadas": 1}
     assert r["seguros"] == {"cargadas": 0, "heredadas": 0}
+
+
+# ─── Cargar y tocar de a muchas ─────────────────────────────────────────────
+#
+# Los endpoints en lote llaman a estos mismos métodos en un for. Lo que se
+# prueba acá es que una que falla no se lleve puestas a las demás, que es la
+# razón de que el lote no se corte al primer error.
+
+def test_confirmar_le_saca_la_marca_de_heredada_sin_tocar_el_precio(s):
+    """Copiar una quincena trae doscientas reglas heredadas. Confirmarlas es
+    decir «este precio lo miré», no cambiarlo."""
+    s.crear("viajes", ANTERIOR, {"tercero": "ARANDA", "precio": "100"})
+    s.copiar(ANTERIOR, Q)
+    copiada = s.listar("viajes", Q)[0]
+    assert copiada.heredada is True
+
+    confirmada = s.confirmar("viajes", copiada.id)
+    assert confirmada.heredada is False
+    assert confirmada.precio == Decimal("100")
+
+
+def test_la_quincena_de_una_tarifa_se_sabe_antes_de_borrarla(s):
+    """Hace falta para saber qué recalcular una vez que la regla ya no está."""
+    t = s.crear("viajes", Q, {"tercero": "ARANDA", "precio": "100"})
+    assert s.quincena_de("viajes", t.id) == Q
+
+
+def test_una_combinacion_repetida_no_frena_a_las_demas(s):
+    """Es lo que hace el endpoint en lote: si de cuarenta y cuatro una ya
+    estaba, las otras cuarenta y tres tienen que quedar cargadas igual."""
+    s.crear("viajes", Q, {"tercero": "ARANDA", "capataz": "SOSA", "precio": "100"})
+
+    cargadas, rechazadas = 0, []
+    for datos in ({"tercero": "ARANDA", "capataz": "SOSA", "precio": "200"},
+                  {"tercero": "ARANDA", "capataz": "PERALTA", "precio": "200"},
+                  {"tercero": "CORNEJO", "capataz": "PERALTA", "precio": "200"}):
+        try:
+            s.crear("viajes", Q, datos)
+            cargadas += 1
+        except TarifaInvalida as e:
+            rechazadas.append(str(e))
+
+    assert cargadas == 2
+    assert len(rechazadas) == 1 and "ambiguo" in rechazadas[0]
+    assert len(s.listar("viajes", Q)) == 3

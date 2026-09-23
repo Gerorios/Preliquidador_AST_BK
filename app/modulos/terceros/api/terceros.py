@@ -39,6 +39,9 @@ from app.modulos.terceros.schemas import (
     BienResponse,
     CalcularResponse,
     CargaCombustibleResponse,
+    ActualizarEnLoteRequest,
+    CombinacionResponse,
+    ConfirmarEnLoteRequest,
     LineaGrillaResponse,
     CopiadoConjunto,
     CopiarRequest,
@@ -52,6 +55,8 @@ from app.modulos.terceros.schemas import (
     TarifaRequest,
     TarifaResponse,
     TarifarioResumen,
+    TarifasEnLoteRequest,
+    TarifasEnLoteResponse,
     TotalTerceroResponse,
     ViajeResponse,
 )
@@ -199,9 +204,17 @@ def estado():
 @router.get("/liquidaciones", response_model=list[LiquidacionResponse])
 def listar_liquidaciones(
     servicio: LiquidacionService = Depends(get_liquidacion),
+    calculo: CalculoService = Depends(get_calculo),
 ):
-    """Las quincenas ya generadas, de la más nueva a la más vieja."""
-    return servicio.listar()
+    """Las quincenas ya generadas, de la más nueva a la más vieja, con lo que
+    suma cada rubro.
+
+    Los importes se traen de una sola pasada para todas las quincenas: pedirlos
+    quincena por quincena serían seis consultas por fila de la tabla.
+    """
+    importes = calculo.importes_por_quincena()
+    return [{**fila, "importes": importes.get(fila["quincena"], {})}
+            for fila in servicio.listar()]
 
 
 @router.post("/liquidaciones/generar", response_model=GenerarResponse)
@@ -360,6 +373,57 @@ def copiar_tarifario(
     return detalle
 
 
+@router.post("/tarifario/{tipo}/lote", response_model=TarifasEnLoteResponse)
+def crear_tarifas_en_lote(
+    tipo: str,
+    req: TarifasEnLoteRequest,
+    quincena: date = Depends(quincena_param),
+    usuario=Depends(get_usuario_actual),
+    servicio: TarifarioService = Depends(get_tarifario),
+    db_propia: Session = Depends(get_db_propia),
+):
+    """Carga varias reglas de un tarifario y recalcula **una sola vez**.
+
+    De a una, pactar las cuarenta y cuatro combinaciones de horas de servicio de
+    una quincena son cuarenta y cuatro requests y cuarenta y cuatro recálculos
+    de lo mismo.
+
+    No se corta al primer error: lo que no entra se devuelve con su motivo y el
+    resto queda cargado. Cortar obligaría a adivinar cuáles alcanzaron a
+    guardarse antes de la que falló.
+    """
+    cargadas, rechazadas = 0, []
+    for datos in req.tarifas:
+        try:
+            servicio.crear(tipo, quincena, datos,
+                           usuario_id=getattr(usuario, "id", None))
+            cargadas += 1
+        except TarifaInvalida as e:
+            rechazadas.append(str(e))
+    if cargadas:
+        recalcular_tras_el_precio(db_propia, tipo, quincena)
+    return {"cargadas": cargadas, "rechazadas": rechazadas}
+
+
+@router.get("/tarifario/{tipo}/combinaciones", response_model=list[CombinacionResponse])
+def combinaciones_de_la_quincena(
+    tipo: str,
+    quincena: date = Depends(quincena_param),
+    servicio: CalculoService = Depends(get_calculo),
+):
+    """Las combinaciones que la quincena tiene, con o sin precio.
+
+    De acá salen dos cosas: la lista de lo que falta pactar —las que tienen
+    `sin_precio` > 0— y los valores que la pantalla ofrece al cargar una regla,
+    para no tipear un nombre que tiene que coincidir exacto con el del sistema
+    de campo.
+
+    De la que más líneas alcanza a la que menos, que es el orden en que conviene
+    pactarlas: la primera mueve el recibo mucho más que la última.
+    """
+    return servicio.combinaciones(tipo, quincena)
+
+
 @router.get("/tarifario/{tipo}", response_model=list[TarifaResponse])
 def listar_tarifas(
     tipo: str,
@@ -391,6 +455,30 @@ def crear_tarifa(
     return _tarifa_a_dict(fila)
 
 
+@router.patch("/tarifario/{tipo}/lote", response_model=TarifasEnLoteResponse)
+def actualizar_tarifas_en_lote(
+    tipo: str,
+    req: ActualizarEnLoteRequest,
+    servicio: TarifarioService = Depends(get_tarifario),
+    db_propia: Session = Depends(get_db_propia),
+):
+    """El mismo valor para varias reglas, y un solo recálculo.
+
+    Es lo que se usa cuando sube el precio del viaje: se filtra a quiénes
+    alcanza y se les cambia el número de una, en vez de abrir cuarenta reglas.
+    """
+    actualizadas, rechazadas, quincena = 0, [], None
+    for id_ in req.ids:
+        try:
+            fila = servicio.actualizar(tipo, id_, req.datos)
+            quincena = fila.quincena
+            actualizadas += 1
+        except TarifaInvalida as e:
+            rechazadas.append(str(e))
+    recalcular_tras_el_precio(db_propia, tipo, quincena)
+    return {"cargadas": actualizadas, "rechazadas": rechazadas}
+
+
 @router.patch("/tarifario/{tipo}/{id_}", response_model=TarifaResponse)
 def actualizar_tarifa(
     tipo: str,
@@ -407,6 +495,31 @@ def actualizar_tarifa(
         raise HTTPException(status_code=422, detail=str(e))
     recalcular_tras_el_precio(db_propia, tipo, fila.quincena)
     return _tarifa_a_dict(fila)
+
+
+@router.post("/tarifario/{tipo}/confirmar-lote", response_model=TarifasEnLoteResponse)
+def confirmar_tarifas_en_lote(
+    tipo: str,
+    req: ConfirmarEnLoteRequest,
+    servicio: TarifarioService = Depends(get_tarifario),
+):
+    """Les saca la marca de heredada a varias reglas de una.
+
+    Copiar de otra quincena trae doscientas reglas sin confirmar; ir una por
+    una es el trabajo que copiar vino a evitar. Se filtra lo que se quiere dar
+    por bueno y se confirma junto.
+
+    No recalcula: confirmar no cambia ningún precio, sólo dice que alguien lo
+    miró.
+    """
+    confirmadas, rechazadas = 0, []
+    for id_ in req.ids:
+        try:
+            servicio.confirmar(tipo, id_)
+            confirmadas += 1
+        except TarifaInvalida as e:
+            rechazadas.append(str(e))
+    return {"cargadas": confirmadas, "rechazadas": rechazadas}
 
 
 @router.post("/tarifario/{tipo}/{id_}/confirmar", response_model=TarifaResponse)
