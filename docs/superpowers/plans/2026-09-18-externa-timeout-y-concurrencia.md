@@ -1,7 +1,7 @@
 # Fix: tope de lectura en la base externa y bloqueo de generaciones concurrentes
 
 **Carril corto.** Origen: incidente del 2026-09-18 15:45-15:57. La base de ADCP
-(`vps2.adcp.com.ar`) quedó bloqueada 12 min; la consulta principal (normalmente 2 s)
+(servidor de ADCP) quedó bloqueada 12 min; la consulta principal (normalmente 2 s)
 tardó hasta 719 s, el front cortó a los 300 s sin mensaje útil y se acumularon 7
 generaciones simultáneas de la misma quincena (carrera que hoy no duplicó, pero puede).
 

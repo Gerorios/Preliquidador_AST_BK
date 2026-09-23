@@ -373,7 +373,7 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
 - PR #48 (backend_preliquidacion) — dos barandas para "Generar / Actualizar
   quincena" a raíz del incidente del mismo día: `read_timeout=60` y
   `connect_timeout=10` en la conexión a la base externa de ADCP
-  (`vps2.adcp.com.ar`), con 503 "La base de datos de campo (ADCP) no respondió
+  (servidor de ADCP), con 503 "La base de datos de campo (ADCP) no respondió
   a tiempo" si la consulta se traba; y un candado por quincena que devuelve 409
   "Ya hay una generación en curso para esta quincena" a la segunda corrida
   concurrente. Sin PR hermano en el front.
