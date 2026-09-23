@@ -355,3 +355,70 @@ def test_un_hecho_diferido_paga_los_precios_de_la_quincena_a_la_que_se_fue(db, c
     assert all(f["tercero"] != "ARANDA, HUGO" for f in calculo.totales(Q))
     assert next(f for f in calculo.totales(siguiente)
                 if f["tercero"] == "ARANDA, HUGO")["viajes"] == Decimal("260000.00")
+
+
+# ─── Cargar un precio ya lo aplica ──────────────────────────────────────────
+#
+# No hay botón de recalcular: el endpoint que guarda la tarifa recalcula el
+# concepto de ese tarifario en el mismo request, como hace Preliquidación con
+# sus conceptos. Lo que se prueba acá es lo que ese endpoint llama.
+
+def test_recalcular_un_concepto_no_toca_los_demas(db, calculo, tarifario):
+    """Tocar la tarifa de un viaje no puede cambiar lo que vale un repuesto."""
+    tarifario.crear("viajes", Q, {"tercero": "ARANDA, HUGO", "precio": "205000"})
+    v = viaje(db)
+    r = Repuesto(liquidacion_id=_liq(db).id, tercero="ARANDA, HUGO",
+                 monto_total=Decimal("50000"))
+    db.add(r)
+    db.commit()
+
+    salida = calculo.calcular(Q, ("viajes",))
+    assert list(salida) == ["viajes"]
+
+    db.refresh(v), db.refresh(r)
+    assert v.estado_calculo == CALCULADO
+    # El repuesto quedó como estaba: nadie lo miró.
+    assert r.importe is None
+
+
+def test_cargar_la_tarifa_deja_la_linea_calculada_sin_pasar_por_nada_mas(db, calculo, tarifario):
+    v = viaje(db)
+    calculo.calcular(Q)
+    db.refresh(v)
+    assert v.estado_calculo == SIN_TARIFA
+
+    tarifario.crear("viajes", Q, {"tercero": "ARANDA, HUGO", "precio": "205000"})
+    CalculoService(db).recalcular_si_existe(Q, ("viajes",))
+
+    db.refresh(v)
+    assert v.estado_calculo == CALCULADO
+    assert v.importe == Decimal("205000.00")
+
+
+def test_borrar_la_tarifa_deja_la_linea_sin_precio_y_no_con_el_viejo(db, calculo, tarifario):
+    """Si no se recalculara al borrar, la línea seguiría mostrando un importe
+    que ya no se puede explicar con ninguna regla cargada."""
+    t = tarifario.crear("viajes", Q, {"tercero": "ARANDA, HUGO", "precio": "205000"})
+    v = viaje(db)
+    calculo.calcular(Q)
+
+    tarifario.eliminar("viajes", t.id)
+    CalculoService(db).recalcular_si_existe(Q, ("viajes",))
+
+    db.refresh(v)
+    assert v.estado_calculo == SIN_TARIFA
+    assert v.importe == Decimal("0")
+    assert v.precio_aplicado is None
+
+
+def test_se_puede_pactar_una_tarifa_de_una_quincena_que_no_se_genero(db, tarifario):
+    """Sin esto, cargar un precio por adelantado fallaría con un error que no
+    tiene nada que ver con el precio."""
+    otra = date(2026, 9, 1)
+    tarifario.crear("viajes", otra, {"tercero": "ARANDA, HUGO", "precio": "205000"})
+    assert CalculoService(db).recalcular_si_existe(otra, ("viajes",)) == {}
+
+
+def test_la_quincena_de_una_tarifa_se_puede_saber_antes_de_borrarla(tarifario):
+    t = tarifario.crear("viajes", Q, {"tercero": "ARANDA", "precio": "100"})
+    assert tarifario.quincena_de("viajes", t.id) == Q

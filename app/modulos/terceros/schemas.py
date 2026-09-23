@@ -249,6 +249,56 @@ class TotalTerceroResponse(BaseModel):
     total_a_pagar: Decimal
 
 
+class LineaGrillaResponse(BaseModel):
+    """Una línea de la grilla de la quincena, venga del concepto que venga.
+
+    Los seis conceptos se traducen a esta forma para poder mirarlos juntos. Lo
+    que no aplica queda en null y la pantalla lo muestra vacío: un repuesto no
+    tiene capataz, y rellenarlo con un guion haría que la exportación a Excel
+    arrastre datos que nadie cargó.
+
+    `importe` es siempre positivo; `signo` dice de qué lado del recibo cae.
+    """
+    concepto: str
+    concepto_label: str
+    signo: int                 # +1 se le paga, -1 se le descuenta
+    id: int
+
+    # Comunes a varios conceptos
+    fecha: date | None = None
+    tercero: str | None = None
+    cliente: str | None = None
+    finca: str | None = None
+    capataz: str | None = None
+    tarea: str | None = None
+
+    # Propios de uno o dos conceptos. Van por separado y no armados en un
+    # "detalle" porque una columna que diga "HIH521 · MEDINA, HECTOR · CORTO" no
+    # se puede ordenar por patente ni filtrar por chofer.
+    patente: str | None = None          # viajes, combustible
+    chofer: str | None = None           # viajes
+    tipo_viaje: str | None = None       # viajes — lo resuelve la tarifa
+    vale: str | None = None             # combustible
+    estacion: str | None = None         # combustible
+    maquina: str | None = None          # servicio, repuestos, reparación
+    planilla: str | None = None         # servicio
+    supervisor: str | None = None       # servicio
+    repuesto: str | None = None         # repuestos
+    rubro: str | None = None            # repuestos, reparación
+    sub_rubro: str | None = None        # reparación
+    estado_taller: str | None = None    # reparación — no es el del cálculo
+    sujeto: str | None = None           # seguros
+    referencia: str | None = None       # seguros
+    tipo_seguro: str | None = None      # seguros
+
+    # El cálculo
+    cantidad: Decimal | None = None
+    unidad: str | None = None
+    precio: Decimal | None = None
+    importe: Decimal | None = None
+    estado: str
+
+
 # ─── El Tarifario (etapa 6) ─────────────────────────────────────────────────
 
 class TarifaResponse(BaseModel):

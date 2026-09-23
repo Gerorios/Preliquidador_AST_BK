@@ -39,6 +39,7 @@ from app.modulos.terceros.schemas import (
     BienResponse,
     CalcularResponse,
     CargaCombustibleResponse,
+    LineaGrillaResponse,
     CopiadoConjunto,
     CopiarRequest,
     GenerarRequest,
@@ -59,6 +60,7 @@ from app.modulos.terceros.services.calculo_service import (
     CalculoService, LiquidacionInexistente,
 )
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
+from app.modulos.terceros.services.grilla_service import GrillaService
 from app.modulos.terceros.services.liquidacion_service import LiquidacionService
 from app.modulos.terceros.services.tarifario_service import (
     TIPOS as TIPOS_TARIFA, TarifaInvalida, TarifarioService, especificidad,
@@ -147,6 +149,40 @@ def get_calculo(
     return CalculoService(db_propia)
 
 
+# Qué concepto de la grilla toca cada tarifario. Los seguros no están porque no
+# tienen hechos: la tarifa **es** la línea, así que cargarla ya es el resultado
+# y no hay nada que recalcular.
+CONCEPTO_DEL_TARIFARIO = {
+    "viajes": "viajes",
+    "servicio": "servicio",
+    "combustible": "combustible",
+    "reparacion": "reparacion",
+}
+
+
+def recalcular_tras_el_precio(db: Session, tipo: str, quincena: date | None) -> None:
+    """Cargar un precio ya lo aplica. No hay botón de recalcular.
+
+    Es la misma mecánica que Preliquidación usa con sus conceptos: el precio se
+    guarda y en el mismo request se recalcula lo que ese precio alcanza. Un
+    botón aparte deja a la pantalla mostrando números viejos hasta que alguien
+    se acuerde de apretarlo, y nadie se acuerda.
+
+    Se recalcula **sólo el concepto de ese tarifario**: tocar la tarifa de un
+    viaje no puede cambiar lo que vale un repuesto.
+    """
+    concepto = CONCEPTO_DEL_TARIFARIO.get(tipo)
+    if concepto is None or quincena is None:
+        return
+    CalculoService(db).recalcular_si_existe(quincena, (concepto,))
+
+
+def get_grilla(
+    db_propia: Session = Depends(get_db_propia),
+) -> GrillaService:
+    return GrillaService(db_propia)
+
+
 def get_liquidacion(
     db_propia: Session = Depends(get_db_propia),
     externa: ConsultaExternaService = Depends(get_consulta_externa),
@@ -225,6 +261,23 @@ def calcular_liquidacion(
             "conjuntos": conjuntos}
 
 
+@router.get("/liquidaciones/lineas", response_model=list[LineaGrillaResponse])
+def lineas_de_la_quincena(
+    quincena: date = Depends(quincena_param),
+    servicio: GrillaService = Depends(get_grilla),
+):
+    """Los seis conceptos de la quincena en una sola lista.
+
+    Vienen todas las líneas, también las que quedaron sin importe: son
+    justamente las que hay que resolver, y esconderlas del listado sería
+    esconder el trabajo pendiente.
+
+    No recalcula: devuelve lo que quedó guardado. Si sale todo en cero es que la
+    quincena no se calculó, y eso se arregla en `/liquidaciones/calcular`.
+    """
+    return servicio.lineas(quincena)
+
+
 @router.get("/liquidaciones/totales", response_model=list[TotalTerceroResponse])
 def totales_de_la_quincena(
     quincena: date = Depends(quincena_param),
@@ -285,6 +338,7 @@ def resumen_tarifario(
 def copiar_tarifario(
     req: CopiarRequest,
     servicio: TarifarioService = Depends(get_tarifario),
+    db_propia: Session = Depends(get_db_propia),
 ):
     """Trae las reglas de otra quincena, marcadas como heredadas.
 
@@ -296,10 +350,14 @@ def copiar_tarifario(
             raise HTTPException(
                 status_code=422,
                 detail="Una quincena se identifica por su primer día: el 1 o el 16 del mes.")
+    tipos = tuple(req.tipos) if req.tipos else None
     try:
-        return servicio.copiar(req.desde, req.hasta, tuple(req.tipos) if req.tipos else None)
+        detalle = servicio.copiar(req.desde, req.hasta, tipos)
     except TarifaInvalida as e:
         raise HTTPException(status_code=422, detail=str(e))
+    for tipo in (tipos or tuple(CONCEPTO_DEL_TARIFARIO)):
+        recalcular_tras_el_precio(db_propia, tipo, req.hasta)
+    return detalle
 
 
 @router.get("/tarifario/{tipo}", response_model=list[TarifaResponse])
@@ -322,12 +380,14 @@ def crear_tarifa(
     quincena: date = Depends(quincena_param),
     usuario=Depends(get_usuario_actual),
     servicio: TarifarioService = Depends(get_tarifario),
+    db_propia: Session = Depends(get_db_propia),
 ):
     try:
         fila = servicio.crear(tipo, quincena, req.model_dump(exclude_none=True),
                               usuario_id=getattr(usuario, "id", None))
     except TarifaInvalida as e:
         raise HTTPException(status_code=422, detail=str(e))
+    recalcular_tras_el_precio(db_propia, tipo, quincena)
     return _tarifa_a_dict(fila)
 
 
@@ -337,6 +397,7 @@ def actualizar_tarifa(
     id_: int,
     req: TarifaRequest,
     servicio: TarifarioService = Depends(get_tarifario),
+    db_propia: Session = Depends(get_db_propia),
 ):
     """Cambiar un precio **confirma** la regla: si estaba heredada deja de
     estarlo, porque alguien la miró y decidió."""
@@ -344,6 +405,7 @@ def actualizar_tarifa(
         fila = servicio.actualizar(tipo, id_, req.model_dump(exclude_none=True))
     except TarifaInvalida as e:
         raise HTTPException(status_code=422, detail=str(e))
+    recalcular_tras_el_precio(db_propia, tipo, fila.quincena)
     return _tarifa_a_dict(fila)
 
 
@@ -353,7 +415,9 @@ def confirmar_tarifa(
     id_: int,
     servicio: TarifarioService = Depends(get_tarifario),
 ):
-    """Dejar el precio como está, pero dicho por una persona."""
+    """Dejar el precio como está, pero dicho por una persona.
+
+    No recalcula: el número no cambió, sólo se le sacó la marca de heredada."""
     try:
         return _tarifa_a_dict(servicio.confirmar(tipo, id_))
     except TarifaInvalida as e:
@@ -365,11 +429,17 @@ def eliminar_tarifa(
     tipo: str,
     id_: int,
     servicio: TarifarioService = Depends(get_tarifario),
+    db_propia: Session = Depends(get_db_propia),
 ):
+    """Borrar una tarifa deja sin precio a los hechos que alcanzaba, así que
+    hay que recalcular: si no, seguirían mostrando un importe que ya nadie
+    puede explicar de dónde sale."""
     try:
+        quincena = servicio.quincena_de(tipo, id_)
         servicio.eliminar(tipo, id_)
     except TarifaInvalida as e:
         raise HTTPException(status_code=422, detail=str(e))
+    recalcular_tras_el_precio(db_propia, tipo, quincena)
 
 
 @router.get("/quincenas", response_model=list[QuincenaResponse])

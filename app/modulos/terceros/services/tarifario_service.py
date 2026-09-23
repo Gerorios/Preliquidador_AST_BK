@@ -179,6 +179,11 @@ class TarifarioService:
         self.db.refresh(fila)
         return fila
 
+    def quincena_de(self, tipo: str, id_: int) -> date:
+        """De qué quincena es esa tarifa. Hace falta antes de borrarla, para
+        saber qué hay que recalcular una vez que ya no esté."""
+        return self._obtener(tipo_o_error(tipo), id_).quincena
+
     def eliminar(self, tipo: str, id_: int) -> None:
         conf = tipo_o_error(tipo)
         self.db.delete(self._obtener(conf, id_))

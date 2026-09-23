@@ -182,8 +182,14 @@ class CalculoService:
 
     # ─── Calcular ───────────────────────────────────────────────────────────
 
-    def calcular(self, quincena: date) -> dict:
-        """Le pone precio a todos los hechos de una quincena. Idempotente."""
+    def calcular(self, quincena: date, conceptos: tuple[str, ...] | None = None) -> dict:
+        """Le pone precio a los hechos de una quincena. Idempotente.
+
+        `conceptos` limita el recálculo a los que se piden. Es lo que se usa al
+        cargar un precio: tocar la tarifa de un viaje no puede cambiar lo que
+        vale un repuesto, así que recorrer las cinco tablas sería pagar cinco
+        veces el viaje a la base por una cuenta que ya se sabe cuál es.
+        """
         liquidacion = (self.db.query(Liquidacion)
                        .filter(Liquidacion.quincena == quincena).first())
         if liquidacion is None:
@@ -193,6 +199,8 @@ class CalculoService:
 
         resumen = {}
         for concepto, conf in CONCEPTOS.items():
+            if conceptos is not None and concepto not in conceptos:
+                continue
             resumen[concepto] = self._calcular_concepto(
                 concepto, conf, liquidacion)
 
@@ -299,6 +307,20 @@ class CalculoService:
             salida.update({"unidad_base": unidad,
                            "cantidad_base": Decimal(str(cantidad or 0))})
         return salida
+
+    def recalcular_si_existe(self, quincena: date,
+                             conceptos: tuple[str, ...] | None = None) -> dict:
+        """Como `calcular`, pero callado si la quincena no está generada.
+
+        Es el que se llama al cargar un precio. Se pueden pactar tarifas de una
+        quincena que todavía no se trajo de los orígenes; ahí no hay hechos que
+        recalcular, y hacer fallar la carga del precio por eso sería obligar a
+        generar antes de poder pactar.
+        """
+        try:
+            return self.calcular(quincena, conceptos)
+        except LiquidacionInexistente:
+            return {}
 
     # ─── Los totales del recibo ─────────────────────────────────────────────
 
