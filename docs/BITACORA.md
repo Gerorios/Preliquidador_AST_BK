@@ -505,3 +505,56 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
   17 ya no entra, así que el caso 16/17 concurrente desaparece por esta vía),
   `except OperationalError` amplio, el `db_externa.execute` crudo en
   `precios.py`, y la aserción vacía sobre `engine_propia`.
+
+## 2026-09-23 — La externa distingue acceso rechazado de corte, y grupos de pago da 503
+
+**Mergeado**
+- PR #50 (backend) — `fix(preliquidacion)`: `GET /api/precios/grupos-pago` pasa
+  por `ConsultaExternaService._ejecutar` (503 claro en vez de 500 si ADCP se
+  bloquea), y un acceso rechazado por ADCP ya no pide reintentar. Merge
+  `c071e0b`. Sin PR hermano en el front.
+
+**Por frontera**
+- Preliquidación: `services/consulta_externa.py` gana `QUERY_GRUPOS_PAGO`,
+  `obtener_grupos_pago()` y `CODIGOS_ACCESO_RECHAZADO = {1044, 1045, 1142, 1143}`;
+  con esos códigos `_ejecutar` levanta `ExternaNoDisponible` con "rechazó el
+  acceso del sistema. Reintentar no sirve: avisá a sistemas". El log `[EXTERNA]`
+  ahora muestra el código. `api/precios.py` deja el `db_externa.execute` crudo.
+  Tests en `tests/preliquidacion/test_consulta_externa_timeout.py`.
+- Docs: plan en `docs/superpowers/plans/2026-09-23-externa-errores.md`.
+
+**Origen**
+- Dos deudas de la revisión del PR #48, anotadas como pendientes en las dos
+  entradas anteriores: el `db_externa.execute` crudo en `precios.py` y el
+  `except OperationalError` amplio. Porqué del segundo (del PR): si ADCP rota
+  las credenciales, el liquidador reintentaría algo que nunca va a andar, y el
+  log lo mostraría como lentitud.
+
+**Decisiones**
+- **Sigue siendo 503 en los dos casos**, aunque un acceso rechazado no es
+  técnicamente "no disponible". Porqué: el contrato con el front no cambia (ya
+  muestra el `detail` de un 503 tal cual) y no hace falta PR hermano.
+- **Lista cerrada de códigos de acceso; todo lo demás = "no respondió".**
+  Porqué: el default conservador es el comportamiento anterior. Descartado:
+  enumerar los transitorios (2003, 2006, 2013…), porque un código no previsto
+  quedaría sin traducir y volvería el 500.
+- La revisión encontró un hallazgo high: `orig.args` vacío levantaba
+  `IndexError` (500 en vez de 503). Se arregló en una línea con test.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-23, con OK explícito del usuario;
+  health ok, servicio activo, sin errores en logs.
+- Migraciones: ninguna. Sin cambio de API. Rollback: revertir el merge.
+- Tests: 3 nuevos, vistos en rojo primero. Suite completa 296 en verde antes
+  del arreglo de la revisión; después, el archivo afectado 6/6. Smoke real con
+  las bases reales: `/grupos-pago` → 200 con los mismos 12 grupos que la
+  consulta vieja corrida directo contra ADCP.
+- No probado en real: un 1045 contra ADCP (exigiría un login fallido a
+  propósito en un servidor que no controlamos). Cubierto sólo por test.
+
+**Pendiente**
+- El interceptor del front muestra mal el `detail` en lista de un 422. Se está
+  atendiendo en `frontend_preliquidacion`; no está cerrado.
+- Siguen abiertos del PR #48: la clave del candado no se normaliza y la
+  aserción vacía sobre `engine_propia`. Los ~16 parámetros de lectura siguen
+  aceptando cualquier fecha (del PR #49).
