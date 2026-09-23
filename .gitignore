@@ -10,3 +10,7 @@ __pycache__/
 # origen. Los repos son públicos. Ver docs/modulos/*/fuentes/LEEME.md
 docs/modulos/*/fuentes/*
 !docs/modulos/*/fuentes/LEEME.md
+
+# Datos de la infraestructura de producción (IPs, hosts, comandos de acceso):
+# viven sólo en la máquina de quien deploya, nunca en el repo público.
+docs/DEPLOY.md
