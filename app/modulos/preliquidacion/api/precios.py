@@ -89,16 +89,7 @@ def listar_tareas(db_externa: Session = Depends(get_db_externa)):
 
 @router.get("/grupos-pago")
 def listar_grupos_pago(db_externa: Session = Depends(get_db_externa)):
-    resultado = db_externa.execute(text("""
-        SELECT DISTINCT
-            TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(ta.descripcion, ';', 2), ';', -1)) AS grupo_pago
-        FROM laa_tareas ta
-        WHERE ta.estado <> 9
-          AND ta.descripcion IS NOT NULL
-          AND ta.descripcion <> ''
-        ORDER BY grupo_pago
-    """))
-    return [fila[0] for fila in resultado.fetchall() if fila[0]]
+    return ConsultaExternaService(db_externa).obtener_grupos_pago()
 
 
 # ─── Maestro unificado de Conceptos de Liquidación ───────────────────────────

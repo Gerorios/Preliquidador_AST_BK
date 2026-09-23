@@ -41,3 +41,35 @@ def test_engine_externa_tiene_tope_de_lectura():
     # Solo la externa: la propia escribe y no se corta a mitad de un commit.
     assert "read_timeout" not in (database.engine_propia.dialect.create_connect_args(
         database.engine_propia.url)[1])
+
+
+def test_grupos_pago_tambien_traduce_el_corte():
+    # /grupos-pago consultaba la externa con execute crudo y devolvía 500.
+    with pytest.raises(ExternaNoDisponible):
+        ConsultaExternaService(DbQueCorta()).obtener_grupos_pago()
+
+
+class DbQueRechazaAcceso:
+    def execute(self, *a, **k):
+        # Lo que levanta pymysql si ADCP cambia o bloquea las credenciales.
+        import pymysql
+        raise OperationalError("SELECT ...", {}, pymysql.err.OperationalError(
+            1045, "Access denied for user 'x'@'y' (using password: YES)"))
+
+
+def test_acceso_rechazado_no_pide_reintentar():
+    with pytest.raises(ExternaNoDisponible) as exc:
+        ConsultaExternaService(DbQueRechazaAcceso()).obtener_clientes()
+    assert "rechazó el acceso" in str(exc.value)
+    assert "Reintentá" not in str(exc.value)
+
+
+class DbQueCortaSinCodigo:
+    def execute(self, *a, **k):
+        raise OperationalError("SELECT ...", {}, Exception())
+
+
+def test_error_sin_codigo_sigue_siendo_externa_no_disponible():
+    # Un orig sin args no puede romper la traducción con un IndexError (500).
+    with pytest.raises(ExternaNoDisponible):
+        ConsultaExternaService(DbQueCortaSinCodigo()).obtener_clientes()
