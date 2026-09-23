@@ -558,3 +558,51 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
 - Siguen abiertos del PR #48: la clave del candado no se normaliza y la
   aserción vacía sobre `engine_propia`. Los ~16 parámetros de lectura siguen
   aceptando cualquier fecha (del PR #49).
+
+## 2026-09-23 — El front muestra el texto de un 422 de validación
+
+**Mergeado**
+- PR #43 (frontend) — `fix(core)`: el interceptor de `src/core/api.js` arma el
+  mensaje con `mensajeDeError(detail)`, que entiende la lista de un 422 de
+  FastAPI. Merge `4d702c4`, commit `fa336e1`. Sin PR hermano en el backend.
+
+**Por frontera**
+- Núcleo (front): `src/core/mensajeError.js` nuevo, maneja las tres formas de
+  `detail`: texto, objeto con `mensaje` (el 409 de solapamiento) y lista de
+  validación, uniendo los `msg` con "; " y sacando el prefijo "Value error, "
+  de Pydantic. `err.status` y `err.detail` crudo no cambian (Conceptos.jsx
+  sigue leyendo el 409 igual).
+
+**Origen**
+- La lista del 422 también es `object`, así que el código viejo buscaba
+  `.mensaje`, no lo encontraba y mostraba "Request failed with status code
+  422". Última deuda del incidente de ADCP (PRs #48, #49 y #50 del backend).
+
+**Decisiones**
+- **Función pura aparte.** Porqué: para poder probarla sin axios ni el store.
+- **Sin framework de tests.** Porqué: el front no tiene, y sumar Vitest es una
+  dependencia nueva que requiere aprobación. Se probó con un script desechable.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-23, con OK explícito del usuario.
+  Swap de carpeta (`frontend_old` queda de rollback); md5 de `index.html`
+  idéntico local/VPS (`35cb892f…`), 31 assets, rutas 200, el bundle contiene
+  el código nuevo.
+- Migraciones: ninguna. Sin cambio de API. Rollback: revertir el merge y
+  redeployar el front.
+- Tests: script de Node con 6 casos, visto en rojo y después verde; `npm run
+  build` OK. Smoke real: `api.js` cargado con Vite desde Node contra el backend
+  local, `POST /preliquidacion/generar` con quincena 17/9 → antes "Request
+  failed with status code 422", ahora "La quincena debe empezar el 1 o el 16
+  del mes, no el 17".
+- No probado en el navegador (extensión de Chrome desconectada).
+- Revisión adversarial: 0 urgent, 0 high.
+
+**Pendiente**
+- Cerrada la deuda del 422 anotada en las entradas de #49 y #50.
+- Minor de la revisión, sin tocar: los 422 del propio Pydantic ("Field
+  required") siguen en inglés y sin nombre de campo; `Login.jsx:48` usa axios
+  directo y no pasa por este interceptor (preexistente).
+- Siguen abiertos del PR #48: la clave del candado no se normaliza y la
+  aserción vacía sobre `engine_propia`. Los ~16 parámetros de lectura siguen
+  aceptando cualquier fecha (del PR #49).
