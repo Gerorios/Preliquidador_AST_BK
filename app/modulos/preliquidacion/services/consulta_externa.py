@@ -241,6 +241,22 @@ QUERY_LEGAJOS = text("""
 """)
 
 
+QUERY_GRUPOS_PAGO = text("""
+    SELECT DISTINCT
+        TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(ta.descripcion, ';', 2), ';', -1)) AS grupo_pago
+    FROM laa_tareas ta
+    WHERE ta.estado <> 9
+      AND ta.descripcion IS NOT NULL
+      AND ta.descripcion <> ''
+    ORDER BY grupo_pago
+""")
+
+# Códigos de MySQL en los que ADCP contesta pero nos niega el acceso
+# (credenciales o permisos cambiados): reintentar no sirve, a diferencia de un
+# corte o un timeout. Cualquier otro código se trata como "no respondió".
+CODIGOS_ACCESO_RECHAZADO = {1044, 1045, 1142, 1143}
+
+
 class ConsultaExternaService:
 
     def __init__(self, db_externa: Session):
@@ -259,7 +275,13 @@ class ConsultaExternaService:
             t1 = time.time()
             filas = resultado.fetchall()
         except OperationalError as e:
-            print(f"[EXTERNA] sin respuesta tras {time.time()-t0:.1f}s: {e.orig}")
+            codigo = (getattr(e.orig, "args", None) or (None,))[0]
+            print(f"[EXTERNA] error {codigo} tras {time.time()-t0:.1f}s: {e.orig}")
+            if codigo in CODIGOS_ACCESO_RECHAZADO:
+                raise ExternaNoDisponible(
+                    "La base de datos de campo (ADCP) rechazó el acceso del sistema. "
+                    "Reintentar no sirve: avisá a sistemas."
+                ) from e
             raise ExternaNoDisponible(
                 "La base de datos de campo (ADCP) no respondió a tiempo. "
                 "Reintentá en unos minutos."
@@ -281,6 +303,10 @@ class ConsultaExternaService:
     def obtener_fincas(self, cliente_nombre: str) -> list[str]:
         filas, *_ = self._ejecutar(QUERY_FINCAS_POR_CLIENTE, {"cliente_nombre": cliente_nombre})
         return [fila[0] for fila in filas]
+
+    def obtener_grupos_pago(self) -> list[str]:
+        filas, *_ = self._ejecutar(QUERY_GRUPOS_PAGO)
+        return [fila[0] for fila in filas if fila[0]]
 
     def obtener_tareas(self) -> list[dict]:
         filas, *_ = self._ejecutar(QUERY_TAREAS)
