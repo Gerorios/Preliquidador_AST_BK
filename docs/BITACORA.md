@@ -606,3 +606,58 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
 - Siguen abiertos del PR #48: la clave del candado no se normaliza y la
   aserción vacía sobre `engine_propia`. Los ~16 parámetros de lectura siguen
   aceptando cualquier fecha (del PR #49).
+
+## 2026-09-23 — Los README quedan como descripción general y los repos siguen públicos
+
+**Mergeado**
+- PR #51 (backend) — el README pasa a descripción general (qué es, stack,
+  estructura por módulos, cómo levantarlo en local, dónde está la
+  documentación); `docs/DEPLOY.md` sale del árbol y entra a `.gitignore`; se
+  tacha el host de ADCP. Merge `66b9bf0`, commits `9666257` y `6439a5b`.
+- PR #44 (frontend) — PR hermano, mismo criterio para el README del front.
+  Merge `55feca3`.
+
+**Por frontera**
+- Docs: `README.md` de los dos repos reescritos (backend -268/+43, front
+  -116/+31). `docs/DEPLOY.md` borrado del repo (186 líneas); queda sólo en la
+  máquina de quien deploya. El nombre del host de ADCP se reemplaza por
+  "servidor de ADCP" en `docs/superpowers/plans/2026-09-18-externa-timeout-y-concurrencia.md`
+  y en la entrada del PR #48 de esta bitácora (el commit `6439a5b` editó esa
+  línea vieja).
+- Prod y Datos: `.gitignore` suma `docs/DEPLOY.md` con el comentario "viven
+  sólo en la máquina de quien deploya, nunca en el repo público".
+
+**Decisiones**
+- **README sin detalle interno.** Porqué: el repo es público y el sistema es
+  interno; el README viejo explicaba la mecánica de identidad y contraseña
+  inicial, nombraba tablas y prefijos de las bases de terceros, describía la
+  infraestructura de producción y listaba todos los endpoints, lo que no le
+  sirve a quien lee el repo y le da un mapa a un tercero. La lista de endpoints
+  sigue en `/docs` para quien corre el sistema. De paso se va lo desactualizado
+  (el `create_all` al arrancar, sacado en el PR 3, y la base propia
+  "compartida", que hoy es dedicada).
+- **`docs/DEPLOY.md` fuera del repo.** Porqué: tenía IPs del VPS y del servidor
+  de bases con comandos de acceso. El PR aclara que sacarlo del árbol no lo
+  borra del historial. Descartado en el PR: limpiar el resto de `docs/`, por la
+  misma razón (no lo saca del historial).
+- **Los repos backend y frontend quedan públicos.** Decisión del usuario del
+  2026-09-23, posterior al merge; cierra lo que el PR dejó "para decidir
+  aparte". No está en el cuerpo del PR: la trae quien despachó esta anotación.
+  Porqué: en GitHub Free la protección de ramas (`main` exige 1 aprobación) no
+  se aplica en repos privados, y no se quiso pagar Pro (USD 4 por mes).
+  Descartado: hacerlos privados; una organización gratuita con Pitu en sólo
+  lectura trabajando desde un fork (demasiado cambio de remotes y de flujo); un
+  hook local de pre-push (se saltea con `--no-verify`).
+
+**Estado**
+- Deploy: ninguno, son sólo docs. El VPS toma los cambios con el próximo pull.
+- Migraciones: ninguna.
+- Verificación (del PR): grep de los README nuevos sin coincidencias para CUIL,
+  contraseña, dominio, hosting, IPs ni nombres de tablas externas; los archivos
+  que referencian existen.
+- Consecuencia de quedar públicos: en el historial de git siguen las IPs del
+  VPS y del servidor de bases y los comandos SSH del `DEPLOY.md` viejo. No se
+  encontraron contraseñas ni el `.env` en el historial.
+
+**Pendiente**
+- Confirmar que el VPS acepte SSH sólo con clave. No se verificó.
