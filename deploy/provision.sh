@@ -45,6 +45,9 @@ if [ ! -f /home/deploy/backend/.env ]; then
   echo
   echo "⚠️  FALTA COMPLETAR /home/deploy/backend/.env (credenciales de las 3 bases,"
   echo "    secret_key, frontend_url=https://$DOMAIN). El servicio NO va a levantar sin eso."
+  echo "    Producción: DB_PROPIA_NAME=preliquidacion Y PERMITIR_BASE_PRODUCCION=1."
+  echo "    Sin el permiso la app se niega a arrancar contra producción y systemd"
+  echo "    entra en bucle de reinicios."
   echo
 fi
 
@@ -68,7 +71,7 @@ echo "  certbot --nginx -d $DOMAIN"
 
 echo
 echo "── Listo. Pendientes manuales ───────────────────────"
-echo "1. Completar /home/deploy/backend/.env y: systemctl restart preliquidacion"
+echo "1. Completar /home/deploy/backend/.env (con PERMITIR_BASE_PRODUCCION=1) y: systemctl restart preliquidacion"
 echo "2. Subir el frontend buildeado (desde tu máquina):"
 echo "     rsync -avz --delete dist/ deploy@IP_DEL_VPS:/home/deploy/frontend/"
 echo "3. certbot --nginx -d $DOMAIN   (cuando el DNS propague)"

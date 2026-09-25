@@ -17,7 +17,7 @@ import importlib
 
 from sqlalchemy import inspect
 
-from app.core.config import settings
+from app.core.config import guardia_base_propia, settings
 from app.core.database import verificar_conexiones, engine_propia, Base
 from app.core import models as models_core   # noqa: F401 — registra las tablas del núcleo (usuarios)
 from app.modulos import activos
@@ -36,10 +36,20 @@ async def lifespan(app: FastAPI):
     print("  Sistema de gestión — La Asturiana SRL")
     print("─" * 50)
 
+    # Única razón por la que se aborta el arranque: evita escribir sobre
+    # producción desde una máquina de desarrollo. En el VPS no se dispara
+    # porque su .env trae PERMITIR_BASE_PRODUCCION=1 (ponerlo ANTES de
+    # deployar este código, o systemd entra en bucle de reinicios).
+    motivo = guardia_base_propia(settings.db_propia_name, settings.permitir_base_produccion)
+    if motivo:
+        print(f"  ERROR: no arranco: {motivo}")
+        print("─" * 50)
+        raise SystemExit(f"No arranco: {motivo}")
+
     resultado = verificar_conexiones()
     print(f"  BD sueldos:  {'✓ OK' if resultado['sueldos'] else '✗ ERROR'}")
     print(f"  BD externa:  {'✓ OK' if resultado['externa'] else '✗ ERROR'}")
-    print(f"  BD propia:   {'✓ OK' if resultado['propia'] else '✗ ERROR'}")
+    print(f"  BD propia:   {'✓ OK' if resultado['propia'] else '✗ ERROR'} ({settings.db_propia_name.strip()})")
 
     if resultado["errores"]:
         for err in resultado["errores"]:
@@ -47,7 +57,7 @@ async def lifespan(app: FastAPI):
 
     # El esquema lo gobiernan las migraciones SQL (migrations/<modulo>/). No se
     # crean tablas al arrancar: una tabla que falta es un deploy incompleto.
-    # No se aborta el arranque (systemd entraría en bucle de reinicios): se
+    # Acá no se aborta el arranque (systemd entraría en bucle de reinicios): se
     # imprime bien visible y se expone en /health para que se note enseguida.
     app.state.tablas_faltantes = []
     if resultado["propia"]:
