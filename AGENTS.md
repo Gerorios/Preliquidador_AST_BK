@@ -12,8 +12,8 @@ frontend. Si lo cambiás, cambialo en los dos: scripts/verificar_agents_comun.sh
 ## Reglas comunes a los dos repos
 
 Los dos repos comparten un solo diario, un solo glosario y un solo juego de ADR, que viven
-en el repo del backend (`backend_preliquidacion`). Las rutas `docs/...` y `CONTEXT.md` de
-este bloque son de ese repo.
+en el repo del backend (`backend_preliquidacion`). Las rutas `docs/...`, `CONTEXT.md` y
+`CONTEXT-MAP.md` de este bloque son de ese repo.
 
 ### Reglas de trabajo
 
@@ -46,7 +46,7 @@ usuario lo pida.
 | Cambio en el VPS o la infraestructura: config del servidor, paquetes, accesos, certificados, cómo se deploya | `docs/DEPLOY.md` (local, fuera de git) | en el momento del cambio |
 | El *por qué* de un cambio de código: qué se eligió y qué se descartó | cuerpo del PR | al abrir el PR |
 | Un merge a `main` | `docs/BITACORA.md` | después de preguntar (ver "Bitácora") |
-| Un término del dominio: qué **es**, no cómo se implementa | `CONTEXT.md`, o el `CONTEXT-<módulo>.md` del módulo | al cerrar el término |
+| Un término del dominio: qué **es**, no cómo se implementa | el glosario que indica `CONTEXT-MAP.md`: `CONTEXT.md` si es del Sistema, el `CONTEXT-<módulo>.md` si es de un módulo | al cerrar el término |
 | Una decisión de arquitectura, con sus alternativas descartadas | `docs/adr/` | sólo con el usuario |
 | Una regla para construir un módulo | `docs/modulos/GUIA-MODULOS.md` | cuando cambia la regla |
 | Cómo preparar una máquina de desarrollo | `docs/modulos/PUESTA-A-PUNTO.md` | cuando cambia |

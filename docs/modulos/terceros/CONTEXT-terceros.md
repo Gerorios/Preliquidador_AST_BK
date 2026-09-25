@@ -1,8 +1,8 @@
 # Liquidación Terceros — La Asturiana SRL
 
-Lenguaje ubicuo del módulo **Liquidación Terceros**, el segundo módulo del Sistema (ver "Sistema y módulos" en `CONTEXT.md`). Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
+Lenguaje ubicuo del módulo **Liquidación Terceros**, el segundo módulo del Sistema (ver "Sistema y módulos" en `CONTEXT.md`; el índice de glosarios es `CONTEXT-MAP.md`). Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
 
-Escrito a partir de la sesión de grilling del 2026-09-09 sobre el Excel que hoy resuelve el circuito. Las decisiones de diseño y el orden de trabajo están en [`plan-terceros.md`](plan-terceros.md); las fuentes originales (el Excel maestro, las consultas de Power Query y los archivos de las estaciones y de seguros) están en `fuentes/`, fuera de git.
+Escrito a partir de la sesión de grilling sobre el Excel que hoy resuelve el circuito. Las decisiones de diseño y el orden de trabajo están en [`plan-terceros.md`](plan-terceros.md); las fuentes originales (el Excel maestro, las consultas de Power Query y los archivos de las estaciones y de seguros) están en `fuentes/`, fuera de git.
 
 ---
 
@@ -17,7 +17,7 @@ La persona o empresa a la que se le liquida: el que cobra los viajes y al que se
 _Avoid_: "dueño de colectivo" (deja afuera a los contratistas de maquinaria, que son la mayoría de los terceros del taller), "proveedor"
 
 **Colectivo**:
-El vehículo con el que un Tercero traslada personal a las fincas, identificado por su **patente**. Un Tercero puede tener muchos colectivos. En el sistema de campo cada colectivo es una fila cuyo `nombre` es, en realidad, **el nombre de su dueño** — por eso un mismo nombre aparece repetido en tantas filas como vehículos tenga.
+El vehículo con el que un Tercero traslada personal a las fincas, identificado por su **patente**. Un Tercero puede tener muchos colectivos. En el sistema de campo cada colectivo figura con **el nombre de su dueño** como nombre, por eso un mismo nombre aparece repetido tantas veces como vehículos tenga.
 _Avoid_: usar "colectivo" para hablar del dueño, aunque el sistema de campo lo haga
 
 **Maquinaria de tercero**:

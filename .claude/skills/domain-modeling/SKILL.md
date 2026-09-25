@@ -41,6 +41,8 @@ Create files lazily — only when you have something to write. If no `CONTEXT.md
 
 ## En este repo
 
+- Hay varios contextos: `CONTEXT-MAP.md` en la raíz lista los glosarios (el del
+  Sistema en `CONTEXT.md` y uno por módulo en `docs/modulos/<m>/CONTEXT-<m>.md`).
 - Los glosarios van en español, con secciones temáticas.
 - Un glosario define qué **es** cada término. No lleva nombres de tablas ni de
   columnas, endpoints, rutas de archivos ni fechas de decisiones: eso vive en el

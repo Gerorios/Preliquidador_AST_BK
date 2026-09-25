@@ -9,7 +9,7 @@
 > que verificarlo en la pantalla correspondiente.
 >
 > Está redactado en el vocabulario del negocio. Los términos técnicos (quincena, concepto común,
-> reemplaza al común, heredado, etc.) están definidos en el glosario `CONTEXT.md`.
+> reemplaza al común, heredado, etc.) están definidos en los glosarios `CONTEXT.md` (el Sistema) y `docs/modulos/preliquidacion/CONTEXT-preliquidacion.md` (el módulo).
 
 ---
 
