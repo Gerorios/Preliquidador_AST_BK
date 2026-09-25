@@ -1,178 +1,71 @@
-# Preliquidación — La Asturiana SRL
+# Sistema de gestión La Asturiana — núcleo
 
-Lenguaje ubicuo del sistema que arma la preliquidación de sueldos de cada quincena a partir de las tareas de campo, aplicándoles los conceptos/precios que define el liquidador. Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
-
-Desde 2026-09 el sistema pasa a ser un **Sistema** con **Módulos** (ver esas entradas): la preliquidación de sueldos es el primer módulo y la liquidación a terceros (fletes y horas de taller) el segundo. Los términos de abajo, salvo los de la sección "Sistema y módulos", pertenecen al módulo de preliquidación.
+Lenguaje ubicuo del **Sistema**: lo que comparten todos los Módulos. Este archivo es un
+glosario: define qué ES cada término, no cómo se implementa. Los términos de cada módulo
+están en su propio glosario; el índice es [`CONTEXT-MAP.md`](CONTEXT-MAP.md).
 
 ## Sistema y módulos
 
 **Sistema**:
-El conjunto que comparten todos los Módulos: usuarios, roles, acceso a las bases externas, la utilidad de Quincena, el menú y el login. El nombre visible es "Sistema de gestión La Asturiana"; los nombres internos (repos, base, servicio) siguen diciendo "preliquidacion" y no se renombran.
-_Avoid_: llamar "Preliquidación" al sistema completo — desde 2026-09 eso es el nombre de un módulo.
-
-**Inicio**:
-La pantalla a la que llega toda persona al entrar al Sistema: la saluda por su nombre, y le ofrece una Tarjeta por cada Módulo al que tiene acceso, más una tarjeta de Gerencial si es gerente o admin en algún módulo con panel gerencial, y una de Administración si es admin. Se pasa siempre por Inicio, aunque la persona tenga acceso a un solo módulo. Es también el único lugar donde viven las dos acciones de cuenta —cambiar la propia contraseña y cerrar sesión—, al pie de las tarjetas: dentro de un Módulo solo se puede cerrar sesión, y el cambio de contraseña se ofrece además en la Administración.
-_Avoid_: confundir con el "Inicio" del módulo Preliquidación (el Dashboard de quincenas, otra pantalla).
+El conjunto que comparten todos los Módulos: usuarios, roles, acceso a las bases externas, la Quincena, el menú y el login. El nombre visible es "Sistema de gestión La Asturiana"; los nombres internos (repos, base, servicio) siguen diciendo "preliquidacion" y no se renombran (ADR-0013).
+_Avoid_: llamar "Preliquidación" al sistema completo; ese es el nombre de un módulo.
 
 **Módulo**:
 Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (Preliquidación de sueldos, Liquidación Terceros). Tiene sus propios datos, pantallas, reglas, tests y panel gerencial, y solo se apoya en el Núcleo compartido. Dos módulos nunca escriben los datos del otro; leerse entre sí solo pasa a través del Núcleo.
 _Avoid_: "sección", "pantalla" (una pantalla es parte de un módulo, no un módulo)
 
 **Núcleo compartido**:
-Lo que el Sistema ofrece a todos los Módulos: autenticación y roles, conexión de solo lectura al sistema de campo y al maestro de sueldos, lectura de Cliente, Finca, Persona/Legajo y Empresa, la utilidad de Quincena, y los componentes visuales comunes (layout, menú, avisos, overlays). Es de lectura para los módulos: ningún módulo escribe en tablas del Núcleo salvo a través de sus servicios. Crece solo cuando dos módulos necesitan lo mismo; lo que usa un solo módulo vive en ese módulo.
+Lo que el Sistema ofrece a todos los Módulos: autenticación y roles, conexión de solo lectura al sistema de campo y al maestro de sueldos, lectura de Cliente, Finca, Persona/Legajo y Empresa, la Quincena, y los componentes visuales comunes (layout, menú, avisos, overlays). Es de lectura para los módulos: ningún módulo escribe datos del Núcleo salvo a través de sus servicios. Crece solo cuando dos módulos necesitan lo mismo; lo que usa un solo módulo vive en ese módulo.
 _Avoid_: "utils", "común" (ambiguo con Concepto común)
 
-**Operador (de módulo)**:
-Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador — no ve el panel Gerencial; en Liquidación Terceros, quien liquida a los terceros). Un operador de un módulo no ve las pantallas operativas de otro módulo. En Preliquidación se muestra como Preliquidador (ver Etiqueta de rol).
+**Módulo activo**:
+Un módulo registrado puede estar inactivo: su código existe, pero el Sistema no monta sus pantallas ni su API ni muestra su Tarjeta en el Inicio. Liquidación Terceros nace inactivo y se activa cuando tenga su primera pantalla real.
 
-**Gerente (de módulo)**:
-Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle (en Preliquidación, el maestro de Conceptos completo). Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
+## Pantallas del Sistema
 
-**Admin**:
-Rol global del Sistema: ve y opera todos los módulos y administra usuarios y permisos desde la pantalla de Administración. No es un rol de módulo.
-
-**Administración**:
-La pantalla del Sistema, visible solo para el rol Admin, donde se da de alta a una persona buscándola en el Padrón de empleados, se le asignan su rol global y sus roles por Módulo, y se gestionan los usuarios existentes (activar/desactivar, cambiar rol, reiniciar contraseña). El identificador de la persona es su CUIL: el alta guarda un email sintético derivado del CUIL (la columna `email` es única y no se migra) y la contraseña inicial es el CUIL, que cada persona puede cambiar cuando quiera desde su propia sesión.
-_Avoid_: ABM de usuarios (nombre técnico, no el término de dominio); confundir con los scripts de consola (`crear_usuario.py`, `asignar_modulo.py`), que quedan como alternativa y como salida de emergencia si el Admin pierde su propio acceso.
-
-**Padrón de empleados**:
-La tabla `nuempleados` del maestro de sueldos (solo lectura), de donde sale el alta de una persona en la Administración: apellido y nombre, CUIL, y sus legajos por Empresa. No se escribe nunca en esta tabla.
+**Inicio**:
+La pantalla a la que llega toda persona al entrar al Sistema: la saluda por su nombre, y le ofrece una Tarjeta por cada Módulo al que tiene acceso, más una tarjeta de Gerencial si es gerente o admin en algún módulo con panel gerencial, y una de Administración si es admin. Se pasa siempre por Inicio, aunque la persona tenga acceso a un solo módulo. Es también el único lugar donde viven las dos acciones de cuenta —cambiar la propia contraseña y cerrar sesión—, al pie de las tarjetas: dentro de un Módulo solo se puede cerrar sesión, y el cambio de contraseña se ofrece además en la Administración.
+_Avoid_: confundir con el "Inicio" del módulo Preliquidación (el Dashboard de quincenas, otra pantalla).
 
 **Tarjeta**:
 La entrada a un Módulo (o a Gerencial, o a la Administración) desde el Inicio: ícono, nombre y una línea de descripción. Solo se muestra si el módulo está activo y la persona tiene rol en él (el admin las ve todas). No muestra el rol de la persona: ver Etiqueta de rol.
 
-**Módulo activo**:
-Un módulo registrado puede estar inactivo: su código existe (rutas, modelos, permisos), pero el núcleo no monta sus rutas ni su API ni muestra su Tarjeta en el Inicio. Liquidación Terceros nace inactivo y se activa cuando tenga su primera pantalla real.
+**Administración**:
+La pantalla del Sistema, visible solo para el rol Admin, donde se da de alta a una persona buscándola en el Padrón de empleados, se le asignan su rol global y sus roles por Módulo, y se gestionan los usuarios existentes (activar/desactivar, cambiar rol, reiniciar contraseña). El identificador de la persona es su CUIL: el alta le genera un email sintético derivado del CUIL, y la contraseña inicial es el CUIL, que cada persona puede cambiar cuando quiera desde su propia sesión. Los usuarios no se borran: se desactivan.
+_Avoid_: ABM de usuarios (nombre técnico, no el término de dominio); confundir con los scripts de consola, que quedan como alternativa y como salida de emergencia si el Admin pierde su propio acceso.
+
+**Padrón de empleados**:
+El listado de empleados del maestro de sueldos (solo lectura) de donde sale el alta de una persona en la Administración: apellido y nombre, CUIL, y sus legajos por Empresa. El Sistema nunca escribe en él.
+
+## Roles
+
+**Rol**:
+Nivel de acceso de un usuario del Sistema. Hay un rol **global**, Admin, y por cada Módulo un usuario puede tener rol Operador o Gerente (uno por usuario y módulo). Qué puede hacer cada rol dentro de un módulo lo define ese módulo. La restricción se aplica en el backend, no solo en pantalla.
+
+**Admin**:
+Rol global del Sistema: ve y opera todos los módulos y administra usuarios y permisos desde la Administración. No es un rol de módulo.
+
+**Operador (de módulo)**:
+Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador; en Liquidación Terceros, quien liquida a los terceros). Un operador de un módulo no ve las pantallas operativas de otro módulo. En Preliquidación se muestra como Preliquidador (ver Etiqueta de rol).
+
+**Gerente (de módulo)**:
+Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle. Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
 
 **Etiqueta de rol**:
-El nombre visible que cada módulo le da a sus roles de módulo. El código interno siempre es `operador`/`gerente`; en Preliquidación el operador se muestra como **Preliquidador**. Se usa **solo en la Administración**, para que el Admin elija y lea los roles con palabras y no con códigos: a la propia persona el Sistema **no le muestra en ninguna pantalla** qué rol tiene (decisión del 2026-09-10). El mecanismo se conserva igual: cada módulo declara sus etiquetas y el Sistema las expone en `GET /api/auth/modulos`.
+El nombre visible que cada módulo le da a sus roles de módulo. El código interno siempre es `operador`/`gerente`; en Preliquidación el operador se muestra como **Preliquidador**. Se usa **solo en la Administración**, para que el Admin elija y lea los roles con palabras y no con códigos: a la propia persona el Sistema **no le muestra en ninguna pantalla** qué rol tiene.
 _Avoid_: usar "operador" en pantalla; mostrarle a alguien su propio rol.
 
-## Language (módulo Preliquidación)
+## Términos que usan todos los módulos
 
 **Quincena**:
-Período de liquidación. Todo el maestro de conceptos está scopeado por quincena: los conceptos de una quincena no afectan a otra.
-
-**Línea**:
-Una tarea de campo realizada (un registro de la quincena). Lleva los datos del hecho (empleado, cliente, finca, tarea, horas, tancadas, unidades) y es la unidad que el liquidador revisa.
-_Avoid_: registro, fila
-
-**Grupo de pago**:
-Atributo estandarizado que el catálogo de tareas asigna por defecto a cada tarea (ej.: "pulverización mecánica tancada" → TANCADA). Es informativo y sirve al control de PLANTA; **no** es una dimensión del precio ni clave de matching del maestro. El default no siempre aplica: la decisión real de cómo se paga la toma la Unidad base del concepto.
-_Avoid_: grupo_pago como criterio de precio
+Período de liquidación: del 1 al 15, o del 16 al fin de mes. Se identifica por su fecha de inicio, que siempre es un día 1 o un día 16.
 
 **Persona**:
-Un trabajador, identificado por su **CUIL** (guardado en la línea como `cuit`). Una persona puede tener **varios legajos**, uno por cada empresa en la que está dada de alta.
+Un trabajador, identificado por su **CUIL**. Una persona puede tener **varios legajos**, uno por cada empresa en la que está dada de alta.
 _Avoid_: empleado (úsese para el nombre display), legajo (una persona no ES un legajo)
 
 **Legajo**:
 Identificador de una persona **dentro de una empresa** en el sistema de sueldos. El par (empresa, legajo) es único; el CUIL agrupa todos los legajos de la misma persona.
 
 **Empresa**:
-Entidad que paga (LA ASTURIANA, PAMPLONA, …). La empresa de una línea se resuelve automáticamente (por legajo/nombre + la regla CITRUSVIL/maquinaria) y puede ser reasignada manualmente por el liquidador, eligiendo entre las empresas donde la persona tiene legajo.
-
-**Concepto**:
-Regla del maestro (`concepto_liquidacion`) que el liquidador carga por quincena para una tarea (± cliente/finca). Define código de liquidación, Unidad base, precio y tipo. Es un catálogo **vigente y editable**: su precio puede cambiar en cualquier momento, y cuando cambia, el modelo reactivo recalcula lo que ya aplicaba.
-_Avoid_: precio maestro, precio común (nombres del modelo viejo, eliminado)
-
-**Concepto común**:
-Concepto sin cliente ni supervisor cargados: aplica a cualquier línea con esa tarea, sin importar cliente/finca/supervisor.
-
-**Concepto por cliente**:
-Concepto con cliente cargado y **sin finca**: aplica a las líneas de esa tarea y ese cliente en **cualquier finca**. Suma con los demás caminos; por defecto **Reemplaza al común** (ver Reemplaza al común).
-
-**Concepto específico**:
-Concepto con cliente **y finca** cargados: aplica solo a las líneas de ese cliente y esa finca. Por defecto un específico **Reemplaza al común** (paga solo lo no-común); se puede destildar para que sume común + específico (ver Reemplaza al común).
-
-**Concepto por supervisor**:
-Concepto con supervisor cargado: aplica a las líneas de esa tarea cuyo supervisor coincida, sin importar cliente/finca. Es excluyente con el cliente (un concepto lleva cliente ± finca **o** supervisor, nunca ambos). Suma con los demás caminos; por defecto **Reemplaza al común**.
-
-**Reemplaza al común**:
-Marca (`reemplaza_comun`, ADR-0009/0011) de cualquier Concepto **no común** (específico, por cliente o por supervisor). Cuando una línea matchea alguna regla no-común marcada así, **no se le aplican los conceptos comunes de esa tarea** — pero los demás caminos no-comunes siguen sumando entre sí: el tilde solo apaga comunes, nunca apaga a otro no-común. Existe porque casi siempre la regla no-común es el precio *total* (reemplaza), no un plus que se suma. **Al crear un concepto no común nace prendida** (opt-out): el liquidador la destilda solo en el caso raro de "común base + plus" que sí debe sumar. Los conceptos ya existentes conservan su valor (los cambios de default no los tocan). Los comunes van siempre en False (no aplica).
-_Avoid_: usarla en un común (no tiene sentido; la marca es de los no-comunes).
-
-**Matching**:
-Regla por la que un concepto aplica a una línea. Cuatro caminos que **suman entre sí**: la tarea sola (comunes), tarea + cliente en cualquier finca (por cliente), tarea + cliente + finca exactos (específicos) y tarea + supervisor (por supervisor). El grupo de pago no participa. Si la tarea de la línea es una Tarea alias de pago, los cuatro caminos se resuelven con su tarea canónica.
-
-**Concepto completo**:
-Vista del maestro por **alcance** (común, por cliente, por finca, por supervisor) de una tarea, con todos los códigos de liquidación que esa tarea tiene en la quincena (la **unión** de los códigos de todos sus alcances). Un alcance del eje cliente está **incompleto** si le falta alguno de esos códigos o si lo tiene sin precio. El alcance por supervisor se muestra pero no se controla: su plus suele ser un solo código a propósito. No existe un catálogo de códigos por tarea; la referencia es lo cargado.
-_Avoid_: "concepto" a secas para este agrupado (Concepto es una regla individual), completitud contra la quincena anterior
-
-**Solapamiento por cliente**:
-Situación en la que, para la misma tarea y quincena, conviven un Concepto por cliente y uno o más Conceptos específicos de **ese mismo cliente**: ambos matchean las líneas de esas fincas y, por ADR-0011, **suman**. No es un error del modelo sino un riesgo de pago doble que el liquidador debe controlar; el sistema lo hace visible al crear (fincas y líneas afectadas) y pide confirmación explícita, sin bloquear. Se agrava cuando las dos reglas comparten el código de liquidación. Dos reglas con Categoría de operario explícita y distinta **no** solapan (pagan a personas distintas); si alguna no tiene categoría o coinciden, sí. No es solapamiento el cruce con el eje supervisor ni el de común vs no-común (gobernado por Reemplaza al común).
-_Avoid_: conflicto, duplicado (el duplicado es el índice único; esto es un solapamiento legítimo pero riesgoso)
-
-**Tarea alias de pago**:
-Tarea del sistema de campo que existe **solo para identificar** un subconjunto de horas de otra tarea (su **tarea canónica**), y que **paga exactamente con el maestro de la canónica** — mismos conceptos, mismas categorías, mismos precios, sin recargo. La línea conserva su nombre real (ese es el propósito: que la liquidación formal vea cuáles horas fueron de ese subconjunto), pero para el maestro de Conceptos la tarea alias **no existe**: no aparece en faltantes y no se le pueden crear conceptos propios. Único caso hoy: `MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)` → `MANTENIMIENTOS MECANICOS (TALLERES)` (ADR-0012), para desdoblar horas comunes vs de guardia de taller (ej. 20 hs = 15 comunes + 5 de guardia).
-_Avoid_: pagarle distinto que a la canónica (si un día hay recargo, es una feature aparte); crearle conceptos propios en el maestro (bloqueado — habría dos fuentes de verdad para la misma hora).
-
-**Unidad base (UM)**:
-Unidad de medida sobre la que impacta un concepto y que determina cómo se calcula su importe: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1`, `jornal_tope1_mas_excedente` o `fijo`. Es la decisión central del liquidador en el maestro concepto.
-_Avoid_: unidad, tipo de cálculo
-
-**Jornal tope 1**:
-Unidad base especial calculada sobre las horas de jornal: **5 horas o más → 1 jornal** (sin importar el excedente); más de 0 y menos de 5 → medio jornal (0,5); 0 horas → 0.
-
-**Jornal tope 1 + excedente**:
-Unidad base (`jornal_tope1_mas_excedente`) idéntica a Jornal tope 1 hasta las 10 horas, pero que **por encima de 10 horas paga proporcional**: horas / 10, redondeado a 2 decimales (11 hs → 1,1 jornales; 11,25 hs → 1,13). La escalera completa: 0 → 0; menos de 5 → 0,5; de 5 a 10 → 1; más de 10 → horas/10. Es continua en el 10 (no hay salto).
-_Avoid_: confundir con Jornal tope 1 (que ignora todo excedente) o con fijo (que ni mira las horas)
-
-**Tancada**:
-Unidad de trabajo de pulverización que se registra en la línea. Se cuenta **ida y vuelta**, por lo que el dato cargado viene doblado: los controles que la valorizan lo dividen `/2` para contar la pasada real. Puede ser Unidad base de un concepto (la tarea se paga por tancada).
-_Avoid_: confundir la tancada (el hecho medible) con el grupo de pago TANCADA (atributo informativo del catálogo; ver Grupo de pago).
-
-**Valor hora tractorista**:
-Costo de **una hora** de trabajo del tractorista que el liquidador carga **por quincena** en el control Plantas vs Jornal. El **jornal tractorista** es este valor × 8 (la jornada), **fijo para toda la tabla** — no se multiplica por las jornadas de cada fila — y contra él se compara lo que cobra la jornada pagada por planta (%Dif = prom. jornal por planta vs jornal tractorista). Sin recargo; un solo valor para toda la quincena.
-_Avoid_: valor jornal (se carga la hora; el jornal es ×8); confundir con Valor hora pulverización (otro control, otro parámetro)
-
-**Valor hora pulverización**:
-Costo de una hora de jornal de pulverización que el liquidador carga **por quincena**. Sirve para valorizar "a jornal" el trabajo de pulverización y compararlo contra lo que costó pagarlo "a tancada" (control Tancadas vs Jornal). Sobre este valor se aplica un recargo fijo de pulverización (×1,3) antes de comparar.
-
-**Tipo**:
-Clasificación/descripción del concepto (REMUNERATIVO, NO_REMUNERATIVO, JORNAL, BONO_BOLSON, EXCENTO, OTRO). Etiqueta puramente informativa: ningún cálculo del sistema la distingue; la aprovechan el contador y los reportes. EXCENTO marca importes exentos de aportes/cargas sociales.
-_Avoid_: "exento" (la grafía correcta sería esa, pero se eligió EXCENTO deliberadamente — matchear ese valor exacto en base/reportes).
-
-**Línea incompleta**:
-Línea que no tiene ningún concepto aplicable con **código y precio > 0** a la vez. Es la única condición que el liquidador debe resolver; se muestra en la solapa "Sin concepto". Un concepto con código pero sin precio no completa la línea (no debe pagar 0 en silencio).
-_Avoid_: sin precio, sin código, faltante (eran tres nociones separadas; ahora es una)
-
-**Precio heredado**:
-Precio de un concepto que vino copiado de otra quincena y todavía no fue confirmado por el liquidador. Paga normal (no deja la línea incompleta), pero queda resaltado hasta que se confirme, para no arrastrar un precio viejo en silencio si hubo un aumento.
-_Avoid_: precio copiado, precio viejo
-
-**Concepto adicional**:
-El **hecho de pago**, no la regla: una foto congelada de cuando un Concepto se aplicó a una línea — guarda su propio `precio` y `cantidad` en ese momento, más el importe resultante (`cantidad × precio`) y, si vino del maestro, un link (`concepto_liquidacion_id`) hacia qué regla lo originó. Existe para que, aunque el Concepto del maestro cambie de precio después, el pago ya calculado no mienta. El importe total de una línea es la suma de sus conceptos adicionales.
-_Avoid_: importe base (siempre 0; el total nace de los conceptos adicionales), "el precio del concepto" para referirse al de acá (es el precio *congelado*, no el vigente — para el vigente ver Concepto)
-
-**Concepto manual**:
-Un Concepto adicional que el liquidador escribió a mano (descripción + importe), sin pasar por ningún código del maestro. No tiene `concepto_liquidacion_id`, `precio` ni `cantidad` — no le faltan, es que genuinamente no salió de ninguna regla.
-
-**Categoría de operario**:
-Nivel (**1 a 12**) que el liquidador le asigna **por quincena** a un operario de taller, y del que depende cuánto cobra la tarea de mantenimiento mecánico. No viene del sistema de campo —que carga todo como una sola tarea "MANTENIMIENTO MECANICO (TALLERES)", sin diferenciar categoría— ni de la categoría de convenio del sistema de sueldos: es un dato **propio** del preliquidador, editable por quincena. Se cruza con la persona por su **CUIL** (no por legajo), y se hereda de la quincena anterior al abrir una nueva.
-_Avoid_: confundir con la categoría de convenio de `nuempleados` (otra cosa, de solo lectura, no manipulable).
-
-**Rol**:
-Nivel de acceso de un usuario del sistema. `admin` es un rol **global** (tabla `usuarios`) y ve y opera todo, en todos los módulos. Por cada módulo, un usuario puede tener rol `operador` o `gerente` (tabla `usuario_modulo`, uno por usuario y módulo). En Preliquidación, el `operador` (el liquidador) opera la preliquidación completa (Revisión, Verificación, Dashboard, Mantenimiento) pero **no** ve la Vista gerencial; el `gerente` accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear/editar/eliminar reglas, precios, precio masivo, copiar quincena), porque es quien muchas veces decide un cambio de precios, pero no al resto de la preliquidación. La restricción se aplica en el backend, no solo en pantalla (ver "Sistema y módulos").
-_Avoid_: jefe (rol anterior a 2026-09, hoy = operador de Preliquidación)
-
-**Vista gerencial**:
-Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).
-
-**Mano de obra gastada**:
-Costo total de la preliquidación de un período: la suma de **todos** los Conceptos adicionales de sus líneas, manuales incluidos (es lo que efectivamente se paga), **excepto** las líneas de Personas mensualizadas (ver esa entrada). Consolidada entre empresas por defecto, filtrable por empresa.
-_Avoid_: excluir los conceptos manuales de alguien jornalizado (haría mentir al indicador); confundir la exclusión de mensualizados con "esconder plata" — no cobran por jornal, así que no hay costo de mano de obra jornalizada que atribuirles acá.
-
-**Personas mensualizadas**:
-Personas que cobran un sueldo mensual fijo, no por jornal. Sus líneas quedan excluidas de **toda** Verificación (excesos, resumen por empleado, Plantas/Tancadas vs Jornal) y de **todos** los cálculos de Mano de obra gastada de la Vista gerencial — esos controles miden razonabilidad del pago jornalizado y no aplican a un sueldo fijo. Lista hardcodeada (`EMPLEADOS_MENSUALIZADOS` en `preliquidacion_service.py`, constante espejo en `Verificacion.jsx`), a pedido del usuario (2026-08-21).
-_Avoid_: excluirlas de Revisión — ahí siguen visibles/editables porque igual hay que liquidarles el sueldo; la exclusión es solo para los controles de razonabilidad de jornal.
-
-**Grupo de tareas**:
-Agrupador funcional (`grupo_tarea`) que el catálogo de tareas del sistema de campo trae en la descripción (primera parte separada por `;`). Es la dimensión gerencial de "¿en qué se va la plata?"; se resuelve por nombre de tarea contra el catálogo, no se persiste en la línea.
-_Avoid_: confundir con Grupo de pago (control operativo, segunda parte de la misma descripción)
-
-**Desvío por persona**:
-Cuánto por encima (%) de su **propia media histórica** está cobrando una persona en el período: se compara contra sus últimas 6 quincenas con actividad, exigiendo al menos 3 para que la comparación exista (si no, la persona se lista como "sin historial comparable"). El umbral desde el que se resalta es configurable (default +30%). Se compara a cada persona contra sí misma —no contra otras— porque tareas distintas pagan distinto.
-_Avoid_: media global entre personas (mezcla poblaciones que cobran naturalmente distinto)
-
-**Precio por categoría**:
-Modo de pago en el que el precio de un Concepto depende de la Categoría de operario de la persona, en vez de ser único por tarea/cliente/finca. En el maestro se cargan varias filas del mismo Concepto (una por categoría, mismo código, distinto precio); a cada línea se le aplica la fila cuya categoría coincide con la de la persona. Los Conceptos **sin** categoría se comportan igual que siempre y **suman** con el de categoría; no se reemplazan. Si la persona no tiene categoría asignada, o su categoría no tiene precio cargado, la línea queda **incompleta** (ver Línea incompleta).
+Entidad que paga (LA ASTURIANA, PAMPLONA, …). Una persona tiene un legajo por cada empresa en la que está dada de alta.

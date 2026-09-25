@@ -28,7 +28,7 @@ Toda entrada se ordena por frontera, no por archivos. Las fronteras son:
 - **Preliquidación** — `app/modulos/preliquidacion/` y su front
 - **Liquidación Terceros** — `app/modulos/terceros/` y su front (antes se llamaba Fletes)
 - **Prod y Datos** — `deploy/`, `migrations/`, VPS, base `preliquidacion`
-- **Docs** — `docs/`, `CONTEXT.md`, `README.md`
+- **Docs** — `docs/`, `AGENTS.md`, `CLAUDE.md`, `CONTEXT-MAP.md` y los glosarios, `README.md`
 
 El front vive en otro repo (`frontend_preliquidacion`). Si el merge del back
 tiene un PR hermano en el front, nombralo; no intentes leer ese repo.
@@ -106,7 +106,7 @@ que faltan. Borrar lo que dejó de ser verdad importa más que agregar.
   un ADR nuevo, decilo como recomendación y nada más.
 - Tocar código, tests, `migrations/`, `deploy/`, o cualquier cosa del VPS.
 - Editar `MEMORY.md` o `memory/*.md` sin OK explícito.
-- Editar `CONTEXT.md` (es el glosario del dominio, lo mantiene domain-modeling).
+- Editar los glosarios (`CONTEXT-MAP.md`, `CONTEXT.md`, `docs/modulos/*/CONTEXT-*.md`): los mantiene domain-modeling.
 - Opinar sobre si una decisión estuvo bien. Anotás qué se decidió, no si te gusta.
 - Deployar cualquier cosa. Nunca.
 

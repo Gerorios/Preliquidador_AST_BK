@@ -82,7 +82,7 @@ Son tres, todas MySQL, en el mismo servidor de la empresa (São Paulo, misma reg
 
 | Base | Uso | Acceso |
 |---|---|---|
-| **Externa** (sistema de campo) | De acá salen las tareas y, para terceros, los viajes y las cargas de combustible. Tablas `laa_*` y `ast_users`. | **Solo lectura. Nunca se escribe.** |
+| **Externa** (sistema de campo) | De acá salen las tareas y, para terceros, los viajes y las cargas de combustible. | **Solo lectura. Nunca se escribe.** |
 | **Sueldos** (maestro de empleados) | Personas, legajos, empresas. Entre 15 y 19 mil empleados. | **Solo lectura. Nunca se escribe.** |
 | **Propia** | Lo que el sistema genera: usuarios, preliquidaciones, conceptos, y a futuro las tablas de terceros. | Lectura y escritura. En producción es `preliquidacion`; en desarrollo es `testing` (sección 6). |
 
@@ -106,9 +106,11 @@ backend_preliquidacion/
 │   ├── models/models.py        # TODOS los modelos SQLAlchemy juntos
 │   └── schemas/schemas.py      # TODOS los schemas Pydantic juntos
 ├── migrations/                 # SQL manual: ws1_...sql ... ws16_...sql
-├── tests/                      # pytest, 275 tests
+├── tests/                      # pytest
 ├── docs/  adr/  AYUDA.md  DEPLOY.md  DOCUMENTACION.md  superpowers/plans/
-├── CONTEXT.md                  # glosario del dominio
+├── AGENTS.md                   # reglas de trabajo (CLAUDE.md lo importa)
+├── CONTEXT-MAP.md              # índice de glosarios
+├── CONTEXT.md                  # glosario del Sistema (núcleo)
 └── README.md
 
 frontend_preliquidacion/
@@ -136,7 +138,7 @@ backend_preliquidacion/
 │   │   ├── identidad.py              # CUIL como identidad (PR 5): normalizar_cuil, email_de_cuil, cuil_de_email
 │   │   ├── administracion.py         # router /api/admin: alta desde el padrón, roles, reset (PR 5)
 │   │   ├── usuarios_service.py       # lógica de alta/roles que usa administracion.py (PR 5)
-│   │   ├── sueldos_service.py        # padrón de empleados (nuempleados) — mudado desde preliquidacion (PR 5)
+│   │   ├── sueldos_service.py        # padrón de empleados — mudado desde preliquidacion (PR 5)
 │   │   ├── permisos.py               # MODULOS, ROLES_MODULO, requiere_modulo, requiere_admin
 │   │   ├── modulos.py                # ModuloInfo (clave, nombre, descripcion, activo,
 │   │   │                             #   routers, etiquetas_rol, panel_gerencial, modelos) — ADR-0013
@@ -250,7 +252,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 ### 4.2 Datos
 
 5. **Todas las tablas del módulo llevan el prefijo del módulo**: `terceros_viaje`, `terceros_tarifa`, etc. El prefijo es la frontera visible en la base.
-6. **Un módulo escribe solo en sus tablas.** Nunca en tablas de otro módulo ni en las del núcleo (`usuarios`, `usuario_modulo`) salvo a través de los servicios del núcleo.
+6. **Un módulo escribe solo en sus tablas.** Nunca en tablas de otro módulo ni en las del núcleo (usuarios y roles) salvo a través de los servicios del núcleo.
 7. **Las bases Externa y Sueldos son de solo lectura, siempre.** Ni un `INSERT`, ni un `UPDATE`, ni una tabla temporal. Si el módulo necesita guardar algo derivado de esos datos, lo guarda en sus propias tablas en la base Propia.
 8. **Las consultas a bases externas son SQL crudo con parámetros** (`text()` de SQLAlchemy con `:parametro`), nunca strings concatenados. No se mapean tablas ajenas con el ORM. Van en `consulta_externa.py` del módulo.
 9. **Nada de escribir sobre la base con el ORM en `create_all`.** `main.py` no lo hace más (se sacó en el PR 3 de la etapa 0, 2026-09-08): **la fuente de verdad del esquema es la migración SQL**, no el modelo. Toda tabla o columna nueva tiene su archivo en `migrations/<modulo>/`.
@@ -285,7 +287,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 ### 4.7 Documentación del módulo
 
-26. **`docs/modulos/<modulo>/CONTEXT-<modulo>.md`**: glosario del dominio del módulo, con el formato de `CONTEXT.md`. Qué ES cada término, no cómo se implementa. Se escribe antes de codear y se mantiene.
+26. **`docs/modulos/<modulo>/CONTEXT-<modulo>.md`**: glosario del dominio del módulo, con el formato de `CONTEXT.md`, y se registra en `CONTEXT-MAP.md`. Qué ES cada término, no cómo se implementa. Se escribe antes de codear y se mantiene.
 27. **Decisiones difíciles de revertir van en un ADR** en `docs/adr/`, numeración global (el próximo es 0014). Formato de los existentes. Solo cuando hubo alternativas reales y se eligió una por razones concretas.
 28. **Ayuda de uso** en `docs/modulos/<modulo>/AYUDA-<modulo>.md` cuando el módulo esté usable. El asistente de ayuda de la app se alimenta de estos documentos.
 
@@ -295,8 +297,8 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 ### Cómo funciona (desde el PR 3 de la etapa 0)
 
-- `usuarios.rol` es **global**: `admin` ve y opera todo, en todos los módulos, y administra usuarios y permisos; `usuario` depende de sus módulos.
-- La tabla `usuario_modulo (usuario_id, modulo, rol)` da, por módulo, el rol `operador` o `gerente`. Una fila por usuario y módulo; el admin no tiene filas porque es global.
+- El rol **global** puede ser `admin` o `usuario`: `admin` ve y opera todo, en todos los módulos, y administra usuarios y permisos; `usuario` depende de sus módulos.
+- Por cada módulo, un usuario puede tener rol `operador` o `gerente`, uno por usuario y módulo; el admin no tiene roles de módulo porque es global.
 - El **operador** de un módulo opera ese circuito completo y no ve las pantallas operativas de otro módulo. El liquidador de terceros no ve la preliquidación de sueldos, y el de sueldos no ve la de terceros. En Preliquidación, el operador (liquidador) no ve el panel Gerencial.
 - El **gerente** de un módulo ve el panel gerencial de ese módulo y lo que el módulo decida abrirle (en Preliquidación, además, el maestro de Conceptos completo). Una persona gerente de los dos módulos ve el analítico de ambos.
 - El menú muestra solo los módulos a los que el usuario tiene acceso. Si tiene uno solo, entra directo ahí.
@@ -329,7 +331,7 @@ requiere_gerencial = requiere_modulo(MODULO, "gerente")
 
 Lo que el módulo tiene que hacer: definir su propio `app/modulos/terceros/permisos.py` con `requiere_modulo("terceros", ...)` sobre las dependencias que necesite, usarlas en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
 
-Alta y gestión de usuarios (desde el PR 5 de la etapa 0): se hace **desde la pantalla de Administración** (solo rol global `admin`), que busca a la persona en el padrón de empleados (`nuempleados`, solo lectura) y la da de alta con los roles elegidos. La identidad de la persona es su **CUIL**: como la columna `email` de `usuarios` es `UNIQUE NOT NULL` y esta etapa no migra el esquema, el alta guarda un email sintético `<cuil>@usuarios.laasturianasrl.com.ar` (`app/core/identidad.py`), y la **contraseña inicial es el CUIL**. Nadie tipea ese email: el login acepta el CUIL pelado (con o sin guiones) además del email real de los usuarios anteriores al PR 5. Cambiarla es voluntario — la persona puede seguir usando el CUIL indefinidamente — y el propio usuario la cambia desde su sesión con `POST /api/auth/password` (pide la contraseña actual).
+Alta y gestión de usuarios (desde el PR 5 de la etapa 0): se hace **desde la pantalla de Administración** (solo rol global `admin`), que busca a la persona en el padrón de empleados (solo lectura) y la da de alta con los roles elegidos. La identidad de la persona es su **CUIL**: como la columna `email` de `usuarios` es `UNIQUE NOT NULL` y esta etapa no migra el esquema, el alta guarda un email sintético `<cuil>@usuarios.laasturianasrl.com.ar` (`app/core/identidad.py`), y la **contraseña inicial es el CUIL**. Nadie tipea ese email: el login acepta el CUIL pelado (con o sin guiones) además del email real de los usuarios anteriores al PR 5. Cambiarla es voluntario — la persona puede seguir usando el CUIL indefinidamente — y el propio usuario la cambia desde su sesión con `POST /api/auth/password` (pide la contraseña actual).
 
 `scripts/crear_usuario.py` (crea o actualiza un usuario y opcionalmente sus módulos) y `scripts/asignar_modulo.py` (asigna, cambia, quita o lista el rol de un usuario en un módulo puntual) siguen existiendo como alternativa de consola y como **salida de emergencia** si el admin pierde su propio acceso.
 
@@ -384,7 +386,7 @@ La regla de esta etapa:
 | Desarrollo (tu máquina) | `testing` | Pitu y Gero, con las credenciales de `testing` |
 | Producción (VPS) | `preliquidacion` | Solo el VPS |
 
-`testing` era la base compartida original del sistema. Puede tener tablas de otros sistemas: **no se hace nunca un drop general**, solo se tocan las tablas del preliquidador y las de terceros. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas del preliquidador y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cuando existan las tablas `terceros_*`, se agregan a la lista del script.
+`testing` es el entorno de prueba del área y es **compartida con otros sistemas**: tiene un espejo de nuestras tablas y tablas ajenas. Toda DDL se aplica primero acá y después en producción. **No se hace nunca un drop general**, solo se tocan las tablas del preliquidador y las de terceros. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas del preliquidador y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cuando existan las tablas `terceros_*`, se agregan a la lista del script.
 
 Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque son de solo lectura. Las consultas que hagas en desarrollo van contra datos reales del sistema de campo: perfecto para validar contra el Excel.
 
@@ -397,7 +399,7 @@ Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque s
 
 ## 7. Cómo trabajamos sobre el mismo código
 
-1. **Rama por feature**, desde `main` actualizado: `feature/terceros-<tema>` (por ejemplo `feature/terceros-consulta-viajes`). Nunca se trabaja sobre `main` directamente; está protegida y no acepta push.
+1. **Rama por feature**, desde `main` actualizado: `feature/terceros-<tema>` (por ejemplo `feature/terceros-consulta-viajes`). Nunca se trabaja sobre `main` directamente: el hook `pre-commit` frena el commit en tu máquina, y GitHub no acepta el push.
 2. **Commits chicos y descriptivos**, en español, con prefijo del tipo: `feat(terceros): ...`, `fix(terceros): ...`, `docs(terceros): ...`, `test(terceros): ...`. Un commit hace una cosa. Los tipos son seis en total (esos cuatro más `refactor` y `chore`) y la convención completa —cuándo el mensaje lleva cuerpo y cuándo no— está en `.claude/skills/commit/SKILL.md`, que se invoca con `/commit`.
 3. **PR contra `main`** cuando la feature está completa y verificada (tests verdes, build OK, migraciones incluidas, docs del módulo al día). El PR explica qué hace, por qué, cómo se verificó y qué queda pendiente.
 4. **Revisión y merge: solo Gero.** Ningún PR se auto-mergea. Los PR que tocan el núcleo los revisa quien no los escribió.
@@ -516,7 +518,7 @@ Lo que quedó sin resolver y quién lo resuelve.
 
 **Para Gero**
 - ~~Reordenamiento a módulos (etapa 0), sin cambio de comportamiento, cubierto por los 275 tests.~~ Backend hecho (PR 1, 2026-09-07). Frontend hecho (PR 2, 2026-09-08).
-- ~~Tabla `usuario_modulo`, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.~~ Hecho (PR 3 de la etapa 0, 2026-09-08).
+- ~~Roles por módulo, dependencia `requiere_modulo`, migración de los usuarios actuales, menú por módulo.~~ Hecho (PR 3 de la etapa 0, 2026-09-08).
 - ~~Dejar `testing` con la estructura actual de `preliquidacion` y el script de refresco.~~ Hecho el 2026-09-07 (`scripts/refrescar_testing.py`).
 - ~~Nombre visible del sistema.~~ Decidido: "Sistema de gestión La Asturiana" (ver CONTEXT.md, "Sistema").
 - ~~Decidir si `create_all` al arrancar se mantiene solo en desarrollo o se saca (regla 9 de la sección 4).~~ Se sacó (PR 3 de la etapa 0, 2026-09-08); el esquema es 100% migraciones SQL.
@@ -537,12 +539,13 @@ Lo que quedó sin resolver y quién lo resuelve.
 | Documento | Qué tiene |
 |---|---|
 | `README.md` | Instalación, endpoints actuales, estructura |
-| `CONTEXT.md` | Glosario del dominio: qué ES cada término. Sección "Sistema y módulos" arriba, después el módulo Preliquidación |
+| `AGENTS.md` | Reglas de trabajo, para personas y para agentes de código |
+| `CONTEXT-MAP.md` | Índice de los glosarios: `CONTEXT.md` (el Sistema) y uno por módulo en `docs/modulos/<m>/` |
 | `docs/adr/` | Decisiones de diseño. `0013` es la de módulos |
 | `docs/DEPLOY.md` | Cómo está montado el VPS y cómo se deploya. Regla de autorización |
-| `docs/DOCUMENTACION.md` | Dónde vive el proyecto, cómo es el código y la base |
+| `docs/DOCUMENTACION.md` | Mapa técnico: cómo es el código y cómo se conecta a las bases |
 | `docs/AYUDA.md` | Ayuda de uso del preliquidador, la que consume el asistente |
 | `docs/superpowers/plans/` | Planes de implementación de features anteriores. Sirven como ejemplo de cómo se planifica acá |
-| `migrations/preliquidacion/` | SQL versionado. Leerlos da una idea rápida del esquema propio |
-| `tests/` | 275 tests. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
+| `migrations/preliquidacion/` | SQL versionado: qué cambió en el esquema y por qué |
+| `tests/` | La suite. Leer dos o tres (por ejemplo `test_solapamiento_por_cliente.py`, `test_actualizar_quincena.py`) muestra cómo se testea sin base real |
 | Frontend `README.md` | Stack, estructura y convenciones del front |

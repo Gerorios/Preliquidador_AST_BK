@@ -39,6 +39,17 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 
 Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
 
+## En este repo
+
+- Hay varios contextos: `CONTEXT-MAP.md` en la raíz lista los glosarios (el del
+  Sistema en `CONTEXT.md` y uno por módulo en `docs/modulos/<m>/CONTEXT-<m>.md`).
+- Los glosarios van en español, con secciones temáticas.
+- Un glosario define qué **es** cada término. No lleva nombres de tablas ni de
+  columnas, endpoints, rutas de archivos ni fechas de decisiones: eso vive en el
+  código, en la base o en la bitácora. Los repos son públicos y los docs no listan
+  tablas.
+- Los ADR se escriben sólo con el usuario.
+
 ## During the session
 
 ### Challenge against the glossary

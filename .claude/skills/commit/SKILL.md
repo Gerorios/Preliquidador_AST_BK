@@ -105,7 +105,7 @@ spec de Conventional Commits.
 | `feat` | Comportamiento nuevo que antes no existía |
 | `fix` | Corrige algo que andaba mal |
 | `refactor` | Cambia la forma sin cambiar el comportamiento observable |
-| `docs` | `CLAUDE.md`, `CONTEXT.md`, `README`, `docs/`, planes, bitácora, ADRs |
+| `docs` | `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `README`, `docs/`, planes, bitácora, ADRs |
 | `test` | Sólo tests |
 | `chore` | Configuración, scripts, hooks, dependencias |
 

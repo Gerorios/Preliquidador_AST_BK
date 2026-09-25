@@ -2,7 +2,8 @@
 Asistente de ayuda de USO del sistema.
 
 Es un chat que le explica al liquidador cómo usar el sistema, apoyándose SOLO en
-documentación (el glosario `CONTEXT.md` + la guía `docs/AYUDA.md`), que se le
+documentación (los glosarios del núcleo y de Preliquidación + la guía
+`docs/AYUDA.md`), que se le
 "pega" al prompt del modelo (context-stuffing, sin RAG). No accede a la base ni
 a datos reales: es ayuda de uso, no de datos.
 
@@ -27,13 +28,17 @@ router = APIRouter(prefix="/api/asistente", tags=["Asistente"])
 _BASE_DIR = Path(__file__).resolve().parents[2]
 
 # Documentación que forma el conocimiento del asistente, en orden.
-_DOCS = ("CONTEXT.md", "docs/AYUDA.md")
+_DOCS = (
+    "CONTEXT.md",
+    "docs/modulos/preliquidacion/CONTEXT-preliquidacion.md",
+    "docs/AYUDA.md",
+)
 
 _PREAMBULO = """\
 Sos el asistente de ayuda del "Sistema de Preliquidación" de La Asturiana SRL.
 Tu único trabajo es ayudar al liquidador a **usar el sistema**: explicarle cómo
 hacer las cosas, qué significa cada término y dónde está cada función, usando la
-documentación que aparece más abajo (un glosario y una guía de uso).
+documentación que aparece más abajo (dos glosarios y una guía de uso).
 
 Reglas que tenés que cumplir siempre:
 

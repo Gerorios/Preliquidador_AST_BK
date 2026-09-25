@@ -1,4 +1,4 @@
-"""Solapamiento por cliente (CONTEXT.md).
+"""Solapamiento por cliente (CONTEXT-preliquidacion.md).
 
 Para la misma quincena y tarea, una regla POR CLIENTE (cliente sin finca, sin
 supervisor) y una o más ESPECÍFICAS (cliente + finca) de ESE MISMO cliente

@@ -92,7 +92,7 @@ class MensajeResponse(BaseModel):
     mensaje: str
     detalle: Optional[str] = None
     # Solo lo llena copiar_quincena: cantidad de solapamientos por cliente
-    # (CONTEXT.md) que quedaron vigentes en la quincena destino tras copiar.
+    # (CONTEXT-preliquidacion.md) que quedaron vigentes en la quincena destino tras copiar.
     solapamientos_heredados: Optional[int] = None
 
 
@@ -122,7 +122,7 @@ class ConceptoUnifResponse(BaseModel):
     precio: Optional[Decimal] = None
     tipo: TipoConcepto
     heredado: bool = False
-    # ADR-0008: categoría (1-7) de Mantenimiento mecánico. None = concepto
+    # ADR-0008: categoría (1-12) de Mantenimiento mecánico. None = concepto
     # común (comportamiento actual, sin filtro por categoría).
     categoria: Optional[int] = None
     # ADR-0011: camino "por supervisor" — aplica a las líneas de esa tarea
@@ -155,7 +155,7 @@ class ConceptoUnifRequest(BaseModel):
     # común — específico, por cliente o por supervisor —, False si es común).
     # Si viene explícito (True/False) se respeta tal cual.
     reemplaza_comun: Optional[bool] = None
-    # Solapamiento por cliente (CONTEXT.md): si la regla que se crea SUMA a
+    # Solapamiento por cliente (CONTEXT-preliquidacion.md): si la regla que se crea SUMA a
     # reglas del eje cliente ya existentes (por cliente vs específicas del
     # mismo cliente), el POST responde 409 con el detalle salvo que el
     # liquidador lo confirme explícitamente con True.

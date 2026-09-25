@@ -14,3 +14,8 @@ docs/modulos/*/fuentes/*
 # Datos de la infraestructura de producción (IPs, hosts, comandos de acceso):
 # viven sólo en la máquina de quien deploya, nunca en el repo público.
 docs/DEPLOY.md
+
+# Preferencias de cada máquina (rutas locales, permisos acumulados):
+# nunca al repo público.
+CLAUDE.local.md
+.claude/settings.local.json

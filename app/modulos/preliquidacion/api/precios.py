@@ -484,7 +484,7 @@ def solapamientos_quincena(
     db: Session = Depends(get_db_propia),
 ):
     """
-    Solapamientos por cliente vigentes en la quincena (CONTEXT.md): pares
+    Solapamientos por cliente vigentes en la quincena (CONTEXT-preliquidacion.md): pares
     tarea+cliente donde conviven una regla por cliente y específicas del
     mismo cliente con categorías compatibles. Suman por ADR-0011; el
     liquidador debe controlarlos. Vacío = todo en orden.
