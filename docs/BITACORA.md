@@ -661,3 +661,57 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
 
 **Pendiente**
 - Confirmar que el VPS acepte SSH sólo con clave. No se verificó.
+
+## 2026-09-25 — El CLAUDE.md dice dónde se anota cada cosa, y el SSH del VPS queda sólo con clave
+
+**Mergeado**
+- PR #52 (backend) — la sección "Los cuatro documentos" del `CLAUDE.md` pasa a
+  ser "Dónde se anota cada cosa": una tabla única (qué pasó, archivo, cuándo) y
+  cuatro reglas debajo. Suma un plan en
+  `docs/superpowers/plans/2026-09-25-reglas-de-anotacion.md`. Merge `bdbd3da`,
+  commit `b2ca2c2`. Sin PR hermano en el front.
+
+**Por frontera**
+- Docs: `CLAUDE.md` +25/-7. La tabla suma lo que faltaba: `docs/DEPLOY.md`
+  (local, fuera de git) para todo lo operativo del VPS, el cuerpo del PR,
+  `PUESTA-A-PUNTO.md`, los planes y la memoria de Claude. La regla de trabajo
+  "anotar en la memoria del proyecto en cada hito" pasa a "en el lugar que
+  corresponda según la tabla".
+- Prod y Datos: sin cambios en el repo. El endurecimiento del SSH (abajo) se
+  hizo en el VPS, no por PR.
+
+**Decisiones**
+- **Una tabla única en el `CLAUDE.md`, en vez de corregir cada skill.** Porqué:
+  el usuario tenía que aclarar en cada sesión dónde anotar, y el endurecimiento
+  del SSH del mismo día quedó sólo en la memoria de Claude, que vive fuera del
+  repo y no la ve nadie más. La skill `flujo` es global, sirve a otro proyecto y
+  nombraba `.claude/Contexto/contexto-proyecto.md`, que en este repo no existe.
+  Descartado: reglas sueltas por skill.
+- **Cuatro reglas bajo la tabla**: la memoria no cuenta como anotación para una
+  persona; al avisar "quedó anotado" se nombra el archivo; IPs, hosts,
+  credenciales y datos de terceros no entran a git porque los repos son
+  públicos; si una skill manda anotar en otro lado, vale la tabla. Porqué: el
+  mismo del punto anterior.
+- **La skill global `flujo` remite al `CLAUDE.md` de cada repo.** Cambio fuera
+  del repo; lo nombra el PR y lo confirma quien despachó esta anotación.
+
+Lo que sigue no está en el PR: lo trae quien despachó esta anotación.
+- **SSH del VPS sólo con clave**, con OK del usuario, antes del PR. Antes
+  aceptaba contraseña para root por el orden en que se leen los drop-ins de
+  cloud-init. Se instaló fail2ban. Probado: el ingreso con clave anda y el
+  ingreso con contraseña se rechaza. El detalle operativo está en
+  `docs/DEPLOY.md`, que es local y está fuera de git.
+- **Se borraron las ramas remotas ya mergeadas** en los dos repos, 7 en total,
+  después de verificar que ninguna tenía commits fuera de `main`.
+
+**Estado**
+- Deploy: ninguno de código; el PR es sólo docs. En el VPS cambió la
+  configuración del SSH (ver arriba).
+- Migraciones: ninguna.
+- Verificación (del PR): existen todos los archivos que nombra la tabla;
+  `docs/modulos/*/fuentes/` sigue ignorado por git; no queda ninguna regla vieja
+  que contradiga la nueva (grep de "memoria" y "cuatro documentos").
+
+**Pendiente**
+- Cerrado el pendiente "Confirmar que el VPS acepte SSH sólo con clave" de la
+  entrada del 2026-09-23.
