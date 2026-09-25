@@ -18,14 +18,31 @@ se deduce de ningún diff.
 
 Si la decisión que buscás no está ahí, no asumas que no se tomó: preguntá.
 
-## Los cuatro documentos y qué es cada uno
+## Dónde se anota cada cosa
 
-| Archivo | Qué es | Quién lo toca |
+Cada cosa que pasa tiene **un** lugar donde se anota. Se anota ahí en el momento, sin
+esperar a que el usuario lo pida.
+
+| Qué pasó | Dónde se anota | Cuándo |
 |---|---|---|
-| `CONTEXT.md` | Glosario del dominio: qué **es** cada término, no cómo se implementa | skill `domain-modeling` |
-| `docs/adr/` | Decisiones de arquitectura con sus alternativas descartadas | el usuario, nunca un agente solo |
-| `docs/BITACORA.md` | Diario append-only: qué se mergeó y **por qué** | agente `bitacora` |
-| `docs/modulos/GUIA-MODULOS.md` | Las reglas para construir un módulo | quien cambie las reglas |
+| Cambio en el VPS o la infraestructura: config del servidor, paquetes, accesos, certificados, cómo se deploya | `docs/DEPLOY.md` (local, fuera de git) | en el momento del cambio |
+| El *por qué* de un cambio de código: qué se eligió y qué se descartó | cuerpo del PR | al abrir el PR |
+| Un merge a `main` | `docs/BITACORA.md`, con el agente `bitacora` | después de preguntar (ver abajo) |
+| Un término del dominio: qué **es**, no cómo se implementa | `CONTEXT.md`, o el `CONTEXT-<módulo>.md` del módulo | con la skill `domain-modeling` |
+| Una decisión de arquitectura, con sus alternativas descartadas | `docs/adr/` | sólo con el usuario |
+| Una regla para construir un módulo | `docs/modulos/GUIA-MODULOS.md` | cuando cambia la regla |
+| Cómo preparar una máquina de desarrollo | `docs/modulos/PUESTA-A-PUNTO.md` | cuando cambia |
+| El plan de una tarea | `docs/superpowers/plans/AAAA-MM-DD-<tema>.md` | en la fase de plan |
+| Estado entre sesiones de Claude: qué quedó a medias, trampas encontradas | memoria de Claude | en cada hito |
+
+- **La memoria no cuenta como anotación para una persona.** Vive fuera del repo, en la
+  máquina del usuario, y no la ve nadie más. Si algo le importa al usuario o a Pitu, va a su
+  archivo de la tabla, y la memoria sólo apunta a ese archivo.
+- **Al avisar "quedó anotado", se nombra el archivo.** Decir "lo anoté en memoria" solo no
+  alcanza.
+- **Los repos son públicos.** IPs, hosts, credenciales y datos de terceros nunca entran a
+  git. Van a `docs/DEPLOY.md` o a `docs/modulos/*/fuentes/`, los dos fuera de git.
+- **Si una skill manda anotar en otro lugar, vale esta tabla.**
 
 Un ADR no es un resumen de lo que pasó: es un compromiso. No se escribe sin el usuario.
 
@@ -39,7 +56,8 @@ Un ADR no es un resumen de lo que pasó: es un compromiso. No se escribe sin el 
 - **Smoke tests reales**, no "debería andar". Si algo no se probó, decilo.
 - **Implementar y después verificar de forma adversarial**: buscá activamente el error propio.
 - Las **migraciones no se difieren**: van en el mismo PR que el código que las necesita.
-- Anotar lo que se va haciendo en la memoria del proyecto, en cada hito.
+- Anotar lo que se va haciendo en cada hito, en el lugar que corresponda según
+  "Dónde se anota cada cosa".
 
 ## Commits
 
