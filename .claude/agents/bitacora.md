@@ -28,7 +28,7 @@ Toda entrada se ordena por frontera, no por archivos. Las fronteras son:
 - **Preliquidación** — `app/modulos/preliquidacion/` y su front
 - **Liquidación Terceros** — `app/modulos/terceros/` y su front (antes se llamaba Fletes)
 - **Prod y Datos** — `deploy/`, `migrations/`, VPS, base `preliquidacion`
-- **Docs** — `docs/`, `CONTEXT.md`, `README.md`
+- **Docs** — `docs/`, `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `README.md`
 
 El front vive en otro repo (`frontend_preliquidacion`). Si el merge del back
 tiene un PR hermano en el front, nombralo; no intentes leer ese repo.
