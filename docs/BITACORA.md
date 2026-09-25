@@ -715,3 +715,112 @@ Lo que sigue no está en el PR: lo trae quien despachó esta anotación.
 **Pendiente**
 - Cerrado el pendiente "Confirmar que el VPS acepte SSH sólo con clave" de la
   entrada del 2026-09-23.
+
+## 2026-09-25 — Las reglas pasan a AGENTS.md y a controles, y la app no arranca contra producción sin permiso
+
+**Mergeado**
+- PR #53 (backend) — reorganiza el harness de agentes: controles en hooks y
+  `settings.json`, `AGENTS.md` como fuente de reglas, un glosario por contexto
+  con `CONTEXT-MAP.md` de índice y documentación al día sin listados de tablas.
+  Merge `d0be3f4`. Plan: `docs/superpowers/plans/2026-09-25-reorganizar-harness.md`.
+- PR #45 (frontend) — hermano del #53: `AGENTS.md` con el bloque común, controles
+  y dos comentarios que apuntan al glosario nuevo. Merge `f885563`.
+- PR #54 (backend) — la app no arranca contra la base de producción salvo que el
+  `.env` tenga `PERMITIR_BASE_PRODUCCION=1`, y el banner muestra qué base se
+  conectó. Merge `dad6649`.
+
+**Por frontera**
+- Núcleo: `app/core/config.py` suma `guardia_base_propia` y el campo
+  `permitir_base_produccion`; la guardia corre en el `lifespan` de `app/main.py`.
+  El asistente (`app/core/asistente.py`) carga el glosario del núcleo, el de
+  Preliquidación y `docs/AYUDA.md`, con un test que falla si falta alguno. 9 tests
+  nuevos de la guardia; la suite da 312 verdes.
+- Preliquidación: sólo comentarios y docstrings, "categoría 1-7" pasa a 1-12. El
+  front cambia dos comentarios.
+- Prod y Datos: `deploy/provision.sh` avisa que producción necesita el permiso.
+  `.env.example` pasa a `DB_PROPIA_NAME=testing` y explica cómo refrescar
+  `testing` con `DB_PROPIA_*` apuntando ahí.
+- Docs: `CLAUDE.md` baja a 20 líneas e importa `AGENTS.md` (en el front, 16).
+  `CONTEXT.md` queda para el núcleo y nace
+  `docs/modulos/preliquidacion/CONTEXT-preliquidacion.md`. `DOCUMENTACION.md` pasa
+  a ser el mapa técnico. PUESTA-A-PUNTO dice que los repos son públicos y suma
+  `instalar.sh`. El ADR-0008 se corrige (sin nombres de tablas, rango 1 a 12). El
+  plan histórico de ws1-ws6 se mueve a `docs/superpowers/plans/`. Las skills
+  `domain-modeling` y `grilling` suman pasos; `grilling` busca antecedentes en la
+  bitácora y los ADR antes de preguntar.
+- Controles (repo, fuera de las fronteras de código): `scripts/hooks/pre-commit`
+  frena los commits en `main`; en el backend deja pasar sólo un commit que toque
+  únicamente `docs/BITACORA.md`, en el front no tiene excepción.
+  `.claude/settings.json` pide confirmación para `ssh`, `scp`, `sftp` y `rsync`. Un
+  hook PostToolUse recuerda preguntar por `/bitacora` después de `gh pr merge`.
+  `.gitattributes` fuerza LF en los `.sh`; `.gitignore` suma `CLAUDE.local.md` y
+  `.claude/settings.local.json`.
+
+**Decisiones**
+- **Las reglas críticas van en hooks y permisos, no sólo en prosa.** Porqué: una
+  instrucción en CLAUDE.md "es un pedido, no una garantía", según Anthropic.
+  Descartado: `deny` para `ssh`/`scp`, porque el deploy legítimo existe; se usa
+  `ask`.
+- **El hook de bitácora usa `grep` y no `jq`, y mira sólo el comando.** Porqué:
+  para no sumar dependencias en Windows; con `grep` sobre el JSON entero avisaba
+  cuando un texto mencionaba el merge.
+- **`AGENTS.md` es la fuente de las reglas y `CLAUDE.md` lo importa con
+  `@AGENTS.md`.** Porqué: es el estándar que leen otros agentes, y a futuro puede
+  usarse otro además de Claude Code. Sin symlink, por Windows. Lo de cada máquina
+  (la ruta de `gh`) pasa a `CLAUDE.local.md`, fuera de git.
+- **El bloque común va duplicado en los dos repos, entre marcadores, y lo compara
+  `scripts/verificar_agents_comun.sh`.** Descartado: que el front remita al back,
+  porque otra herramienta no sigue el puntero; e importar el del back, porque sólo
+  le sirve a Claude Code.
+- **Un glosario por contexto, con `CONTEXT-MAP.md` de índice.** Porqué:
+  `CONTEXT.md` mezclaba el núcleo con Preliquidación, y la skill `domain-modeling`
+  no encontraba el glosario de Terceros sin un mapa. Se sacaron tablas, columnas,
+  endpoints, rutas y fechas, porque los repos son públicos y el glosario define qué
+  es cada cosa, no cómo se implementa.
+- **Los docs públicos no listan tablas; para saber qué hay, se consulta la base.**
+  Porqué: decisión del usuario, con los repos públicos.
+- **La app frena el arranque contra producción en vez de sólo avisar.** Porqué: el
+  `.env` de desarrollo apuntaba a producción y la app sólo lee `DB_PROPIA_*`, así
+  que un `uvicorn --reload` local escribía sobre el dato real. Un aviso en el
+  banner no evita el error.
+- **La guardia va en el `lifespan` y no en `Settings`.** Porqué: para no romper
+  `pytest` ni los scripts, que importan la configuración sin arrancar la app; así
+  el refresco de `testing` y `verificar_conexion.py` pueden seguir leyendo
+  producción. Es la única razón por la que se aborta el arranque: una tabla
+  faltante sigue sin abortarlo, para no meter a systemd en un bucle.
+
+Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
+- **No se borra ninguna skill**, aunque se superpongan. Decisión del usuario.
+- **`plan-terceros.md` conserva a propósito la tabla de las tablas que Pitu
+  planea crear**, como excepción a "los docs no listan tablas". Decisión del
+  usuario.
+- **El ADR-0008 lo corrigió un agente con OK explícito del usuario.**
+- **El `.env` local de Gero pasó a apuntar a `testing`**, con las credenciales de
+  producción guardadas aparte para el refresco de `testing`.
+- **Trampa encontrada**: la confirmación de `ssh` no funcionó en la sesión donde
+  se creó el `settings.json` (había arrancado antes) y sí en sesiones nuevas; los
+  hooks, en cambio, se recargaron en caliente.
+
+**Estado**
+- Deploy del backend el 2026-09-25, con OK del usuario (dato de quien despachó).
+  Orden obligatorio, que el PR #54 marca como riesgo: primero la variable del
+  permiso en el `.env` del VPS (el código viejo la ignora) y después el código.
+  Verificado: el servicio arrancó una sola vez, sin bucle de reinicios; el banner
+  muestra la base de producción; `/health` ok; sitio 200; el asistente responde
+  términos de los dos glosarios (en local no se había podido probar porque el
+  antivirus bloquea el HTTPS de Python).
+- Front: no se deployó; sólo cambiaron comentarios.
+- Migraciones: ninguna.
+- Verificación (de los PR): el `pre-commit` probado con commits reales en `main` y
+  en rama; la confirmación de `ssh` probada en sesiones nuevas; el hook de
+  bitácora con 9 comandos simulados; los 47 términos del glosario viejo están en
+  los dos nuevos; con el `.env` de producción sin permiso, `uvicorn` se niega a
+  arrancar (exit 3) antes de abrir conexiones; contra `testing` arranca y
+  `/health` da ok. `npm run build` compila en el front.
+
+**Pendiente**
+- Correr `sh scripts/hooks/instalar.sh` en cada clon, también los de Pitu.
+- Aceptados sin arreglar (dato de quien despachó; los lista el PR #53): el hook de
+  bitácora avisa si `gh pr merge` aparece al principio de una línea dentro de un
+  heredoc, y también si el merge falla o sólo queda programado con `--auto`. Lo
+  peor que pasa es una pregunta de más.
