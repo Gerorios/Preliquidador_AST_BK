@@ -1,1 +1,2 @@
 scripts/hooks/* text eol=lf
+.claude/hooks/* text eol=lf

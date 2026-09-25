@@ -1,0 +1,18 @@
+#!/bin/sh
+# Frena los commits en main: todo cambio va por rama y PR.
+# Única excepción: un commit que sólo toca docs/BITACORA.md, que va directo
+# a main (ver "La bitácora se commitea directo a main" en AGENTS.md o CLAUDE.md).
+# Instalar con: sh scripts/hooks/instalar.sh
+
+rama=$(git symbolic-ref --short -q HEAD) || exit 0
+[ "$rama" = "main" ] || exit 0
+
+stageados=$(git diff --cached --name-only)
+[ "$stageados" = "docs/BITACORA.md" ] && exit 0
+
+echo "" >&2
+echo "  Commit frenado: estás en main." >&2
+echo "  Creá una rama (git switch -c <tipo>/<tema>) y commiteá ahí." >&2
+echo "  Única excepción: un commit que sólo toque docs/BITACORA.md." >&2
+echo "" >&2
+exit 1

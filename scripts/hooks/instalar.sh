@@ -5,7 +5,7 @@
 raiz=$(git rev-parse --show-toplevel) || exit 1
 destino="$raiz/.git/hooks"
 
-for hook in post-merge; do
+for hook in post-merge pre-commit; do
   cp "$raiz/scripts/hooks/$hook" "$destino/$hook" || exit 1
   chmod +x "$destino/$hook"
   echo "instalado: .git/hooks/$hook"
