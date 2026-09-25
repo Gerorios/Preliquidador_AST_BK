@@ -69,7 +69,7 @@ class ConceptoLiquidacion(Base):
     precio         = Column(Numeric(12, 4))
     tipo           = Column(Enum(TipoConcepto), default=TipoConcepto.OTRO, nullable=False)
     heredado       = Column(Boolean, default=False, nullable=False)  # ADR-0004: precio copiado de otra quincena, sin confirmar
-    # ADR-0008: categoría (1-7) de mantenimiento mecánico. NULL = concepto
+    # ADR-0008: categoría (1-12) de mantenimiento mecánico. NULL = concepto
     # común, se comporta igual que siempre. Con valor, el concepto solo
     # aplica a líneas de personas cuya categoría (tabla categoria_operario,
     # por quincena) coincida exactamente.
@@ -242,7 +242,7 @@ class AjusteManual(Base):
 
 # ─── Categoría de operario para Mantenimiento mecánico (ADR-0008) ────────────
 #
-# La categoría (1-7) de cada operario se administra a mano por el liquidador,
+# La categoría (1-12) de cada operario se administra a mano por el liquidador,
 # por quincena (una persona puede cambiar de categoría de una quincena a
 # otra). Cruza con ConceptoLiquidacion.categoria por CUIL para decidir qué
 # concepto de "MANTENIMIENTO MECANICO (TALLERES)" le corresponde a cada línea.

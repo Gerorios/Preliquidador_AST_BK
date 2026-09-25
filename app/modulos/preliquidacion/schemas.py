@@ -122,7 +122,7 @@ class ConceptoUnifResponse(BaseModel):
     precio: Optional[Decimal] = None
     tipo: TipoConcepto
     heredado: bool = False
-    # ADR-0008: categoría (1-7) de Mantenimiento mecánico. None = concepto
+    # ADR-0008: categoría (1-12) de Mantenimiento mecánico. None = concepto
     # común (comportamiento actual, sin filtro por categoría).
     categoria: Optional[int] = None
     # ADR-0011: camino "por supervisor" — aplica a las líneas de esa tarea

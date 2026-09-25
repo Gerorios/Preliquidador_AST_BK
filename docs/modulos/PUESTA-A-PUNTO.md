@@ -44,7 +44,7 @@ Tienen que responder las cuatro. Python tiene que decir `3.13.x` y Node `v22.x`.
 
 ## 2. Acceso a GitHub
 
-Los dos repos son privados. Hace falta:
+Los dos repos son públicos, pero para pushear hace falta ser colaboradora. Hace falta:
 
 1. Una cuenta de GitHub. Pasarle el usuario a Gero para que la agregue como colaboradora en `Gerorios/Preliquidador_AST_BK` y `Gerorios/Preliquidador_AST_FT`.
 2. Aceptar la invitación que llega por mail.
@@ -90,6 +90,17 @@ git clone https://github.com/Gerorios/Preliquidador_AST_FT.git frontend_preliqui
 ```
 
 El nombre de las carpetas importa: la documentación y los scripts asumen esos dos nombres.
+
+Después, en **cada uno** de los dos repos, instalar los hooks de git:
+
+```bash
+cd backend_preliquidacion && sh scripts/hooks/instalar.sh && cd ..
+cd frontend_preliquidacion && sh scripts/hooks/instalar.sh && cd ..
+```
+
+Instala dos hooks: `pre-commit`, que frena cualquier commit en `main` (todo va por rama y
+PR), y `post-merge`, que avisa cuando entra un merge sin anotar en la bitácora. Para
+comprobarlo, `ls .git/hooks` en cada repo tiene que mostrar `pre-commit` y `post-merge`.
 
 ---
 
@@ -142,7 +153,7 @@ Después:
 python -m pytest -q
 ```
 
-Tiene que terminar en verde. Al día de hoy son 275 tests y tardan entre uno y cuatro minutos según la máquina. No necesitan las bases: usan SQLite en memoria.
+Tiene que terminar en verde. Tarda entre uno y cuatro minutos según la máquina. No necesitan las bases: usan SQLite en memoria.
 
 Por último, arrancar el servidor:
 
@@ -218,7 +229,11 @@ npm run build            # frontend, sin errores
 
 ## 8. Qué leer después
 
+Si usás Claude Code: lo que es propio de tu máquina (por ejemplo, la ruta de `gh` si no está
+en el PATH) va en un `CLAUDE.local.md` en la raíz de cada repo. No se commitea.
+
 1. `docs/modulos/GUIA-MODULOS.md`: cómo está armado el sistema y qué tiene que cumplir un módulo. Es la lectura principal.
-2. `CONTEXT.md`: el glosario del dominio.
-3. `README.md` del backend y del frontend: estructura y convenciones de cada uno.
-4. Dos o tres tests de `tests/` para ver cómo se prueba la lógica sin base real.
+2. `AGENTS.md`: las reglas de trabajo, para personas y para agentes de código.
+3. `CONTEXT-MAP.md`: el índice de los glosarios del dominio.
+4. `README.md` del backend y del frontend: estructura y convenciones de cada uno.
+5. Dos o tres tests de `tests/` para ver cómo se prueba la lógica sin base real.

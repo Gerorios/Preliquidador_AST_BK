@@ -77,8 +77,9 @@ pytest
 
 | Archivo | Contenido |
 |---|---|
-| `CONTEXT.md` | Glosario del dominio |
-| `docs/DOCUMENTACION.md` | Documentación funcional |
+| `AGENTS.md` | Reglas de trabajo, para personas y para agentes de código |
+| `CONTEXT-MAP.md` | Índice de los glosarios del dominio |
+| `docs/DOCUMENTACION.md` | Mapa técnico: código y conexiones a las bases |
 | `docs/AYUDA.md` | Ayuda de uso |
 | `docs/adr/` | Decisiones de arquitectura |
 | `docs/BITACORA.md` | Qué se mergeó y por qué |
