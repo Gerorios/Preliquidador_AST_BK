@@ -42,6 +42,7 @@ from app.modulos.terceros.schemas import (
     ActualizarEnLoteRequest,
     CombinacionResponse,
     ConfirmarEnLoteRequest,
+    FuenteVerificada,
     LineaGrillaResponse,
     CopiadoConjunto,
     CopiarRequest,
@@ -66,6 +67,7 @@ from app.modulos.terceros.services.calculo_service import (
 )
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
 from app.modulos.terceros.services.grilla_service import GrillaService
+from app.modulos.terceros.services.verificaciones_service import VerificacionesService
 from app.modulos.terceros.services.liquidacion_service import LiquidacionService
 from app.modulos.terceros.services.tarifario_service import (
     TIPOS as TIPOS_TARIFA, TarifaInvalida, TarifarioService, especificidad,
@@ -186,6 +188,12 @@ def get_grilla(
     db_propia: Session = Depends(get_db_propia),
 ) -> GrillaService:
     return GrillaService(db_propia)
+
+
+def get_verificaciones(
+    db_propia: Session = Depends(get_db_propia),
+) -> VerificacionesService:
+    return VerificacionesService(db_propia)
 
 
 def get_liquidacion(
@@ -634,6 +642,24 @@ def listar_horas_reparacion(
         )
     except FALLAS_DE_ORIGEN as e:
         raise HTTPException(status_code=502, detail=_mensaje_origen(e))
+
+
+@router.get("/verificaciones", response_model=list[FuenteVerificada])
+def verificaciones_de_la_quincena(
+    quincena: date = Depends(quincena_param),
+    servicio: VerificacionesService = Depends(get_verificaciones),
+):
+    """Lo que hay que mirar antes de liquidar, agrupado por fuente.
+
+    Por fuente y no por tipo de problema: cada fuente la corrige alguien
+    distinto, y una lista de "duplicados" mezcla tres conversaciones con tres
+    personas.
+
+    Se mide sobre lo guardado, que es lo que se va a cobrar. Si alguien arregló
+    el origen y la quincena todavía no se actualizó, la verificación sigue
+    apareciendo — y tiene que aparecer.
+    """
+    return servicio.por_fuente(quincena)
 
 
 @router.get("/alertas", response_model=AlertasResponse)

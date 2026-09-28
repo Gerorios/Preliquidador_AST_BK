@@ -69,7 +69,7 @@ def _linea(concepto: str, **campos) -> dict:
         "capataz": None, "tarea": None,
         # Propios de uno o dos conceptos
         "patente": None, "chofer": None, "tipo_viaje": None,
-        "vale": None, "estacion": None,
+        "vale": None, "estacion": None, "observacion": None,
         "maquina": None, "planilla": None, "supervisor": None,
         "repuesto": None, "rubro": None,
         "sub_rubro": None, "estado_taller": None,
@@ -150,7 +150,7 @@ class GrillaService:
         return [_linea(
             "combustible", id=c.id, fecha=c.fecha_uso, tercero=c.tercero,
             patente=_limpio(c.colectivo_patente), estacion=c.origen,
-            vale=_limpio(c.vale),
+            vale=_limpio(c.vale), observacion=_limpio(c.observacion),
             cantidad=c.litros, unidad=UNIDAD_LITRO,
             precio=c.precio_aplicado, importe=c.importe,
             estado=c.estado_calculo,

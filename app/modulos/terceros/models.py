@@ -22,7 +22,7 @@ Son dos familias:
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String,
+    Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -175,6 +175,9 @@ class CargaCombustible(Base):
     vale              = Column(String(30), nullable=True, index=True)
     origen            = Column(String(150), nullable=True)
     usuario_carga     = Column(String(150), nullable=True)
+    # Campo libre del sistema de campo. No identifica la carga —no va en la
+    # clave— pero es lo que explica por qué un vale aparece dos veces.
+    observacion       = Column(Text, nullable=True)
     quincena_efectiva = Column(Date, nullable=True)
     motivo_efectiva   = Column(String(255), nullable=True)
     tarifa_id       = Column(Integer, nullable=True)

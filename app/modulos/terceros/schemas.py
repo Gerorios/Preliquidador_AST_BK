@@ -213,6 +213,42 @@ class GenerarResponse(LiquidacionResponse):
     detalle: dict[str, DetalleConjunto]
 
 
+# ─── Verificaciones por fuente (etapa 9) ────────────────────────────────────
+
+class CasoVerificacion(BaseModel):
+    """Una fila concreta para ir a buscar. `datos` son los campos que la
+    identifican en su origen, en el orden en que los muestra la pantalla."""
+    tercero: str | None = None
+    veces: int
+    datos: list[str]
+
+
+class Verificacion(BaseModel):
+    tipo: str
+    severidad: str          # alta | media | baja
+    titulo: str
+    impacto: str
+    detalle: str
+    sistema: str            # dónde se corrige
+    casos: list[CasoVerificacion]
+    # Cuántos hay en total: `casos` viene recortado para que la pantalla siga
+    # siendo una lista de tareas y no un volcado.
+    total: int
+
+
+class FuenteVerificada(BaseModel):
+    """Una fuente y lo que hay que mirarle en esta quincena.
+
+    Viene aunque no tenga nada: que una fuente esté limpia es información, y si
+    desapareciera nadie sabría si está bien o si no se miró.
+    """
+    fuente: str
+    sistema: str
+    titulo: str
+    filas: int
+    verificaciones: list[Verificacion]
+
+
 # ─── El cálculo del neto (etapa 7) ──────────────────────────────────────────
 
 class CalculoConjunto(BaseModel):
@@ -283,6 +319,7 @@ class LineaGrillaResponse(BaseModel):
     tipo_viaje: str | None = None       # viajes — lo resuelve la tarifa
     vale: str | None = None             # combustible
     estacion: str | None = None         # combustible
+    observacion: str | None = None      # combustible — el campo libre del origen
     maquina: str | None = None          # servicio, repuestos, reparación
     planilla: str | None = None         # servicio
     supervisor: str | None = None       # servicio

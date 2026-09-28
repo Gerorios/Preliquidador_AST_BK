@@ -80,7 +80,10 @@ SELECT
     cfluidos.cantidad AS litros_cargados,
     cfluidos.numorden AS vale,
     origen.nombre AS origen_combustible,
-    usuarios.name AS usuario_carga
+    usuarios.name AS usuario_carga,
+    -- Campo libre. Explica la mitad de los vales que aparecen repetidos: la
+    -- segunda carga suele ser aceite o un adicional de la misma orden.
+    cfluidos.observacion AS observacion
 FROM laa_controlfluidosoperativos cfluidos
     -- INNER JOIN, no LEFT: sin colectivo no hay tercero a quien descontarle
     INNER JOIN laa_colectivos colectivos ON colectivos.id = cfluidos.colectivo
@@ -555,6 +558,7 @@ COLUMNAS_VIAJES = (
 COLUMNAS_CARGAS_COMBUSTIBLE = (
     "fecha_carga", "fecha_uso", "quincena_mes", "colectivo_nombre",
     "colectivo_patente", "colectivo_propiedad", "litros_cargados", "vale",
+    "observacion",
     "origen_combustible", "usuario_carga",
 )
 COLUMNAS_HORAS_SERVICIO = (

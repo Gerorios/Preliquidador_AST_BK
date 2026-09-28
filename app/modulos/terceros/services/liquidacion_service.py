@@ -90,6 +90,7 @@ def _mapear_carga(f: dict) -> dict:
         "vale": _texto(f.get("vale")),
         "origen": _texto(f.get("origen_combustible")),
         "usuario_carga": _texto(f.get("usuario_carga")),
+        "observacion": _texto(f.get("observacion")),
     }
 
 
