@@ -70,16 +70,18 @@ class Settings(BaseSettings):
 
     @property
     def url_externa(self) -> str:
+        password = quote_plus(self.db_externa_password)
         return (
-            f"mysql+pymysql://{self.db_externa_user}:{self.db_externa_password}"
+            f"mysql+pymysql://{self.db_externa_user}:{password}"
             f"@{self.db_externa_host}:{self.db_externa_port}/{self.db_externa_name}"
             f"?charset=utf8mb4"
         )
 
     @property
     def url_propia(self) -> str:
+        password = quote_plus(self.db_propia_password)
         return (
-            f"mysql+pymysql://{self.db_propia_user}:{self.db_propia_password}"
+            f"mysql+pymysql://{self.db_propia_user}:{password}"
             f"@{self.db_propia_host}:{self.db_propia_port}/{self.db_propia_name}"
             f"?charset=utf8mb4"
         )

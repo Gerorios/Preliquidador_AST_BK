@@ -22,8 +22,7 @@ Repositorio hermano (frontend React + Vite): `Gerorios/Preliquidador_AST_FT`.
 | Exportación | openpyxl |
 | Tests | pytest (SQLite en memoria) |
 
-Las migraciones son SQL manual versionado en `migrations/<core|modulo>/` (Alembic figura en
-`requirements.txt` pero no se usa).
+Las migraciones son SQL manual versionado en `migrations/<core|modulo>/`.
 
 ---
 

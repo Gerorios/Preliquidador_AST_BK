@@ -1,3 +1,5 @@
+import logging
+import secrets
 import sys
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
@@ -94,6 +96,32 @@ async def _externa_no_disponible(_: Request, exc: ExternaNoDisponible):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
+# Cualquier excepción no prevista: 500 con un mensaje genérico y un código
+# corto. El texto de la excepción (los de pymysql traen host y puerto de la
+# base) y el traceback van sólo al log, con el mismo código, para encontrarlo
+# en el journal con lo que la persona ve en el toast. No pisa a los handlers
+# más específicos (ExternaNoDisponible, HTTPException): Starlette usa primero
+# el de la clase más cercana. Después de mandar esta respuesta, Starlette
+# re-lanza la excepción al servidor y uvicorn la loguea otra vez: es
+# aceptable, el registro con el código es el de acá.
+_log_errores = logging.getLogger("app.errores")
+
+
+@app.exception_handler(Exception)
+async def _error_interno(request: Request, exc: Exception):
+    codigo = secrets.token_hex(3).upper()
+    # exc_info explícito: no depender de que el handler corra dentro del
+    # `except` de Starlette para que el traceback salga en el log.
+    _log_errores.exception(
+        "Error interno %s en %s %s", codigo, request.method, request.url.path,
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Error interno del sistema. Si se repite, avisá a sistemas con el código {codigo}"},
+    )
+
+
 # Comprime respuestas grandes (ej. /lineas de una quincena: ~1.3 MB de JSON
 # que gzip baja a ~150 KB). Las chicas (<1 KB) no pagan el overhead.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
@@ -136,12 +164,24 @@ def generar_status():
     return {"status": "ok"}
 
 
+_log_health = logging.getLogger("app.health")
+
+
 @app.get("/health")
 def health():
+    # Sólo estado y booleanos por HTTP: los textos de error (los de pymysql
+    # traen host y puerto de la base) y los nombres de tablas faltantes van al
+    # log; para el detalle, mirar el journal.
     conexiones = verificar_conexiones()
     ok = conexiones["externa"] and conexiones["propia"]
     tablas_faltantes = getattr(app.state, "tablas_faltantes", [])
+    for err in conexiones["errores"]:
+        _log_health.error("/health: %s", err)
     if tablas_faltantes:
+        _log_health.error(
+            "/health: faltan tablas en la base propia (migraciones sin aplicar): %s",
+            ", ".join(tablas_faltantes),
+        )
         status = "error"
     elif ok:
         status = "ok"
@@ -149,8 +189,7 @@ def health():
         status = "degraded"
     return {
         "status": status,
+        "bd_sueldos": conexiones["sueldos"],
         "bd_externa": conexiones["externa"],
         "bd_propia": conexiones["propia"],
-        "errores": conexiones["errores"],
-        "tablas_faltantes": tablas_faltantes,
     }

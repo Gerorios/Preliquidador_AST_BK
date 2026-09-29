@@ -1,12 +1,13 @@
 """Autenticación: login, token JWT y el usuario autenticado (get_usuario_actual).
 La autorización por módulo (quién puede operar qué) vive en
 app/core/permisos.py y en permisos.py de cada módulo."""
+import math
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -14,6 +15,7 @@ from typing import Optional
 from app.core.config import settings
 from app.core.database import get_db_propia
 from app.core.identidad import cuil_de_email, email_de_cuil, normalizar_cuil
+from app.core.limite_login import limitador_login
 from app.core.models import Usuario
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
@@ -51,13 +53,15 @@ def verificar_password(plain: str, hashed: str) -> bool:
 
 def crear_token(data: dict) -> str:
     payload = data.copy()
-    # python-jose exige que el claim "sub" sea string (spec JWT).
-    # Si se pasa un int (ej. usuario.id) sin convertir, jwt.decode()
-    # lanza JWTClaimsError ("Subject must be a string") y el endpoint
-    # devuelve 401 SIEMPRE, sin importar si el token es válido.
+    # El claim "sub" tiene que ser string (spec JWT). PyJWT (>= 2.10) lo
+    # exige al decodificar: con un int (ej. usuario.id) sin convertir,
+    # jwt.decode() lanza InvalidSubjectError y el endpoint devuelve 401
+    # SIEMPRE, sin importar si el token es válido (python-jose, que se usaba
+    # antes, hacía lo mismo).
     if "sub" in payload:
         payload["sub"] = str(payload["sub"])
-    payload["exp"] = datetime.utcnow() + timedelta(
+    # Aware en UTC: PyJWT lo pasa a timestamp con utctimetuple().
+    payload["exp"] = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
@@ -91,7 +95,7 @@ def get_usuario_actual(
         if sub is None:
             raise credenciales_exc
         user_id = int(sub)  # el claim viene como string, se reconvierte a int para la query
-    except (JWTError, ValueError):
+    except (jwt.PyJWTError, ValueError):
         raise credenciales_exc
 
     en_cache = _USUARIO_CACHE.get(user_id)
@@ -139,6 +143,14 @@ def _password_es_la_inicial(usuario: Usuario) -> bool:
     return bool(cuil) and verificar_password(cuil, usuario.password)
 
 
+def clave_limite(tipeado: str) -> str:
+    """Balde del limitador de intentos para lo tipeado en el campo usuario.
+    Las distintas formas de escribir a la misma persona caen en el mismo
+    balde: el CUIL con o sin guiones y el email sintético dan el CUIL; un mail
+    real, en minúsculas y sin espacios. No depende de que el usuario exista."""
+    return normalizar_cuil(tipeado) or cuil_de_email(tipeado) or tipeado.strip().lower()
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=TokenResponse)
@@ -146,14 +158,30 @@ def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db_propia),
 ):
+    # El bloqueo se chequea antes de consultar la base y del bcrypt: a un
+    # identificador bloqueado no se le paga ni la query ni el hash.
+    clave = clave_limite(form.username)
+    segundos = limitador_login.segundos_restantes(clave)
+    if segundos is not None:
+        minutos = math.ceil(segundos / 60)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Demasiados intentos. Probá de nuevo en {minutos} minutos.",
+            headers={"Retry-After": str(segundos)},
+        )
+
     usuario = _usuario_por_identificador(db, form.username)
 
     if not usuario or not verificar_password(form.password, usuario.password):
+        # Usuario inexistente también cuenta: responder distinto delataría
+        # qué identificadores existen.
+        limitador_login.registrar_fallo(clave)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
         )
 
+    limitador_login.exito(clave)
     token = crear_token({"sub": usuario.id})
 
     # Import local: app.core.permisos importa get_usuario_actual de este

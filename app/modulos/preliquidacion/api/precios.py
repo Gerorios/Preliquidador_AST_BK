@@ -335,11 +335,12 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
         reemplaza_comun=reemplaza_comun,
     )
     db.add(nuevo)
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=f"No se pudo guardar: {e}")
+    # Sin try: un error de base acá cae en el 500 genérico de main.py (el
+    # detalle va al log, no al front). No hay un duplicado "esperable" que
+    # atajar: uq_concepto_unif incluye cliente_nombre y supervisor_nombre, uno
+    # siempre es NULL (ADR-0011) y cada NULL es distinto en un índice único.
+    # La sesión la cierra get_db_propia, que descarta la transacción fallida.
+    db.commit()
     db.refresh(nuevo)
 
     PreliquidacionService(db).recalcular_por_concepto(nuevo.quincena, actual=_match(nuevo))

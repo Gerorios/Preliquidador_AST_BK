@@ -2,13 +2,25 @@
 Modelos del núcleo del sistema: lo que comparten todos los módulos.
 Hoy solo el usuario. Los permisos por módulo (usuario_modulo) llegan en el PR 3.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 import enum
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+
+
+def ahora_utc() -> datetime:
+    """Default de las columnas de fecha de alta: ahora en UTC, **naive**.
+
+    Reemplaza a `datetime.utcnow()` (deprecada desde Python 3.12) con el mismo
+    valor. Naive a propósito: las columnas son `DateTime` sin zona (MySQL
+    DATETIME y SQLite no la guardan) y SQLAlchemy devuelve naive al leer; un
+    default aware haría convivir objetos aware (recién creados) con naive
+    (cargados) y compararlos u ordenarlos levantaría TypeError. Vive en el
+    núcleo porque la usan los modelos del núcleo y los de los módulos."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class RolUsuario(str, enum.Enum):
@@ -28,7 +40,7 @@ class Usuario(Base):
     password   = Column(String(255), nullable=False)
     rol        = Column(String(20), default='usuario')
     activo     = Column(Boolean, default=True)
-    creado_en  = Column(DateTime, default=datetime.utcnow)
+    creado_en  = Column(DateTime, default=ahora_utc)
 
     # selectin: se carga en la misma consulta que el usuario, así el objeto
     # sigue usable después del expunge del cache de get_usuario_actual.
@@ -47,6 +59,6 @@ class UsuarioModulo(Base):
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     modulo     = Column(String(30), nullable=False)   # 'preliquidacion' | 'terceros' | ...
     rol        = Column(String(20), nullable=False)   # 'operador' | 'gerente'
-    creado_en  = Column(DateTime, default=datetime.utcnow, nullable=False)
+    creado_en  = Column(DateTime, default=ahora_utc, nullable=False)
 
     usuario = relationship("Usuario", back_populates="modulos")

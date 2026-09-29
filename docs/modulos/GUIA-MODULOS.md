@@ -51,12 +51,12 @@ Todo lo que se escribe en el sistema usa esto y nada más. No se agregan framewo
 | ORM y SQL | SQLAlchemy 2.0 (ORM para tablas propias, SQL crudo con `text()` para bases externas) | 2.0.36 |
 | Driver MySQL | PyMySQL | 1.1.1 |
 | Validación y schemas | Pydantic 2 + pydantic-settings | 2.9 |
-| Autenticación | JWT con python-jose, contraseñas con passlib + bcrypt | |
+| Autenticación | JWT con PyJWT, contraseñas con passlib + bcrypt | |
 | Excel | openpyxl (exportaciones) | 3.1.5 |
 | Tests | pytest, base SQLite en memoria | 9.1 |
 | Variables de entorno | python-dotenv, archivo `.env` | |
 
-Alembic figura en `requirements.txt` pero **no se usa**: las migraciones son SQL manual versionado (sección 4.3).
+Las migraciones son SQL manual versionado (sección 4.3).
 
 ### Frontend
 
