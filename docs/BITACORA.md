@@ -824,3 +824,34 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
   bitácora avisa si `gh pr merge` aparece al principio de una línea dentro de un
   heredoc, y también si el merge falla o sólo queda programado con `--auto`. Lo
   peor que pasa es una pregunta de más.
+
+## 2026-09-29 — ADR-0014: se desarrolla contra testing y sólo el VPS toca producción
+
+**Mergeado**
+- PR #55 (backend) — ADR-0014, que registra la decisión implementada en el PR #54;
+  `AGENTS.md`, `DOCUMENTACION.md` y `GUIA-MODULOS.md` se alinean con él.
+
+**Por frontera**
+- Docs: nuevo `docs/adr/0014-desarrollo-en-testing-produccion-solo-desde-el-vps.md`.
+  `AGENTS.md` cita el ADR y la guardia de arranque (`PERMITIR_BASE_PRODUCCION=1`, sólo
+  en el `.env` del VPS); `DOCUMENTACION.md` deja de fijar el rango de ADR ("numeradas en
+  orden"); `GUIA-MODULOS.md` pasa el próximo número a 0015.
+
+**Decisiones**
+- **La regla "desarrollo en `testing`, producción sólo desde el VPS" se hace cumplir con
+  código y no con una instrucción escrita.** Porqué: la app lee una sola conexión propia,
+  y un `.env` de desarrollo apuntando a producción hacía que un arranque local escribiera
+  sobre el dato real. Descartado: la base única; el aviso en el banner como única medida
+  (se conserva como complemento); la guardia en `Settings`, porque rompía tests y scripts.
+- Lo que sigue no está en el PR: lo trae quien despachó esta anotación. El ADR formaliza
+  una decisión ya tomada e implementada en el PR #54, no una nueva. El usuario eligió
+  cerrar este PR de documentación antes de arrancar un plan de 7 puntos de seguridad y
+  calidad surgido de un relevamiento del proyecto. Desde este merge, los merges los hace
+  el agente pidiendo confirmación al usuario.
+
+**Estado**
+- Deploy: ninguno (sólo documentación).
+- Migraciones: ninguna.
+
+**Pendiente**
+- El plan de 7 puntos de seguridad y calidad, todavía sin arrancar.
