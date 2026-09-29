@@ -1,4 +1,3 @@
-from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
     Date, Numeric, Text, Enum, ForeignKey, UniqueConstraint, Index
@@ -12,6 +11,7 @@ import enum
 # ForeignKey("usuarios.id") y relationship("Usuario"), que SQLAlchemy resuelve por
 # nombre, así que importar este módulo tiene que registrar Usuario primero. No borrar.
 from app.core.models import Usuario, RolUsuario  # noqa: F401
+from app.core.models import ahora_utc
 
 
 # ─── Enums ────────────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ class ConceptoLiquidacion(Base):
     # línea (paga solo el/los específico/s). Default False: comportamiento
     # actual intacto (comunes y específicos suman).
     reemplaza_comun = Column(Boolean, default=False, nullable=False)
-    creado_en      = Column(DateTime, default=datetime.utcnow)
+    creado_en      = Column(DateTime, default=ahora_utc)
 
     __table_args__ = (
         UniqueConstraint(
@@ -99,7 +99,7 @@ class Preliquidacion(Base):
     id         = Column(Integer, primary_key=True, autoincrement=True)
     quincena   = Column(Date, nullable=False, unique=True)
     creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    creado_en  = Column(DateTime, default=datetime.utcnow)
+    creado_en  = Column(DateTime, default=ahora_utc)
     # Valor hora de jornal de pulverización de esta quincena, que el liquidador
     # carga a mano (ADR-0007). Sirve para valorizar "a jornal" el trabajo de
     # pulverización y compararlo contra el pago "a tancada" en el control
@@ -213,7 +213,7 @@ class ConceptoAdicional(Base):
     )
     importe         = Column(Numeric(12, 2), nullable=False)
     ingresado_por   = Column(Integer, ForeignKey("usuarios.id"))
-    fecha           = Column(DateTime, default=datetime.utcnow)
+    fecha           = Column(DateTime, default=ahora_utc)
 
     linea            = relationship("PreliquidacionLinea", back_populates="conceptos")
     usuario          = relationship("Usuario")
@@ -234,7 +234,7 @@ class AjusteManual(Base):
     valor_nuevo       = Column(Text)
     motivo            = Column(Text)
     usuario_id        = Column(Integer, ForeignKey("usuarios.id"))
-    fecha             = Column(DateTime, default=datetime.utcnow)
+    fecha             = Column(DateTime, default=ahora_utc)
 
     linea   = relationship("PreliquidacionLinea", back_populates="ajustes")
     usuario = relationship("Usuario")
