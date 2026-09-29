@@ -855,3 +855,70 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
 
 **Pendiente**
 - El plan de 7 puntos de seguridad y calidad, todavía sin arrancar.
+
+## 2026-09-29 — Plan de seguridad, PR 1: errores sin detalle interno, PyJWT y límite de login
+
+**Mergeado**
+- PR #56 (backend) — primer PR (de 6) del plan de seguridad y calidad: 500 genérico con
+  código, `/health` sin textos, PyJWT en lugar de `python-jose`, `quote_plus` en las URLs
+  de conexión, límite de intentos de login; entra además el plan
+  `docs/superpowers/plans/2026-09-29-seguridad-y-calidad-relevamiento.md`. Sin PR hermano
+  en el front.
+
+**Por frontera**
+- Núcleo: handler global en `app/main.py` que devuelve un 500 genérico con un código de 6
+  caracteres y manda detalle y traceback al log (`app.errores`) con el mismo código.
+  `/health` devuelve sólo `status` y un booleano por base; errores y tablas faltantes van
+  al log (`app.health`). `auth.py` pasa a PyJWT; los tokens HS256 ya emitidos siguen
+  valiendo. Nuevo `app/core/limite_login.py`: 5 fallos en 15 minutos por identificador
+  normalizado (mail, email sintético o CUIL) dan 429 con `Retry-After` por 15 minutos; en
+  memoria, chequeado antes del bcrypt, cuenta también usuarios inexistentes y un login
+  correcto lo resetea. `utcnow()` sale: columnas con `ahora_utc()` (naive-UTC, mismos
+  valores que antes) y `exp` del JWT aware. `config.py` aplica `quote_plus` a la
+  contraseña de `url_externa` y `url_propia`, como ya hacía `url_sueldos`.
+  `requirements.txt`: entra `PyJWT==2.15.1`, salen `python-jose` y `alembic`.
+- Preliquidación: se borran los `except Exception → HTTPException(500, str(e))` de la
+  API (15, según el PR); los mensajes de negocio (`ValueError`, 503, 409) no
+  cambian. Se borra `POST /{id}/backfill-conceptos`, que llamaba a un método inexistente
+  (siempre 500) y el front no usaba. Los modelos del módulo pasan a `ahora_utc()`.
+- Docs: `README.md` y `GUIA-MODULOS.md` dejan de mencionar Alembic y nombran PyJWT; entra
+  el plan de 6 PRs.
+
+**Decisiones**
+- **El alta de conceptos pierde su `try/except` en vez de devolver "ya existe".** Porqué:
+  `uq_concepto_unif` nunca se dispara por la API, porque cliente o supervisor van siempre
+  en NULL (ADR-0011), así que ese mensaje describiría un caso que no ocurre. Según quien
+  despachó, fue la opción B que eligió el usuario durante la ejecución.
+- **Límite de login por identificador y no por IP.** Porqué: toda una oficina sale por la
+  misma IP. Descartado: `slowapi`/Redis, una dependencia nueva para un solo worker.
+- **PyJWT en lugar de `python-jose`, y fuera `alembic`.** Porqué: `python-jose` tiene
+  mantenimiento irregular y CVE-2024-33663/33664; `alembic` no se usaba. Según quien
+  despachó, las dos cosas las aprobó el usuario en la entrevista.
+- **Fechas naive-UTC en columnas y sólo el `exp` del JWT aware.** Porqué (del commit):
+  no mezclar objetos aware y naive en la misma sesión.
+- **El PR 2 del plan cambió de diseño a pedido del usuario:** no se crea ninguna tabla
+  nueva en la base; sólo un manifiesto de migraciones y un chequeo de tablas y columnas
+  faltantes al arrancar. Porqué (del plan): el riesgo es deployar código que necesita una
+  columna que la base no tiene, y eso se detecta comparando el modelo con el esquema real.
+  Descartados: la tabla de registro `migracion_aplicada` (el usuario no quiere tablas
+  nuevas para esto) y el registro en un archivo fuera de la base (se desincroniza).
+- Lo que sigue lo trae quien despachó: la ejecución fue por pares test rojo →
+  implementación con el agente ejecutor.
+
+**Estado**
+- Deploy: no se hizo. Necesita `pip install -r requirements.txt` antes del restart (si
+  falla, no reiniciar). PyJWT avisa si la `SECRET_KEY` tiene menos de 32 bytes; alargarla
+  corta las sesiones abiertas. Rollback: revert del merge, `pip install` y restart.
+- Migraciones: ninguna.
+- Verificación (del PR): 352 tests en verde, cada paso con test rojo antes; revisión con
+  0 urgent y 0 high; smoke contra `testing` con las tres bases OK, `/health` ok, 6 logins
+  malos dan 5×401 y un 429 con `Retry-After: 900`, token inválido da 401, sin tracebacks.
+  No probado: login con usuario real y navegación en el front.
+
+**Pendiente**
+- Deploy del backend (con OK del usuario).
+- PRs 2 a 6 del plan.
+- Hallazgo fuera de alcance que anota el PR: hoy se pueden cargar conceptos duplicados.
+- Minor aceptados sin tocar (los lista el PR): 4 tests de endpoints del módulo quedaron en
+  `tests/core/`; la fixture SQLite en memoria se repite en 5 archivos; `limite_login.py`
+  lee una tupla por índice; el 429 dice "1 minutos" en el último minuto.
