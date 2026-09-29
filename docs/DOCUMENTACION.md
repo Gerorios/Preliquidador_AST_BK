@@ -108,7 +108,7 @@ responde.
 
 - **Reglas de trabajo** (para personas y agentes): [`AGENTS.md`](../AGENTS.md).
 - **Glosarios**: [`CONTEXT-MAP.md`](../CONTEXT-MAP.md).
-- **Decisiones de arquitectura**: [`adr/`](adr/), de la 0001 a la 0013.
+- **Decisiones de arquitectura**: [`adr/`](adr/), numeradas en orden.
 - **Diario de lo mergeado y por qué**: [`BITACORA.md`](BITACORA.md).
 - **Cómo construir un módulo**: [`modulos/GUIA-MODULOS.md`](modulos/GUIA-MODULOS.md).
 - **Configuración de conexión**: `.env` (no versionado); la plantilla es `.env.example`.

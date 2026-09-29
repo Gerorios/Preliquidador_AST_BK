@@ -100,13 +100,14 @@ Textos públicos sin emojis.
 ## Bases de datos
 
 Tres conexiones: la base de campo y la de sueldos son de terceros y de **sólo lectura**; la
-propia (`DB_PROPIA_*`) es la nuestra, y tiene dos bases:
+propia (`DB_PROPIA_*`) es la nuestra, y tiene dos bases (ADR-0014):
 
 - **`testing`**: el entorno de prueba del área. Es **compartida con otros sistemas**: tiene
   un espejo de nuestras tablas y tablas ajenas. Nunca un drop general; sólo se tocan las
   tablas nuestras. Para desarrollar, `DB_PROPIA_NAME=testing`.
 - **`preliquidacion`**: **producción**. La usa el VPS y es el dato real de la empresa.
-  Ninguna máquina de desarrollo apunta ahí.
+  Ninguna máquina de desarrollo apunta ahí: la app se niega a arrancar contra ella sin
+  `PERMITIR_BASE_PRODUCCION=1`, que sólo tiene el `.env` del VPS.
 - **Toda DDL se aplica primero en `testing`** y después en producción.
 
 Por ADR-0013 las tablas en producción **no se renombran**. Cada módulo usa su prefijo
