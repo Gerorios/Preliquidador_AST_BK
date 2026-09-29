@@ -288,7 +288,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 ### 4.7 Documentación del módulo
 
 26. **`docs/modulos/<modulo>/CONTEXT-<modulo>.md`**: glosario del dominio del módulo, con el formato de `CONTEXT.md`, y se registra en `CONTEXT-MAP.md`. Qué ES cada término, no cómo se implementa. Se escribe antes de codear y se mantiene.
-27. **Decisiones difíciles de revertir van en un ADR** en `docs/adr/`, numeración global (el próximo es 0014). Formato de los existentes. Solo cuando hubo alternativas reales y se eligió una por razones concretas.
+27. **Decisiones difíciles de revertir van en un ADR** en `docs/adr/`, numeración global (el próximo es 0015). Formato de los existentes. Solo cuando hubo alternativas reales y se eligió una por razones concretas.
 28. **Ayuda de uso** en `docs/modulos/<modulo>/AYUDA-<modulo>.md` cuando el módulo esté usable. El asistente de ayuda de la app se alimenta de estos documentos.
 
 ---
