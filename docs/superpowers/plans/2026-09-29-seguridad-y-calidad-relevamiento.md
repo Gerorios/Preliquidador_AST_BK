@@ -189,6 +189,8 @@ Backend rama `feat/mensualizados-por-cuil` (worktree nuevo); frontend rama `feat
 
 Archivos BK: `app/modulos/preliquidacion/config.py` (nuevo), `app/modulos/preliquidacion/models.py` (propiedad), `services/preliquidacion_service.py`, `services/gerencial_service.py`, `schemas.py`, `.env.example`, `docs/DOCUMENTACION.md:57`, `docs/modulos/preliquidacion/CONTEXT-preliquidacion.md:125-127`, tests: `test_control_plantas_jornal.py`, `test_control_tancadas_jornal.py`, `test_gerencial_kpis.py`, nuevo `test_mensualizados_config.py`. FT: `src/modulos/preliquidacion/pages/Verificacion.jsx`.
 
+**Verificado antes de codear (2026-09-30, consulta de sólo lectura en `testing`, sin datos en git):** `preliquidacion_linea.cuit` viene como 11 dígitos sin guiones ni espacios en 8.658 líneas; 42 líneas traen 8 dígitos (DNI) y 4 vienen vacías. Las dos personas mensualizadas actuales tienen un único CUIL de 11 dígitos. Respuesta a la pregunta 3: se normalizan los CUIL del `.env` a 11 dígitos y se comparan contra la columna con `strip`; un valor inválido en el `.env` se ignora con aviso en el log.
+
 **4.1 Config del módulo.**
 - (a) `tests/preliquidacion/test_mensualizados_config.py`: `ConfigPreliquidacion(_env_file=None, empleados_mensualizados_cuil="20-11111111-9, 27222222223 ,,")` → `cuils_mensualizados() == {"20111111119", "27222222223"}` (normaliza con `normalizar_cuil`, ignora vacíos); una entrada que no es CUIL (`"pepe"`) → se ignora y se loguea un aviso (o levanta `ValueError` al arrancar: pregunta abierta 3; default: ignorar con aviso); vacío → `set()`; `es_mensualizado("20111111119")` True, `es_mensualizado(None)` False, `es_mensualizado(" 20-11111111-9 ")` True (normaliza el lado de la línea también).
 - (b) `app/modulos/preliquidacion/config.py`: `class ConfigPreliquidacion(BaseSettings)` con `empleados_mensualizados_cuil: str = ""`, `model_config` con `env_file=".env"`, `extra="ignore"`; instancia `config = ConfigPreliquidacion()`; funciones `cuils_mensualizados()` (calculada en cada llamada, barata; así los tests monkeypatchean `config.empleados_mensualizados_cuil`) y `es_mensualizado(cuit)`. Importa `normalizar_cuil` del núcleo (permitido por ADR-0013).
@@ -201,6 +203,8 @@ Archivos BK: `app/modulos/preliquidacion/config.py` (nuevo), `app/modulos/preliq
 **4.3 Frontend.**
 - Sin tests: verificación por build + smoke. `Verificacion.jsx`: borrar `EMPLEADOS_MENSUALIZADOS` (13-19) y el `useEffect` importado sin uso (línea 1; PR5 lo va a marcar igual); `lineas = useMemo(() => lineasCrudas.filter(l => !l.mensualizado), [lineasCrudas])`. Contra un backend viejo (`mensualizado` ausente) no filtra nada: por eso el orden de deploy.
 - Smoke **[USUARIO]** en local con `.env` con dos CUIL de prueba de `testing`: Verificación no muestra esas personas en ninguna sección; Revisión sí las muestra; Gerencial (como gerente) excluye su plata del total.
+
+**Decidido en la revisión del PR4 (usuario, 2026-09-30):** (1) la diferencia entre la propiedad `mensualizado` (normaliza guiones) y el filtro SQL (sólo `TRIM`) se deja como está y se anota como minor: hoy ningún `cuit` tiene guiones; (2) al ADR-0012 se le agrega una nota de una línea que aclara que la constante citada pasó al `.env`.
 
 **4.4 Cierre y deploy.**
 - Cuerpo de los PRs (los dos): configuración por CUIL y no por nombre (el nombre cambia de formato entre sistemas y es dato personal en un repo público); en el módulo y no en el núcleo (ADR-0013); `mensualizado` en la línea para que el front no tenga datos.

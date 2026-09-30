@@ -68,6 +68,9 @@ class LineaResponse(BaseModel):
     alerta_legajo: bool
     alerta_empresa: bool = False
     linea_incompleta: bool
+    # Propiedad de PreliquidacionLinea (no columna). Default False para que
+    # cualquier otro constructor de LineaResponse no se rompa.
+    mensualizado: bool = False
     conceptos: list[ConceptoAdicionalResponse] = []
 
     class Config:
