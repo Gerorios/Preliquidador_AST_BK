@@ -191,3 +191,20 @@ def test_precio_viene_del_pago_real_no_del_maestro(db):
     assert "precio_comun" not in fila
     assert "precio_especial" not in fila
     assert "var_pct" not in fila
+
+
+# ─── Setter del valor hora ────────────────────────────────────────────────────
+
+def test_set_valor_hora_pulv(db):
+    preliq = _preliq(db)
+    svc = PreliquidacionService(db)
+    actualizada = svc.set_valor_hora_pulv(preliq.id, Decimal("5458.34"))
+    assert actualizada.valor_hora_pulv == Decimal("5458.34")
+    actualizada = svc.set_valor_hora_pulv(preliq.id, None)   # None limpia
+    assert actualizada.valor_hora_pulv is None
+
+
+def test_set_valor_hora_pulv_preliquidacion_inexistente(db):
+    svc = PreliquidacionService(db)
+    with pytest.raises(ValueError, match="Preliquidacion 999 no encontrada"):
+        svc.set_valor_hora_pulv(999, Decimal("100"))
