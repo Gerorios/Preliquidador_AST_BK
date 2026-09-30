@@ -1325,3 +1325,78 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
 **Pendiente**
 - Queda cerrado el pendiente "regla 24 de `GUIA-MODULOS.md`" de la entrada del FT #48.
 - PR 6 del plan.
+
+## 2026-09-30 — Plan de seguridad, PR 6: caché compartido entre pantallas y logout que lo vacía
+
+**Mergeado**
+- PR #49 (frontend) — las pantallas de Preliquidación comparten las claves de React Query
+  y el logout vacía el caché; cierra el PR 6, el último del plan.
+- PR #62 (backend) — notas de ejecución del PR 6 en el plan.
+
+**Por frontera**
+- Preliquidación (front): claves centralizadas en
+  `src/modulos/preliquidacion/services/claves.js` (`preliquidaciones`, `lineas(id)`,
+  `stats(id)` y los prefijos `todasLasLineas`/`todasLasStats`; `Number(id)` normaliza el
+  id). Una sola lista de preliquidaciones para Dashboard, Conceptos, Revisión (ahora un
+  `select` sobre la lista), Verificación y Categorías; generar o actualizar en el
+  Dashboard invalida también líneas y estadísticas. Verificación y Revisión comparten las
+  líneas, y las invalidaciones de Conceptos alcanzan ahora a Verificación. En "Sin
+  concepto" cada fila se identifica por tarea, cliente y finca en vez de por su posición,
+  y los cuatro radios de alcance usan esa clave.
+- Núcleo (front): `src/core/queryClient.js` exporta la instancia; `authStore.logout`
+  cancela y vacía el caché antes de limpiar el token, un solo lugar para Layout, Inicio,
+  Login y el 401. El interceptor de 401 sólo actúa si todavía hay token.
+- Docs: el plan (`docs/superpowers/plans/2026-09-29-seguridad-y-calidad-relevamiento.md`)
+  registra los ajustes del PR 6: los números de línea de 6.2 y 6.3 se corrieron, las
+  estadísticas de Revisión también pasan a `claves.stats(id)`, y la corrección del 6.5.
+
+**Decisiones**
+- **Claves compartidas en un solo archivo.** Porqué: con claves escritas a mano, las
+  pantallas guardaban el mismo dato en cachés distintas, y generar una quincena o cambiar
+  un precio no llegaba a las otras pantallas hasta el F5.
+- **El logout vacía el caché en un solo lugar (`authStore`).** Porqué: evita que un camino
+  se olvide de vaciarlo y otro usuario vea datos del anterior. Descartado: un helper
+  `cerrarSesion()` llamado desde cuatro lugares.
+- **El 401 sólo redirige si todavía hay token.** Porqué: varios 401 simultáneos, una sola
+  redirección.
+- **"Sin concepto" con clave estable por fila.** Porqué: con la posición como key, al crear
+  una regla la fila siguiente heredaba el estado de la que desaparecía. El paso 6.5 del
+  plan tenía mal los nombres de campo (`nombre_*` en vez de `*_nombre`; con esos nombres
+  todas las filas quedaban con la misma clave): el agente ejecutor frenó y el usuario
+  eligió aplicarlo con los nombres reales, con una clave que distingue `null` de vacío y
+  en los cuatro radios.
+- **Revisión y Verificación comparten la clave de líneas.** Porqué: piden la misma URL sin
+  filtros; el filtro de mensualizados es en el cliente, así que compartir no mezcla datos.
+
+**Estado**
+- Deploy: no.
+- Migraciones: ninguna.
+- Verificación (del PR): `npm run lint` con 0 errores (los 5 warnings de Terceros) y
+  `npm run build` verde. Prueba manual del usuario en el navegador contra `testing`:
+  generar una quincena y verla en Conceptos sin F5, Revisión entrando por URL, cambiar un
+  precio y ver el recálculo en Verificación, editar en Revisión y verlo en Verificación,
+  logout desde el menú y desde Inicio, entrar con otro usuario, y "Sin concepto" (crear
+  regla, "Listo" y "Otra", dos filas abiertas); sin errores en consola ni respuestas
+  4xx/5xx en el backend. Revisión de código: 0 urgent, 0 high; el verificador confirmó que
+  ningún camino deja datos de un usuario visibles para otro.
+
+**Pendiente**
+- **El plan de seguridad y calidad queda completo**: todos sus PRs están mergeados
+  (backend #56, #57, #58, #60, #61, #62; frontend #47, #48, #49). **Ninguno está
+  deployado.** Deploy completo, con OK del usuario, en este orden:
+  1. `pip install -r requirements.txt` en el VPS (entran PyJWT y xlrd).
+  2. `EMPLEADOS_MENSUALIZADOS_CUIL` y `TALLER_SHEET_URL` en el `.env` del VPS.
+  3. Migraciones `terceros/001-007` en producción.
+  4. Backend, verificando en el arranque el banner "Tablas y columnas BD propia:
+     verificadas".
+  5. Después, frontend (`npm run build` y swap de carpeta; rollback a `frontend_old`).
+- Para el usuario, dueño del proyecto:
+  - Los 5 warnings de hooks de Liquidación Terceros (ver la entrada del FT #48).
+  - `docs/DEPLOY.md` sigue fuera de git.
+  - Tareas aparte ofrecidas: los bugs de conceptos, Verificación y el combo de
+    `/conceptos/buscar`, con el combo como prioridad; `scripts/verificar_agents_comun.sh`
+    que no compara nada desde un worktree; conceptos duplicados en el maestro.
+- Minor sin tocar (los lista el PR #49): el par de invalidaciones de líneas y estadísticas
+  está repetido en tres lugares (Conceptos dos veces, Dashboard); el comentario del núcleo
+  en `src/core/api.js` usa "Revisión" como ejemplo.
+- Queda cerrado el pendiente "PR 6 del plan" de las entradas anteriores.
