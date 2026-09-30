@@ -124,6 +124,7 @@ Archivos: `migrations/ORDEN.txt` (nuevo), `app/main.py` (lifespan y `/health`), 
 - (a) Extender `tests/core/test_health_tablas.py` y el patrón de `test_guardia_base.py`: con una columna faltante simulada, el lifespan imprime `ERROR: faltan columnas en la base propia (migraciones sin aplicar): tabla.col` y **no aborta**; `/health` da `status: "error"` sin listar nombres (regla del PR1: el detalle va al log). Con todo al día: `Tablas y columnas BD propia: verificadas`.
 - (b) `app/main.py:62-70`: reemplazar el cálculo inline por `comparar_esquema`; guardar en `app.state.esquema_incompleto: bool`; `/health` usa ese booleano en lugar de `tablas_faltantes`. Envolver en `try/except Exception` con log: un fallo del chequeo nunca tumba el arranque.
 - Depende del PR1 (el `/health` ya sin listas). Si PR1 no está en `main`, frenar.
+- **Decidido en ejecución (usuario, 2026-09-29, opción A):** si el chequeo mismo falla (excepción al leer la base), `esquema_incompleto` queda en `False` y `/health` no marca error por eso; el banner y el log avisan "no se pudo verificar". Descartado: marcar `status: "error"` también en ese caso (confundiría un fallo del chequeo con migraciones faltantes; un problema de conexión ya se ve en `bd_propia`).
 
 **2.3 Manifiesto `migrations/ORDEN.txt`.**
 - (a) `tests/core/test_manifiesto_migraciones.py`: todo `*.sql` bajo `migrations/` está en el manifiesto exactamente una vez; el manifiesto no nombra archivos inexistentes; las entradas marcadas `historica` van después de `preliquidacion/000_esquema_base.sql`.
@@ -137,6 +138,8 @@ Archivos: `migrations/ORDEN.txt` (nuevo), `app/main.py` (lifespan y `/health`), 
 - `python -m pytest -q` verde. Smoke local contra `testing`: arranque con banner `verificadas`.
 - **[USUARIO] Deploy** (con OK): `git pull` + restart; el journal muestra `Tablas y columnas BD propia: verificadas`. Si mostrara columnas faltantes en producción, es un hallazgo real (migración no aplicada): frenar y revisar antes de tocar nada.
 - Sin DDL. Rollback: `git revert` del merge + restart.
+
+**Paso R1 (revisión del PR2, high).** Hallazgo: los nombres de lo que falta sólo salen con `print` en el banner, y bajo systemd stdout no es una terminal, así que Python lo guarda en un buffer por bloques (el `reconfigure` de `app/main.py:14` no activa `line_buffering`; la unit no define `PYTHONUNBUFFERED`). Escenario: tras el deploy `/health` da `error` y `journalctl -u preliquidacion` no muestra el banner hasta el próximo restart. Arreglo mínimo: `sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)` en `app/main.py:14`. Test: un subproceso con stdout a un pipe importa `app.main` y comprueba `sys.stdout.line_buffering is True` (o que un `print` llega al pipe antes de que el proceso termine). Cierra también la deuda preexistente de todo el banner.
 
 ### PR3 — Backend: tests de métodos masivos (rama `test/servicio-preliquidacion`, sólo tests)
 
