@@ -145,6 +145,8 @@ Archivos: `migrations/ORDEN.txt` (nuevo), `app/main.py` (lifespan y `/health`), 
 
 Regla: si un test revela un bug, **frenar y consultar**; no se toca `app/`. Fixtures: copiar el patrón `db` + `_preliq` + `_linea` de `test_reasignacion_empresa.py:14-56` (líneas con `cuit`) y `_sueldos_con` (24-32) para el maestro falso; para endpoints, `StaticPool` + overrides como `test_autorizacion_roles.py:26-60`, y `api.get_service` override como `test_generar_api.py:38-40` cuando haga falta inyectar `sueldos`. Leer antes `test_categoria_mantenimiento.py` y `test_recalculo_reactivo.py`: probablemente ya tienen fixtures de maestro con categoría.
 
+**Decidido en ejecución (usuario, 2026-09-30, opción A; responde también la pregunta 8):** un bug que destape el PR3 se deja en la suite como `@pytest.mark.xfail(strict=True, raises=<excepción>, reason="bug conocido: ...")`, así queda visible y el fix obliga a actualizarlo. Descartado: dejar el test fuera y anotarlo sólo en el PR. Los fixes van en una tarea aparte, con su propio plan y con el usuario definiendo qué mensaje ve la persona.
+
 Archivos nuevos en `tests/preliquidacion/`:
 
 **3.1 `test_lineas_service.py`** (`listar_lineas`, `actualizar_linea`, `legajos_disponibles_de_linea`).
@@ -158,7 +160,7 @@ Archivos nuevos en `tests/preliquidacion/`:
 
 **3.3 `test_concepto_masivo.py`** (`agregar_concepto_masivo`, `eliminar_concepto_masivo`, endpoints `concepto-masivo` y `concepto-masivo/eliminar`).
 - `agregar_concepto_masivo`: 3 líneas → `{"aplicadas": 3}`, cada una con su concepto `"(masivo)"` e `importe_total` actualizado; un id inexistente en la lista se saltea y no cuenta; `linea_ids[0]` inexistente → hoy `quincena=None` → `ValueError` "No existe el código" (fijar; comentar que el mensaje es engañoso pero es el contrato actual); código sin regla → `ValueError`.
-- `eliminar_concepto_masivo`: **FRENO ANTICIPADO** (hallazgo 3): el `IN :ids` con tupla no bindea en SQLite. Escribir el test igual (eliminar sólo los conceptos de ese código en esas líneas, recalcular `importe_total`, devolver `{"eliminados", "lineas"}`, lista vacía → `{0, 0}` sin tocar la base) y, cuando falle con `InterfaceError`/`Error binding parameter`, marcarlo `@pytest.mark.xfail(strict=True, reason="text() con tupla: pymysql interpola, sqlite no bindea; ver PR de fix")` sólo si el usuario lo aprueba; si no, dejarlo fuera y anotar.
+- `eliminar_concepto_masivo` — **resuelto en ejecución:** el caso normal va como `xfail(strict=True, raises=OperationalError)` (SQLite rechaza `IN ?` por sintaxis: `near "?": syntax error`). Es entorno, no bug de producción: pymysql interpola la tupla como `(1,2)`. Se verificó renderizando con el dialecto MySQL, no contra un MySQL real. El cambio a `bindparam(expanding=True)` va en la tarea aparte.
 - Endpoints (TestClient, admin, SQLite): `POST /api/preliquidacion/lineas/concepto-masivo` sin `linea_ids` → 400 "Se requieren linea_ids y codigo"; con datos válidos → 200 y `detalle == "N líneas actualizadas"`; código inexistente → 404. `/concepto-masivo/eliminar` → mismo 400; el 200 depende del freno anterior.
 
 **3.4 `test_categorias_heredar.py`** (`heredar_categorias_operario`, `recalcular_por_categoria`).
@@ -168,12 +170,16 @@ Archivos nuevos en `tests/preliquidacion/`:
 **3.5 `test_dashboard_verificacion.py`** (`dashboard_verificacion`).
 - Excesos: dos líneas del mismo legajo y fecha con `hsjornal` 7 + 7 → aparece en `exceso_horas` con `valor 14`; 13 exacto no; `tancadas > 35`; `plantas` sólo suma líneas con `grupo_pago_aplicado == "PLANTA"` (case/trim) y umbral 6000; orden descendente por `valor`; `resumen_empleados` agrupa por `legajo_asignado or legajo_campo`, `dias_trabajados` = fechas distintas, `importe_por_dia` redondeado a 2, ordenado por importe desc; preliquidación sin líneas e inexistente → `ValueError`; existente pero vacía → dict con listas vacías. (Nota: **no** excluye mensualizados; el front lo hace. Fijarlo con un comentario, PR4 no lo cambia.)
 
+**Decidido en ejecución 3.5 (usuario, 2026-09-30, opción A):** agrupar excesos y resumen sólo por número de legajo es un bug (el par empresa+legajo es el único; ver CONTEXT.md): dos personas con el mismo legajo en empresas distintas se suman. Queda como `xfail(strict=True)` y el arreglo va a la tarea aparte. En 3.4 el usuario confirmó como correcto que heredar tome sólo la quincena anterior más reciente con asignaciones.
+
 **3.6 `set_valor_hora_pulv`**: agregar a `test_control_tancadas_jornal.py` el espejo de `test_set_valor_hora_tractorista` (`test_control_plantas_jornal.py:241-247`): setea, `None` limpia, inexistente → `ValueError`.
 
 **3.7 `test_endpoints_lineas.py`** (`legajos-por-cuil`, `conceptos/buscar`).
 - `POST /api/preliquidacion/lineas/legajos-por-cuil`: `[]` → 400 "Se requieren linea_ids"; con `api.get_service` override que inyecta `sueldos=_sueldos_con(...)` → 200 con `grupos`/`sin_cuil`; con `sueldos=None` → 400 "Servicio de sueldos no disponible".
 - `GET /api/precios/conceptos/buscar`: sin `q` → todos los códigos distintos ordenados, dedup por código; `q="461"` filtra por código; `q="remu"` filtra por `tipo` ilike; `quincena=` acota; máximo 200 filas. Revisar qué dependencia de rol tiene el router de `precios.py` (leer su `APIRouter(...)`) para elegir el usuario del override.
 - `backfill-conceptos`: **fuera** (hallazgo 1).
+
+**Hallazgo en ejecución 3.7 (usuario, 2026-09-30):** `/conceptos/buscar` aplica `limit(200)` antes de deduplicar y el front lo pide sin quincena, así que el combo pierde códigos (en `testing`: 36 códigos, el combo muestra 30). No se fija con test; va a la tarea aparte de arreglos.
 
 **3.8 Cierre**: `python -m pytest -q` verde; PR con la lista de comportamientos fijados y, aparte, la lista de "cosas raras encontradas y no tocadas" (IndexError potencial en 3.2, mensaje engañoso en 3.3, el `IN :ids`). Sin deploy (sólo tests). Rollback: nada.
 
@@ -182,6 +188,8 @@ Archivos nuevos en `tests/preliquidacion/`:
 Backend rama `feat/mensualizados-por-cuil` (worktree nuevo); frontend rama `feat/mensualizados-por-cuil`.
 
 Archivos BK: `app/modulos/preliquidacion/config.py` (nuevo), `app/modulos/preliquidacion/models.py` (propiedad), `services/preliquidacion_service.py`, `services/gerencial_service.py`, `schemas.py`, `.env.example`, `docs/DOCUMENTACION.md:57`, `docs/modulos/preliquidacion/CONTEXT-preliquidacion.md:125-127`, tests: `test_control_plantas_jornal.py`, `test_control_tancadas_jornal.py`, `test_gerencial_kpis.py`, nuevo `test_mensualizados_config.py`. FT: `src/modulos/preliquidacion/pages/Verificacion.jsx`.
+
+**Verificado antes de codear (2026-09-30, consulta de sólo lectura en `testing`, sin datos en git):** `preliquidacion_linea.cuit` viene como 11 dígitos sin guiones ni espacios en 8.658 líneas; 42 líneas traen 8 dígitos (DNI) y 4 vienen vacías. Las dos personas mensualizadas actuales tienen un único CUIL de 11 dígitos. Respuesta a la pregunta 3: se normalizan los CUIL del `.env` a 11 dígitos y se comparan contra la columna con `strip`; un valor inválido en el `.env` se ignora con aviso en el log.
 
 **4.1 Config del módulo.**
 - (a) `tests/preliquidacion/test_mensualizados_config.py`: `ConfigPreliquidacion(_env_file=None, empleados_mensualizados_cuil="20-11111111-9, 27222222223 ,,")` → `cuils_mensualizados() == {"20111111119", "27222222223"}` (normaliza con `normalizar_cuil`, ignora vacíos); una entrada que no es CUIL (`"pepe"`) → se ignora y se loguea un aviso (o levanta `ValueError` al arrancar: pregunta abierta 3; default: ignorar con aviso); vacío → `set()`; `es_mensualizado("20111111119")` True, `es_mensualizado(None)` False, `es_mensualizado(" 20-11111111-9 ")` True (normaliza el lado de la línea también).
@@ -195,6 +203,8 @@ Archivos BK: `app/modulos/preliquidacion/config.py` (nuevo), `app/modulos/preliq
 **4.3 Frontend.**
 - Sin tests: verificación por build + smoke. `Verificacion.jsx`: borrar `EMPLEADOS_MENSUALIZADOS` (13-19) y el `useEffect` importado sin uso (línea 1; PR5 lo va a marcar igual); `lineas = useMemo(() => lineasCrudas.filter(l => !l.mensualizado), [lineasCrudas])`. Contra un backend viejo (`mensualizado` ausente) no filtra nada: por eso el orden de deploy.
 - Smoke **[USUARIO]** en local con `.env` con dos CUIL de prueba de `testing`: Verificación no muestra esas personas en ninguna sección; Revisión sí las muestra; Gerencial (como gerente) excluye su plata del total.
+
+**Decidido en la revisión del PR4 (usuario, 2026-09-30):** (1) la diferencia entre la propiedad `mensualizado` (normaliza guiones) y el filtro SQL (sólo `TRIM`) se deja como está y se anota como minor: hoy ningún `cuit` tiene guiones; (2) al ADR-0012 se le agrega una nota de una línea que aclara que la constante citada pasó al `.env`.
 
 **4.4 Cierre y deploy.**
 - Cuerpo de los PRs (los dos): configuración por CUIL y no por nombre (el nombre cambia de formato entre sistemas y es dato personal en un repo público); en el módulo y no en el núcleo (ADR-0013); `mensualizado` en la línea para que el front no tenga datos.

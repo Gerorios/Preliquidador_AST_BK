@@ -10,7 +10,18 @@ from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     ConceptoAdicional, UnidadBaseConcepto, TipoConcepto,
 )
+from app.modulos.preliquidacion.config import config
 from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+
+# CUIL ficticio: la lista real de mensualizados vive sólo en el .env del
+# servidor (el repo es público).
+CUIL_MENSUALIZADO = "20111111119"
+
+
+@pytest.fixture()
+def mensualizado(monkeypatch):
+    monkeypatch.setattr(config, "empleados_mensualizados_cuil", CUIL_MENSUALIZADO)
+    return CUIL_MENSUALIZADO
 
 
 @pytest.fixture()
@@ -31,13 +42,14 @@ def _preliq(db, quincena=date(2026, 5, 1), valor_hora_pulv=None):
     return p
 
 
-def _linea(db, preliq, tarea, cliente, finca, tancadas, hsjornal, hsmaquina, nombre_empleado=None):
+def _linea(db, preliq, tarea, cliente, finca, tancadas, hsjornal, hsmaquina, nombre_empleado=None,
+           cuit=None):
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id,
         nombre_tarea=tarea, nombre_cliente=cliente, nombre_finca=finca,
         tancadas=Decimal(tancadas), hsjornal=Decimal(hsjornal), hsmaquina=Decimal(hsmaquina),
         unidades=Decimal("0"), importe_total=Decimal("0"), linea_incompleta=False,
-        nombre_empleado=nombre_empleado,
+        nombre_empleado=nombre_empleado, cuit=cuit,
     )
     db.add(l)
     db.commit()
@@ -155,20 +167,32 @@ def test_solo_incluye_lineas_pagadas_por_tancada(db):
     assert res["filas"][0]["nombre_tarea"] == "PULV"
 
 
-def test_excluye_lineas_de_empleados_mensualizados(db):
-    """Las líneas de personas mensualizadas (hardcodeadas en
-    EMPLEADOS_MENSUALIZADOS) no entran a este control."""
-    from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+def test_excluye_lineas_de_empleados_mensualizados(db, mensualizado):
+    """Las líneas de personas mensualizadas (por CUIL, desde la config del
+    módulo) no entran a este control."""
     preliq = _preliq(db, valor_hora_pulv=Decimal("100"))
     l1 = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
                 tancadas="40", hsjornal="10", hsmaquina="5",
-                nombre_empleado=EMPLEADOS_MENSUALIZADOS[1])
+                nombre_empleado="EMPLEADO, MENSUALIZADO", cuit=mensualizado)
     _aplicar_tancada(db, l1)
     svc = PreliquidacionService(db)
 
     res = svc.control_tancadas_jornal(preliq.id)
 
     assert res["filas"] == []
+
+
+def test_linea_sin_cuit_no_se_excluye(db, mensualizado):
+    """NOT IN con NULL da NULL en SQL: una línea sin CUIL sigue entrando."""
+    preliq = _preliq(db, valor_hora_pulv=Decimal("100"))
+    l1 = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                tancadas="40", hsjornal="10", hsmaquina="5", cuit=None)
+    _aplicar_tancada(db, l1)
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert len(res["filas"]) == 1
 
 
 def test_precio_viene_del_pago_real_no_del_maestro(db):
@@ -191,3 +215,20 @@ def test_precio_viene_del_pago_real_no_del_maestro(db):
     assert "precio_comun" not in fila
     assert "precio_especial" not in fila
     assert "var_pct" not in fila
+
+
+# ─── Setter del valor hora ────────────────────────────────────────────────────
+
+def test_set_valor_hora_pulv(db):
+    preliq = _preliq(db)
+    svc = PreliquidacionService(db)
+    actualizada = svc.set_valor_hora_pulv(preliq.id, Decimal("5458.34"))
+    assert actualizada.valor_hora_pulv == Decimal("5458.34")
+    actualizada = svc.set_valor_hora_pulv(preliq.id, None)   # None limpia
+    assert actualizada.valor_hora_pulv is None
+
+
+def test_set_valor_hora_pulv_preliquidacion_inexistente(db):
+    svc = PreliquidacionService(db)
+    with pytest.raises(ValueError, match="Preliquidacion 999 no encontrada"):
+        svc.set_valor_hora_pulv(999, Decimal("100"))

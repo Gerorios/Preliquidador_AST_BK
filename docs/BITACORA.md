@@ -996,3 +996,72 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
   también el arranque; el docstring de `test_esquema.py` cita "(PR2, paso 2.1)";
   `test_manifiesto_migraciones.py` tiene `BASE` ambiguo, `_entradas()` llamado dos veces y
   `MARCAS_VALIDAS` de un elemento.
+
+## 2026-09-30 — Plan de seguridad, PR 3: tests de caracterización del servicio de Preliquidación
+
+**Mergeado**
+- PR #58 (backend) — tests de caracterización para los métodos y endpoints de
+  Preliquidación sin cobertura; los bugs que destaparon quedan como xfail estricto. Sólo
+  tests, no toca `app/`. Sin PR hermano en el front.
+
+**Por frontera**
+- Preliquidación: seis archivos nuevos en `tests/preliquidacion/` y uno ampliado. Cubren
+  `listar_lineas`, `actualizar_linea` (auditoría en `AjusteManual`),
+  `legajos_disponibles_de_linea`, `agregar_concepto`, `agregar_concepto_por_codigo`,
+  `agregar_concepto_masivo`, `eliminar_concepto_masivo` y sus endpoints,
+  `heredar_categorias_operario`, `recalcular_por_categoria`, `dashboard_verificacion`
+  (excesos y resumen por empleado), `set_valor_hora_pulv` (en
+  `test_control_tancadas_jornal.py`) y los endpoints `legajos-por-cuil` y
+  `conceptos/buscar`. Quedan fijados tal como están algunos comportamientos raros: la
+  auditoría de `actualizar_linea` guarda el texto `"None"` si el campo estaba vacío;
+  `alerta_legajo` se apaga aunque la empresa enviada sea la misma; `agregar_concepto`
+  recalcula `importe_total` desde los conceptos; un concepto agregado por código queda
+  como manual (sobrevive a una regeneración); en Verificación, las personas sin legajo ni
+  fecha se suman en un solo grupo.
+- Docs: el plan `2026-09-29-seguridad-y-calidad-relevamiento.md` anota lo decidido en
+  ejecución para el PR 3 (pasos 3.3, 3.5 y 3.7, y la regla de xfail).
+
+**Decisiones**
+- **Los bugs que destapan los tests quedan en la suite como
+  `xfail(strict=True, raises=<excepción exacta>)`**, decidido por el usuario en ejecución.
+  Porqué: siguen visibles y, el día del fix, el test pasa a XPASS y obliga a actualizarlo.
+  Descartado: dejarlos fuera y anotarlos sólo en el PR (se pierden). Los arreglos van en
+  una tarea aparte, con su propio plan.
+- **Agrupar Verificación sólo por número de legajo es un bug**, decidido por el usuario.
+  Porqué: el par empresa+legajo es el único (CONTEXT.md), así que dos personas con el
+  mismo legajo en empresas distintas se suman: exceso falso y una sola fila en el resumen.
+  Queda como xfail.
+- **Heredar categorías desde la quincena anterior más reciente con asignaciones es
+  correcto**, confirmado por el usuario. Se fija como comportamiento, no como bug. Porqué
+  no registrado en el PR.
+- **El xfail de `eliminar_concepto_masivo` es de entorno, no de producción.** Porqué:
+  `IN :ids` con tupla funciona con pymysql (la interpola como `(1,2)`) y SQLite no la
+  acepta. Se verificó renderizando con el dialecto MySQL, no contra un MySQL real.
+
+**Bugs fijados como xfail (4 en la suite)**
+- `agregar_concepto_por_codigo` con una regla sin precio en la quincena: `IndexError` y el
+  endpoint da 500. `agregar_concepto_masivo` tiene lo mismo.
+- `eliminar_concepto_masivo` (dos tests): el de entorno de arriba.
+- `dashboard_verificacion` agrupa sólo por legajo.
+
+**Estado**
+- Deploy: no aplica (sólo tests). Rollback: revert del merge.
+- Migraciones: ninguna.
+- Verificación (del PR): `python -m pytest -q` con 437 passed y 4 xfailed; en cada paso se
+  alteró un assert a propósito y el test falló. Revisión con 0 urgent y 0 high; el
+  verificador confirmó que ningún test pasa con el código roto ni falla al azar.
+
+**Pendiente**
+- Tarea aparte de arreglos, con su propio plan: ofrecida al usuario, sin arrancar. Cuatro
+  bugs: el `IndexError` de concepto por código y masivo, el `IN :ids` (pasar a
+  `bindparam(expanding=True)`), la agrupación de Verificación por legajo y, con prioridad
+  por decisión del usuario, el combo de `GET /conceptos/buscar`: aplica `limit(200)` antes
+  de deduplicar y el front lo pide sin quincena, así que pierde códigos (en `testing`, 36
+  códigos y el combo muestra 30; empeora con cada quincena). Este último no tiene test.
+- Deploy de los PRs #56 y #57 (con OK del usuario), que sigue abierto.
+- PRs 4 a 6 del plan.
+- Minor aceptados sin tocar (los lista el PR): 4 tests de `test_dashboard_verificacion.py`
+  dependen del orden de inserción (la query no tiene `order_by`); el xfail de legajos
+  tiene dos asserts y sólo avisa cuando se arreglan excesos y resumen a la vez;
+  `_con_service` en `test_endpoints_lineas.py` está fuera de un fixture; docstrings que
+  citan pasos del plan.

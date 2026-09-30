@@ -2,8 +2,9 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import and_, or_, func, case, bindparam, text as sql_text
+from sqlalchemy import and_, or_, func, case, bindparam, true, text as sql_text
 
+from app.modulos.preliquidacion.config import cuils_mensualizados
 from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoAdicional,
     AjusteManual, ConceptoLiquidacion, UnidadBaseConcepto, CategoriaOperario,
@@ -16,14 +17,26 @@ from app.modulos.preliquidacion.schemas import LineaUpdateRequest, ConceptoAdici
 
 # Personas mensualizadas (no jornalizadas): sus líneas se excluyen de todas
 # las pantallas de Verificación (excesos, resumen por empleado, controles
-# Plantas/Tancadas vs Jornal) porque esos controles miden razonabilidad del
-# pago jornalizado y no aplican a un sueldo mensual fijo. Lista hardcodeada
-# a pedido del usuario (2026-08-21) — si la nómina de mensualizados crece,
-# esto debería pasar a una columna en el maestro de empleados.
-EMPLEADOS_MENSUALIZADOS = [
-    "ARAOZ, GUILLERMO HORACIO",
-    "TORANZO, JOSE PIO",
-]
+# Plantas/Tancadas vs Jornal) y del panel gerencial, porque esos controles
+# miden el pago jornalizado y no aplican a un sueldo mensual fijo. La lista es
+# por CUIL y vive en el .env del servidor (ver app/modulos/preliquidacion/config.py).
+def filtro_no_mensualizado():
+    """Condición SQL que deja afuera las líneas de los mensualizados.
+
+    Los CUIL de la config ya vienen normalizados a 11 dígitos; la columna se
+    compara con TRIM y sin normalizar (en la base viene sin guiones).
+    `or_(is_(None), notin_(...))` porque NOT IN con NULL da NULL en SQL (fila
+    excluida), no TRUE: una línea sin CUIL no es de ningún mensualizado. Con
+    la lista vacía devuelve TRUE: `notin_([])` emite un warning y en algunos
+    dialectos compila a `1 != 1`."""
+    cuils = cuils_mensualizados()
+    if not cuils:
+        return true()
+    return or_(
+        PreliquidacionLinea.cuit.is_(None),
+        func.trim(PreliquidacionLinea.cuit).notin_(sorted(cuils)),
+    )
+
 
 # ADR-0012: tareas alias de pago. La clave (alias) existe solo para IDENTIFICAR
 # un subconjunto de horas de su canónica (el valor); paga exactamente con el
@@ -1042,8 +1055,7 @@ class PreliquidacionService:
         """
         filtros = [
             PreliquidacionLinea.preliquidacion_id == preliq_id,
-            or_(PreliquidacionLinea.nombre_empleado.is_(None),
-                PreliquidacionLinea.nombre_empleado.notin_(EMPLEADOS_MENSUALIZADOS)),
+            filtro_no_mensualizado(),
             ConceptoAdicional.unidad_base == unidad_base,
         ]
         if grupo_pago is not None:
@@ -1105,8 +1117,7 @@ class PreliquidacionService:
             .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
             .filter(
                 PreliquidacionLinea.preliquidacion_id == preliq_id,
-                or_(PreliquidacionLinea.nombre_empleado.is_(None),
-                PreliquidacionLinea.nombre_empleado.notin_(EMPLEADOS_MENSUALIZADOS)),
+                filtro_no_mensualizado(),
                 ConceptoAdicional.unidad_base == "unidades",
                 func.upper(func.trim(PreliquidacionLinea.grupo_pago_aplicado)) == "PLANTA",
             )
@@ -1224,8 +1235,7 @@ class PreliquidacionService:
             .join(ConceptoAdicional, ConceptoAdicional.linea_id == PreliquidacionLinea.id)
             .filter(
                 PreliquidacionLinea.preliquidacion_id == preliq_id,
-                or_(PreliquidacionLinea.nombre_empleado.is_(None),
-                    PreliquidacionLinea.nombre_empleado.notin_(EMPLEADOS_MENSUALIZADOS)),
+                filtro_no_mensualizado(),
                 ConceptoAdicional.unidad_base == "tancadas",
             )
             .group_by(

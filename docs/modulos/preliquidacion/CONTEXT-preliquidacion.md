@@ -123,7 +123,7 @@ _Avoid_: valor jornal (se carga la hora; el jornal es ×8); confundir con Valor 
 Costo de una hora de jornal de pulverización que el liquidador carga **por quincena**. Sirve para valorizar "a jornal" el trabajo de pulverización y compararlo contra lo que costó pagarlo "a tancada" (control Tancadas vs Jornal). Sobre este valor se aplica un recargo fijo de pulverización (×1,3) antes de comparar.
 
 **Personas mensualizadas**:
-Personas que cobran un sueldo mensual fijo, no por jornal. Sus líneas quedan excluidas de **toda** Verificación (excesos, resumen por empleado, Plantas/Tancadas vs Jornal) y de **todos** los cálculos de Mano de obra gastada de la Vista gerencial: esos controles miden razonabilidad del pago jornalizado y no aplican a un sueldo fijo. Es una lista fija, mantenida en el código y no editable desde la app.
+Personas que cobran un sueldo mensual fijo, no por jornal. Sus líneas quedan excluidas de **toda** Verificación (excesos, resumen por empleado, Plantas/Tancadas vs Jornal) y de **todos** los cálculos de Mano de obra gastada de la Vista gerencial: esos controles miden razonabilidad del pago jornalizado y no aplican a un sueldo fijo. Se identifican por CUIL y la lista es configuración del servidor, no editable desde la app.
 _Avoid_: excluirlas de Revisión (ahí siguen visibles y editables, porque igual hay que liquidarles el sueldo; la exclusión es solo para los controles de razonabilidad de jornal).
 
 ## Vista gerencial

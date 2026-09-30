@@ -12,6 +12,7 @@ import enum
 # nombre, así que importar este módulo tiene que registrar Usuario primero. No borrar.
 from app.core.models import Usuario, RolUsuario  # noqa: F401
 from app.core.models import ahora_utc
+from app.modulos.preliquidacion.config import es_mensualizado
 
 
 # ─── Enums ────────────────────────────────────────────────────────────────────
@@ -174,6 +175,13 @@ class PreliquidacionLinea(Base):
         back_populates="linea",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def mensualizado(self) -> bool:
+        """True si la línea es de una persona mensualizada (por CUIL, desde la
+        config del módulo). Llega a la API por `LineaResponse`, así el front no
+        guarda su propia lista."""
+        return es_mensualizado(self.cuit)
 
     # WS9 (latencia, DIFERIBLE — ver migrations/preliquidacion/ws9_indices_latencia.sql):
     # índices de solo velocidad, no cambian comportamiento observable.
