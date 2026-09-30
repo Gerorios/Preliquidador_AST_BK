@@ -27,6 +27,7 @@ from app.modulos.terceros.models import (
     CALCULADO, SIGNO, CargaCombustible, HoraReparacion, HoraServicio,
     Liquidacion, PrecioSeguro, Repuesto, Viaje,
 )
+from app.modulos.terceros.services.estaciones_service import EstacionesService
 
 # Cómo se llama cada concepto en la pantalla. El orden es el del recibo: primero
 # lo que se le paga al tercero, después lo que se le descuenta.
@@ -70,6 +71,10 @@ def _linea(concepto: str, **campos) -> dict:
         # Propios de uno o dos conceptos
         "patente": None, "chofer": None, "tipo_viaje": None,
         "vale": None, "estacion": None, "observacion": None,
+        # Si la estación facturó esta carga. Nulo cuando no se subió el archivo
+        # de esa estación: no es lo mismo "no está facturada" que "todavía no
+        # sabemos", y mostrarlo igual haría que se reclame de gusto.
+        "facturada": None,
         "maquina": None, "planilla": None, "supervisor": None,
         "repuesto": None, "rubro": None,
         "sub_rubro": None, "estado_taller": None,
@@ -147,10 +152,17 @@ class GrillaService:
         ) for h in self._de(HoraServicio, quincena)]
 
     def _combustible(self, quincena: date) -> list[dict]:
+        # Lo que las estaciones facturaron en esta quincena, para poder marcar
+        # cada carga. Sin ningún archivo subido, `facturada` queda en nulo en
+        # todas: decir que no están facturadas sería afirmar algo que no se sabe.
+        facturados = EstacionesService(self.db).vales_facturados(quincena)
+        hay_archivos = bool(facturados)
+
         return [_linea(
             "combustible", id=c.id, fecha=c.fecha_uso, tercero=c.tercero,
             patente=_limpio(c.colectivo_patente), estacion=c.origen,
             vale=_limpio(c.vale), observacion=_limpio(c.observacion),
+            facturada=(_limpio(c.vale) in facturados if hay_archivos else None),
             cantidad=c.litros, unidad=UNIDAD_LITRO,
             precio=c.precio_aplicado, importe=c.importe,
             estado=c.estado_calculo,

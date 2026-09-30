@@ -22,8 +22,8 @@ Son dos familias:
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text,
-    UniqueConstraint,
+    JSON, Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String,
+    Text, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -407,3 +407,59 @@ class PrecioSeguro(Base):
         UniqueConstraint("quincena", "tercero", "tipo_seguro", "sujeto",
                          name="uq_terceros_precio_seguro"),
     )
+
+
+# ─── Estaciones de servicio (etapa 10) ──────────────────────────────────────
+#
+# El otro lado del combustible: lo que la estación facturó, contra lo que el
+# sistema de campo dice que se cargó. Una carga facturada que nadie registró es
+# plata que la empresa pagó y no le descontó a nadie.
+
+
+class Estacion(Base):
+    """Una estación de servicio, con cómo leer su archivo.
+
+    El mapeo vive acá y no en el código porque cada estación manda un reporte
+    distinto —Calchaqui tiene el vale en `NumVehiculo` y Garsa en
+    `ORDEN_CARGA`, en negativo y con fecha serial— y cuando una cambia su
+    formato lo tiene que poder arreglar quien lo ve romperse, sin un deploy.
+    """
+    __tablename__ = "terceros_estacion"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    nombre       = Column(String(150), nullable=False)
+    # El nombre EXACTO en `laa_combustiblesorigen` del sistema de campo: es lo
+    # que ata sus líneas con nuestras cargas. Nulo mientras no se sepa.
+    origen_campo = Column(String(150), nullable=True)
+    mapeo        = Column(JSON, nullable=True)
+    activa       = Column(Boolean, nullable=False, default=True)
+    creado_en    = Column(DateTime, nullable=False, default=datetime.now)
+
+
+class CargaFacturada(Base):
+    """Una línea de lo que la estación cobró.
+
+    No es un hecho de la quincena: es la contraparte contra la que se cruzan
+    los hechos. Por eso no tiene `liquidacion_id` ni estado de cálculo.
+    """
+    __tablename__ = "terceros_carga_facturada"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    estacion_id = Column(Integer, ForeignKey("terceros_estacion.id"), nullable=False)
+    quincena    = Column(Date, nullable=False, index=True)
+    fecha       = Column(Date, nullable=True)
+    # El puente con nuestras cargas. Se guarda aunque sea nulo: que la estación
+    # cobre algo sin vale también hay que verlo.
+    vale        = Column(String(30), nullable=True, index=True)
+    litros      = Column(Numeric(12, 2), nullable=True)
+    importe     = Column(Numeric(14, 2), nullable=True)
+    # Diesel o nafta: decide si la línea es de un colectivo o de la flota
+    # liviana, que queda afuera de la liquidación.
+    producto    = Column(String(80), nullable=True)
+    patente     = Column(String(30), nullable=True)
+    chofer      = Column(String(150), nullable=True)
+    archivo     = Column(String(255), nullable=True)
+    subido_en   = Column(DateTime, nullable=False, default=datetime.now)
+    subido_por  = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    estacion = relationship("Estacion")

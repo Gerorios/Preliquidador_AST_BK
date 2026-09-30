@@ -213,6 +213,132 @@ class GenerarResponse(LiquidacionResponse):
     detalle: dict[str, DetalleConjunto]
 
 
+# ─── Estaciones de servicio (etapa 10) ──────────────────────────────────────
+
+class EstacionResponse(BaseModel):
+    """Una estación, y si se le puede subir archivo.
+
+    `origen_campo` nulo significa que todavía no se sabe con qué nombre se
+    registran sus cargas en el sistema de campo, y sin eso no hay nada que
+    cruzar. `mapeo` nulo significa que no manda archivo o que nadie configuró
+    cómo leerlo.
+    """
+    id: int
+    nombre: str
+    origen_campo: str | None = None
+    acepta_archivo: bool
+    activa: bool
+    # Cuántas líneas tiene cargadas de la quincena que se está mirando.
+    lineas: int = 0
+
+
+class LineaAManoRequest(BaseModel):
+    """Una carga tipeada, para la estación que manda los remitos por foto.
+
+    `fecha` no es opcional: es lo que decide en qué quincena entra.
+    """
+    fecha: date
+    vale: str | None = None
+    litros: Decimal | None = None
+    importe: Decimal | None = None
+    producto: str | None = None
+    patente: str | None = None
+    chofer: str | None = None
+
+
+class LineasAManoRequest(BaseModel):
+    lineas: list[LineaAManoRequest]
+
+
+class OrigenRequest(BaseModel):
+    origen_campo: str | None = None
+
+
+class SubidaResponse(BaseModel):
+    estacion: str
+    lineas: int
+    # Cuántas había antes y se reemplazaron: subir dos veces no acumula.
+    reemplazadas: int
+    # Cada línea va a la quincena de SU fecha, y un archivo puede caer en dos.
+    quincenas: list[str]
+    sin_vale: int
+    flota_liviana: int
+
+
+class LineaFacturada(BaseModel):
+    id: int
+    estacion: str
+    fecha: date | None = None
+    vale: str | None = None
+    litros: Decimal | None = None
+    importe: Decimal | None = None
+    producto: str | None = None
+    patente: str | None = None
+    chofer: str | None = None
+
+
+class CargaSinEstacion(BaseModel):
+    """Una carga del sistema de campo que la estación no facturó.
+
+    Es el lado espejo de `sin_cargar`, y no significa lo mismo: acá el tercero
+    tiene un descuento que la empresa nunca pagó.
+    """
+    id: int
+    estacion: str | None = None
+    fecha: date | None = None
+    vale: str | None = None
+    litros: Decimal | None = None
+    patente: str | None = None
+    tercero: str | None = None
+    observacion: str | None = None
+
+
+class FilaComparada(BaseModel):
+    """Una línea de la estación al lado de la carga del sistema de campo.
+
+    Los dos lados son opcionales porque las filas que importan son justamente
+    las que tienen uno solo.
+
+    `estado` dice por qué quedó así:
+
+      `vale`             cruzó por el número de vale
+      `patente_litros`   cruzó por patente y litros, con la fecha cerca
+      `litros_distintos` cruzó, pero las cantidades no coinciden
+      `sin_cargar`       la estación lo facturó y en el sistema no está
+      `sin_estacion`     está en el sistema y la estación no lo facturó
+      `sin_asignar`      no salió a un colectivo de nadie (cisterna, bidones,
+                         camionetas, maquinaria)
+    """
+    estado: str
+    estacion_id: int | None = None
+    facturada: LineaFacturada | None = None
+    carga: CargaSinEstacion | None = None
+
+
+class CruceResponse(BaseModel):
+    """Los dos lados del combustible, comparados.
+
+    Una sola lista de filas y no una por problema: los problemas son estados de
+    la misma fila, y partirlos en cuatro listas obliga a la pantalla a decidir
+    cuál mira. Con una, filtrar por estado es la misma operación que filtrar
+    por estación o por patente, y el que la usa aprende un solo gesto.
+
+    El que importa es `sin_cargar`: lo que la estación cobró sobre un colectivo
+    y nadie registró. Es plata que la empresa pagó y no le descontó a nadie.
+    """
+    facturadas: int
+    cargadas: int = 0
+    cruzan: int
+    por_vale: int
+    # Cruzadas por patente + litros con la fecha cerca, porque una estación
+    # escribe sólo los últimos cuatro dígitos del vale y otra no lo manda.
+    por_huella: int
+    # Cruzadas con la patente a un carácter de la que trae el archivo: la
+    # estación la tipea a mano y se equivoca.
+    por_parecida: int = 0
+    filas: list[FilaComparada] = []
+
+
 # ─── Verificaciones por fuente (etapa 9) ────────────────────────────────────
 
 class CasoVerificacion(BaseModel):
@@ -320,6 +446,9 @@ class LineaGrillaResponse(BaseModel):
     vale: str | None = None             # combustible
     estacion: str | None = None         # combustible
     observacion: str | None = None      # combustible — el campo libre del origen
+    # combustible: si la estación facturó esta carga. Nulo mientras no se haya
+    # subido el archivo de esa estación — no es lo mismo que "no facturada".
+    facturada: bool | None = None
     maquina: str | None = None          # servicio, repuestos, reparación
     planilla: str | None = None         # servicio
     supervisor: str | None = None       # servicio

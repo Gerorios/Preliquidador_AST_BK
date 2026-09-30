@@ -28,7 +28,7 @@ el conjunto. Filtrar y ordenar es tarea de la pantalla, que ya las tiene.
 from datetime import date, datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_actual
@@ -42,6 +42,14 @@ from app.modulos.terceros.schemas import (
     ActualizarEnLoteRequest,
     CombinacionResponse,
     ConfirmarEnLoteRequest,
+    CargaSinEstacion,
+    CruceResponse,
+    FilaComparada,
+    EstacionResponse,
+    LineaFacturada,
+    LineasAManoRequest,
+    OrigenRequest,
+    SubidaResponse,
     FuenteVerificada,
     LineaGrillaResponse,
     CopiadoConjunto,
@@ -66,6 +74,9 @@ from app.modulos.terceros.services.calculo_service import (
     CalculoService, LiquidacionInexistente,
 )
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
+from app.modulos.terceros.services.estaciones_service import (
+    ArchivoInvalido, EstacionesService, patente_de,
+)
 from app.modulos.terceros.services.grilla_service import GrillaService
 from app.modulos.terceros.services.verificaciones_service import VerificacionesService
 from app.modulos.terceros.services.liquidacion_service import LiquidacionService
@@ -194,6 +205,47 @@ def get_verificaciones(
     db_propia: Session = Depends(get_db_propia),
 ) -> VerificacionesService:
     return VerificacionesService(db_propia)
+
+
+def get_estaciones(
+    db_propia: Session = Depends(get_db_propia),
+) -> EstacionesService:
+    return EstacionesService(db_propia)
+
+
+def _facturada_a_dict(f) -> dict:
+    return {
+        "id": f.id, "estacion": f.estacion.nombre if f.estacion else "",
+        "fecha": f.fecha, "vale": f.vale, "litros": f.litros,
+        "importe": f.importe, "producto": f.producto,
+        "patente": f.patente, "chofer": f.chofer,
+    }
+
+
+def _carga_a_dict(c) -> dict:
+    return {
+        "id": c.id, "estacion": c.origen, "fecha": c.fecha_uso,
+        "vale": c.vale, "litros": c.litros, "patente": c.colectivo_patente,
+        "tercero": c.tercero, "observacion": c.observacion,
+    }
+
+
+def _patentes_de_colectivos(externa) -> set[str] | None:
+    """Las patentes del maestro del sistema de campo.
+
+    Separan lo que falta cargar de lo que nunca iba a estar: la cisterna, los
+    bidones y las camionetas no se cargan como flete y no le corresponden a
+    ningún tercero.
+
+    Si el maestro no contesta se cruza igual, pero la lista de "falta cargar"
+    va a traer cosas que no son de nadie. Es mejor que no mostrar nada.
+    """
+    try:
+        patentes = {patente_de(c.get("patente")) for c in externa.colectivos_campo()}
+        patentes.discard(None)
+        return patentes
+    except FALLAS_DE_ORIGEN:
+        return None
 
 
 def get_liquidacion(
@@ -642,6 +694,145 @@ def listar_horas_reparacion(
         )
     except FALLAS_DE_ORIGEN as e:
         raise HTTPException(status_code=502, detail=_mensaje_origen(e))
+
+
+@router.get("/estaciones", response_model=list[EstacionResponse])
+def listar_estaciones(
+    quincena: date = Depends(quincena_param),
+    servicio: EstacionesService = Depends(get_estaciones),
+):
+    """Las estaciones y cuánto tienen cargado de esa quincena."""
+    cargadas = servicio.lineas_por_estacion(quincena)
+    return [{
+        "id": e.id, "nombre": e.nombre, "origen_campo": e.origen_campo,
+        "acepta_archivo": e.mapeo is not None, "activa": bool(e.activa),
+        "lineas": cargadas.get(e.id, 0),
+    } for e in servicio.listar()]
+
+
+@router.post("/estaciones/{id_}/subir", response_model=SubidaResponse)
+def subir_archivo_de_estacion(
+    id_: int,
+    quincena: date = Form(...),
+    archivo: UploadFile = File(...),
+    usuario=Depends(get_usuario_actual),
+    servicio: EstacionesService = Depends(get_estaciones),
+):
+    """Carga lo que facturó una estación.
+
+    Cada línea va a la quincena de **su** fecha, no a la del formulario: el
+    reporte de una estación puede arrancar el 1 y terminar el 19. La quincena
+    del formulario es el respaldo para las líneas que vengan sin fecha.
+
+    Subir dos veces no acumula: reemplaza lo que esa estación tenía en las
+    quincenas que el archivo toca.
+    """
+    if not quincenas.es_inicio_valido(quincena):
+        raise HTTPException(
+            status_code=422,
+            detail="Una quincena se identifica por su primer día: el 1 o el 16 del mes.")
+    try:
+        return servicio.subir(id_, quincena, archivo.file.read(),
+                              archivo.filename or "",
+                              usuario_id=getattr(usuario, "id", None))
+    except ArchivoInvalido as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.get("/estaciones/{id_}/lineas", response_model=list[LineaFacturada])
+def lineas_de_una_estacion(
+    id_: int,
+    quincena: date = Depends(quincena_param),
+    servicio: EstacionesService = Depends(get_estaciones),
+):
+    """Lo que esa estación tiene cargado de esa quincena."""
+    return [_facturada_a_dict(f) for f in servicio.lineas_de(id_, quincena)]
+
+
+@router.post("/estaciones/{id_}/lineas", status_code=201)
+def cargar_lineas_a_mano(
+    id_: int,
+    req: LineasAManoRequest,
+    usuario=Depends(get_usuario_actual),
+    servicio: EstacionesService = Depends(get_estaciones),
+):
+    """Carga remitos tipeados, para la estación que no manda archivo.
+
+    A diferencia de subir un archivo, esto **suma**: se tipea de a poco, a
+    medida que llegan las fotos, y borrar lo anterior en cada carga sería
+    perder lo que alguien acaba de escribir.
+    """
+    try:
+        n = servicio.agregar_a_mano(
+            id_, [l.model_dump() for l in req.lineas],
+            usuario_id=getattr(usuario, "id", None))
+    except ArchivoInvalido as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"cargadas": n}
+
+
+@router.delete("/estaciones/lineas/{id_}", status_code=204)
+def borrar_linea_facturada(
+    id_: int,
+    servicio: EstacionesService = Depends(get_estaciones),
+):
+    """Sacar una línea tipeada mal. Las que vienen de un archivo se corrigen
+    volviendo a subirlo; una tipeada no tiene de dónde volver a salir."""
+    try:
+        servicio.borrar_linea(id_)
+    except ArchivoInvalido as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.patch("/estaciones/{id_}", response_model=EstacionResponse)
+def definir_origen_de_estacion(
+    id_: int,
+    req: OrigenRequest,
+    servicio: EstacionesService = Depends(get_estaciones),
+):
+    """Con qué nombre se registran sus cargas en el sistema de campo.
+
+    Sin esto no hay nada que cruzar, y no se puede adivinar: el archivo se
+    llama «Calchaqui» y esa estación en el sistema de campo es
+    `YPF OASIS ALDERETE`.
+    """
+    try:
+        e = servicio.definir_origen(id_, req.origen_campo)
+    except ArchivoInvalido as ex:
+        raise HTTPException(status_code=404, detail=str(ex))
+    return {"id": e.id, "nombre": e.nombre, "origen_campo": e.origen_campo,
+            "acepta_archivo": e.mapeo is not None, "activa": bool(e.activa),
+            "lineas": 0}
+
+
+@router.get("/estaciones/cruce", response_model=CruceResponse)
+def cruce_con_las_estaciones(
+    quincena: date = Depends(quincena_param),
+    servicio: EstacionesService = Depends(get_estaciones),
+    externa: ConsultaExternaService = Depends(get_consulta_externa),
+):
+    """Lo que la estación facturó contra lo que se cargó, línea por línea.
+
+    Viene todo junto y con el estado en cada fila: mirar una estación, o mirar
+    sólo lo que no cruzó, es filtrar la misma lista.
+
+    Las patentes del maestro del sistema de campo se usan para separar lo que
+    falta cargar de lo que nunca iba a estar: la cisterna, los bidones y las
+    camionetas no se cargan como flete y no le corresponden a ningún tercero.
+    """
+    c = servicio.cruce(quincena, _patentes_de_colectivos(externa))
+    return {
+        "facturadas": c["facturadas"], "cargadas": c["cargadas"],
+        "cruzan": c["cruzan"],
+        "por_vale": c["por_vale"], "por_huella": c["por_huella"],
+        "por_parecida": c["por_parecida"],
+        "filas": [{
+            "estado": f["estado"],
+            "estacion_id": f["estacion_id"],
+            "facturada": _facturada_a_dict(f["facturada"]) if f["facturada"] else None,
+            "carga": _carga_a_dict(f["carga"]) if f["carga"] else None,
+        } for f in c["filas"]],
+    }
 
 
 @router.get("/verificaciones", response_model=list[FuenteVerificada])
