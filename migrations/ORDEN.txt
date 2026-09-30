@@ -1,0 +1,46 @@
+# Orden de las migraciones de la base propia.
+#
+# Una entrada por línea: la ruta del archivo relativa a migrations/ y, si
+# corresponde, la marca `historica`. Las líneas que empiezan con # y las
+# vacías se ignoran.
+#
+# `historica`: la migración ya está contenida en
+# preliquidacion/000_esquema_base.sql, que se exportó de producción. Queda
+# como registro de cómo llegó el esquema a su forma actual, pero NO se corre
+# en una base nueva (varias fallarían: dropean columnas que ya no existen o
+# agregan columnas que ya están). Una base nueva se arma corriendo, en este
+# orden, sólo las entradas sin la marca.
+#
+# Regla: una migración nueva se agrega al final de este archivo, en el mismo
+# PR que el código que la necesita. Un test verifica que todo *.sql bajo
+# migrations/ figure acá exactamente una vez.
+
+core/000_usuarios.sql
+preliquidacion/000_esquema_base.sql
+core/001_usuario_modulo.sql
+
+preliquidacion/ws1_drop_columnas_precio_ab.sql historica
+preliquidacion/ws2_drop_columna_revisado.sql historica
+preliquidacion/ws3_completitud_unica.sql historica
+preliquidacion/ws5_precio_heredado.sql historica
+preliquidacion/fix_trazabilidad_concepto_adicional.sql historica
+preliquidacion/ws7_valor_hora_pulv.sql historica
+preliquidacion/ws8_categoria_mantenimiento.sql historica
+preliquidacion/ws9_indices_latencia.sql historica
+preliquidacion/ws10_perf_recalculo.sql historica
+preliquidacion/ws11_reemplaza_comun.sql historica
+preliquidacion/ws12_vistas_powerbi.sql historica
+preliquidacion/ws13_jornal_tope1_mas_excedente.sql historica
+preliquidacion/ws14_tipo_excento.sql historica
+preliquidacion/ws15_conceptos_cliente_supervisor.sql historica
+preliquidacion/ws16_valor_hora_tractorista.sql historica
+
+# Liquidación Terceros. Ninguna se aplicó todavía en producción: se crearon
+# y probaron en `testing`, y llegan con el primer deploy del módulo.
+terceros/001_crear_tablas.sql
+terceros/002_tarifario.sql
+terceros/003_seguros_por_tipo_y_sujeto.sql
+terceros/004_calculo.sql
+terceros/005_observacion_combustible.sql
+terceros/006_estaciones.sql
+terceros/007_cuotas_repuesto.sql

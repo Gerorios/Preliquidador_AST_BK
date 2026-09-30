@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(sftp *)",
+      "Bash(rsync *)",
+      "Bash(ssh-copy-id *)",
+      "PowerShell(ssh *)",
+      "PowerShell(scp *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/recordar-bitacora.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

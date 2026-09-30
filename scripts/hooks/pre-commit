@@ -1,0 +1,25 @@
+#!/bin/sh
+# Frena los commits en main: todo cambio va por rama y PR.
+# Única excepción: un commit que sólo toca docs/BITACORA.md, que va directo
+# a main (ver "Bitácora" en AGENTS.md).
+# Instalar con: sh scripts/hooks/instalar.sh
+
+# Aviso (no frena): si cambió AGENTS.md, comparar el bloque común con el repo
+# hermano. Se cambia primero en uno y después en el otro, por eso no bloquea.
+if git diff --cached --name-only | grep -qx 'AGENTS.md'; then
+  sh "$(git rev-parse --show-toplevel)/scripts/verificar_agents_comun.sh" ||
+    echo "  Aviso: acordate de replicar el bloque común en el otro repo." >&2
+fi
+
+rama=$(git symbolic-ref --short -q HEAD) || exit 0
+[ "$rama" = "main" ] || exit 0
+
+stageados=$(git diff --cached --name-only)
+[ "$stageados" = "docs/BITACORA.md" ] && exit 0
+
+echo "" >&2
+echo "  Commit frenado: estás en main." >&2
+echo "  Creá una rama (git switch -c <tipo>/<tema>) y commiteá ahí." >&2
+echo "  Única excepción: un commit que sólo toque docs/BITACORA.md." >&2
+echo "" >&2
+exit 1

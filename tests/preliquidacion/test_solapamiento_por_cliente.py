@@ -1,4 +1,4 @@
-"""Solapamiento por cliente (CONTEXT.md): una regla POR CLIENTE y una o más
+"""Solapamiento por cliente (CONTEXT-preliquidacion.md): una regla POR CLIENTE y una o más
 ESPECÍFICAS del mismo cliente, misma tarea y quincena, matchean las mismas
 líneas y SUMAN (ADR-0011). No es error del modelo: el sistema lo hace visible
 y pide confirmación. La categoría participa (categorías explícitas distintas

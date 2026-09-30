@@ -1,0 +1,140 @@
+# Preliquidación — La Asturiana SRL
+
+Lenguaje ubicuo del módulo **Preliquidación**, el primer módulo del Sistema: arma la preliquidación de sueldos de cada quincena a partir de las tareas de campo, aplicándoles los conceptos y precios que define el liquidador. Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
+
+Los términos del Sistema (Módulo, roles, Quincena, Persona, Legajo, Empresa) están en [`CONTEXT.md`](../../../CONTEXT.md); el índice de glosarios es [`CONTEXT-MAP.md`](../../../CONTEXT-MAP.md).
+
+## Roles en Preliquidación
+
+**Operador de Preliquidación (Preliquidador)**:
+El liquidador. Opera la preliquidación completa (Revisión, Verificación, Dashboard, Mantenimiento) pero **no** ve la Vista gerencial.
+_Avoid_: jefe (nombre viejo de este rol)
+
+**Gerente de Preliquidación**:
+Accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear, editar y eliminar reglas, precios, precio masivo, copiar quincena), porque es quien muchas veces decide un cambio de precios. No opera el resto de la preliquidación.
+
+## La quincena y sus líneas
+
+**Quincena (en Preliquidación)**:
+Todo el maestro de conceptos está scopeado por quincena: los conceptos de una quincena no afectan a otra.
+
+**Línea**:
+Una tarea de campo realizada (un registro de la quincena). Lleva los datos del hecho (empleado, cliente, finca, tarea, horas, tancadas, unidades) y es la unidad que el liquidador revisa.
+_Avoid_: registro, fila
+
+**Empresa de la línea**:
+La Empresa que paga una línea. Se resuelve automáticamente (por legajo o nombre, más la regla CITRUSVIL/maquinaria) y el liquidador puede reasignarla a mano, eligiendo entre las empresas donde la persona tiene legajo.
+
+**Línea incompleta**:
+Línea que no tiene ningún concepto aplicable con **código y precio > 0** a la vez. Es la única condición que el liquidador debe resolver; se muestra en la solapa "Sin concepto". Un concepto con código pero sin precio no completa la línea (no debe pagar 0 en silencio).
+_Avoid_: sin precio, sin código, faltante (eran tres nociones separadas; ahora es una)
+
+**Grupo de pago**:
+Atributo estandarizado que el catálogo de tareas asigna por defecto a cada tarea (ej.: "pulverización mecánica tancada" → TANCADA). Es informativo y sirve al control de PLANTA; **no** es una dimensión del precio ni clave de matching del maestro. El default no siempre aplica: la decisión real de cómo se paga la toma la Unidad base del concepto.
+_Avoid_: grupo de pago como criterio de precio
+
+**Grupo de tareas**:
+Agrupador funcional que el catálogo de tareas del sistema de campo trae en la primera parte de la descripción de cada tarea. Es la dimensión gerencial de "¿en qué se va la plata?"; se resuelve por nombre de tarea contra el catálogo, no se guarda en la línea.
+_Avoid_: confundir con Grupo de pago (control operativo, segunda parte de la misma descripción)
+
+**Tarea alias de pago**:
+Tarea del sistema de campo que existe **solo para identificar** un subconjunto de horas de otra tarea (su **tarea canónica**), y que **paga exactamente con el maestro de la canónica**: mismos conceptos, mismas categorías, mismos precios, sin recargo. La línea conserva su nombre real (ese es el propósito: que la liquidación formal vea cuáles horas fueron de ese subconjunto), pero para el maestro de Conceptos la tarea alias **no existe**: no aparece en faltantes y no se le pueden crear conceptos propios. Único caso hoy: `MANTENIMIENTOS MECANICOS HORAS GUARDIA (TALLERES)` → `MANTENIMIENTOS MECANICOS (TALLERES)` (ADR-0012), para desdoblar horas comunes y de guardia de taller (ej. 20 hs = 15 comunes + 5 de guardia).
+_Avoid_: pagarle distinto que a la canónica (si un día hay recargo, es una feature aparte); crearle conceptos propios en el maestro (bloqueado: habría dos fuentes de verdad para la misma hora).
+
+## Conceptos y matching
+
+**Concepto**:
+Regla del maestro que el liquidador carga por quincena para una tarea (± cliente/finca). Define código de liquidación, Unidad base, precio y tipo. Es un catálogo **vigente y editable**: su precio puede cambiar en cualquier momento, y cuando cambia, el modelo reactivo recalcula lo que ya aplicaba.
+_Avoid_: precio maestro, precio común (nombres del modelo viejo, eliminado)
+
+**Concepto común**:
+Concepto sin cliente ni supervisor cargados: aplica a cualquier línea con esa tarea, sin importar cliente, finca o supervisor.
+
+**Concepto por cliente**:
+Concepto con cliente cargado y **sin finca**: aplica a las líneas de esa tarea y ese cliente en **cualquier finca**. Suma con los demás caminos; por defecto **Reemplaza al común**.
+
+**Concepto específico**:
+Concepto con cliente **y finca** cargados: aplica solo a las líneas de ese cliente y esa finca. Por defecto un específico **Reemplaza al común** (paga solo lo no-común); se puede destildar para que sume común + específico.
+
+**Concepto por supervisor**:
+Concepto con supervisor cargado: aplica a las líneas de esa tarea cuyo supervisor coincida, sin importar cliente o finca. Es excluyente con el cliente (un concepto lleva cliente ± finca **o** supervisor, nunca ambos). Suma con los demás caminos; por defecto **Reemplaza al común**.
+
+**Reemplaza al común**:
+Marca (ADR-0009/0011) de cualquier Concepto **no común** (específico, por cliente o por supervisor). Cuando una línea matchea alguna regla no-común marcada así, **no se le aplican los conceptos comunes de esa tarea**, pero los demás caminos no-comunes siguen sumando entre sí: el tilde solo apaga comunes, nunca apaga a otro no-común. Existe porque casi siempre la regla no-común es el precio *total* (reemplaza), no un plus que se suma. **Al crear un concepto no común nace prendida** (opt-out): el liquidador la destilda solo en el caso raro de "común base + plus" que sí debe sumar. Los conceptos ya existentes conservan su valor (los cambios de default no los tocan). Los comunes no la llevan.
+_Avoid_: usarla en un común (no tiene sentido; la marca es de los no-comunes).
+
+**Matching**:
+Regla por la que un concepto aplica a una línea. Cuatro caminos que **suman entre sí**: la tarea sola (comunes), tarea + cliente en cualquier finca (por cliente), tarea + cliente + finca exactos (específicos) y tarea + supervisor (por supervisor). El grupo de pago no participa. Si la tarea de la línea es una Tarea alias de pago, los cuatro caminos se resuelven con su tarea canónica.
+
+**Concepto completo**:
+Vista del maestro por **alcance** (común, por cliente, por finca, por supervisor) de una tarea, con todos los códigos de liquidación que esa tarea tiene en la quincena (la **unión** de los códigos de todos sus alcances). Un alcance del eje cliente está **incompleto** si le falta alguno de esos códigos o si lo tiene sin precio. El alcance por supervisor se muestra pero no se controla: su plus suele ser un solo código a propósito. No existe un catálogo de códigos por tarea; la referencia es lo cargado.
+_Avoid_: "concepto" a secas para este agrupado (Concepto es una regla individual), completitud contra la quincena anterior
+
+**Solapamiento por cliente**:
+Situación en la que, para la misma tarea y quincena, conviven un Concepto por cliente y uno o más Conceptos específicos de **ese mismo cliente**: ambos matchean las líneas de esas fincas y, por ADR-0011, **suman**. No es un error del modelo sino un riesgo de pago doble que el liquidador debe controlar; el sistema lo hace visible al crear (fincas y líneas afectadas) y pide confirmación explícita, sin bloquear. Se agrava cuando las dos reglas comparten el código de liquidación. Dos reglas con Categoría de operario explícita y distinta **no** solapan (pagan a personas distintas); si alguna no tiene categoría o coinciden, sí. No es solapamiento el cruce con el eje supervisor ni el de común vs no-común (gobernado por Reemplaza al común).
+_Avoid_: conflicto, duplicado (el duplicado es otra cosa, que el sistema impide; esto es un solapamiento legítimo pero riesgoso)
+
+**Precio heredado**:
+Precio de un concepto que vino copiado de otra quincena y todavía no fue confirmado por el liquidador. Paga normal (no deja la línea incompleta), pero queda resaltado hasta que se confirme, para no arrastrar un precio viejo en silencio si hubo un aumento.
+_Avoid_: precio copiado, precio viejo
+
+**Tipo**:
+Clasificación del concepto (REMUNERATIVO, NO_REMUNERATIVO, JORNAL, BONO_BOLSON, EXCENTO, OTRO). Etiqueta puramente informativa: ningún cálculo del sistema la distingue; la aprovechan el contador y los reportes. EXCENTO marca importes exentos de aportes y cargas sociales.
+_Avoid_: "exento" (sería la grafía correcta, pero se eligió EXCENTO a propósito: los reportes matchean ese valor exacto).
+
+## Unidades y cálculo
+
+**Unidad base (UM)**:
+Unidad de medida sobre la que impacta un concepto y que determina cómo se calcula su importe: `hsjornal`, `hsmaquina`, `tancadas`, `unidades`, `jornal_tope1`, `jornal_tope1_mas_excedente` o `fijo`. Es la decisión central del liquidador en el maestro de conceptos.
+_Avoid_: unidad, tipo de cálculo
+
+**Jornal tope 1**:
+Unidad base especial calculada sobre las horas de jornal: **5 horas o más → 1 jornal** (sin importar el excedente); más de 0 y menos de 5 → medio jornal (0,5); 0 horas → 0.
+
+**Jornal tope 1 + excedente**:
+Unidad base idéntica a Jornal tope 1 hasta las 10 horas, pero que **por encima de 10 horas paga proporcional**: horas / 10, redondeado a 2 decimales (11 hs → 1,1 jornales; 11,25 hs → 1,13). La escalera completa: 0 → 0; menos de 5 → 0,5; de 5 a 10 → 1; más de 10 → horas/10. Es continua en el 10 (no hay salto).
+_Avoid_: confundir con Jornal tope 1 (que ignora todo excedente) o con fijo (que ni mira las horas)
+
+**Tancada**:
+Unidad de trabajo de pulverización que se registra en la línea. Se cuenta **ida y vuelta**, por lo que el dato cargado viene doblado: los controles que la valorizan lo dividen por 2 para contar la pasada real. Puede ser Unidad base de un concepto (la tarea se paga por tancada).
+_Avoid_: confundir la tancada (el hecho medible) con el grupo de pago TANCADA (atributo informativo del catálogo; ver Grupo de pago).
+
+**Concepto adicional**:
+El **hecho de pago**, no la regla: una foto congelada de cuando un Concepto se aplicó a una línea. Guarda su propio precio y cantidad de ese momento, el importe resultante (cantidad × precio) y, si vino del maestro, un vínculo a la regla que lo originó. Existe para que, aunque el Concepto del maestro cambie de precio después, el pago ya calculado no mienta. El importe total de una línea es la suma de sus conceptos adicionales.
+_Avoid_: importe base (siempre 0; el total nace de los conceptos adicionales), "el precio del concepto" para referirse al de acá (es el precio *congelado*, no el vigente; para el vigente ver Concepto)
+
+**Concepto manual**:
+Un Concepto adicional que el liquidador escribió a mano (descripción + importe), sin pasar por ningún código del maestro. No tiene vínculo a una regla, ni precio, ni cantidad: no le faltan, es que genuinamente no salió de ninguna regla.
+
+**Categoría de operario**:
+Nivel (**1 a 12**) que el liquidador le asigna **por quincena** a un operario de taller, y del que depende cuánto cobra la tarea de mantenimiento mecánico. No viene del sistema de campo, que carga todo como una sola tarea "MANTENIMIENTO MECANICO (TALLERES)" sin diferenciar categoría, ni de la categoría de convenio del sistema de sueldos: es un dato **propio** del preliquidador, editable por quincena. Se cruza con la persona por su **CUIL** (no por legajo), y se hereda de la quincena anterior al abrir una nueva.
+_Avoid_: confundir con la categoría de convenio del maestro de sueldos (otra cosa, de solo lectura, no manipulable).
+
+**Precio por categoría**:
+Modo de pago en el que el precio de un Concepto depende de la Categoría de operario de la persona, en vez de ser único por tarea, cliente o finca. En el maestro se cargan varias filas del mismo Concepto (una por categoría, mismo código, distinto precio); a cada línea se le aplica la fila cuya categoría coincide con la de la persona. Los Conceptos **sin** categoría se comportan igual que siempre y **suman** con el de categoría; no se reemplazan. Si la persona no tiene categoría asignada, o su categoría no tiene precio cargado, la línea queda **incompleta** (ver Línea incompleta).
+
+## Controles
+
+**Valor hora tractorista**:
+Costo de **una hora** de trabajo del tractorista que el liquidador carga **por quincena** en el control Plantas vs Jornal. El **jornal tractorista** es este valor × 8 (la jornada), **fijo para toda la tabla** (no se multiplica por las jornadas de cada fila), y contra él se compara lo que cobra la jornada pagada por planta (%Dif = prom. jornal por planta vs jornal tractorista). Sin recargo; un solo valor para toda la quincena.
+_Avoid_: valor jornal (se carga la hora; el jornal es ×8); confundir con Valor hora pulverización (otro control, otro parámetro)
+
+**Valor hora pulverización**:
+Costo de una hora de jornal de pulverización que el liquidador carga **por quincena**. Sirve para valorizar "a jornal" el trabajo de pulverización y compararlo contra lo que costó pagarlo "a tancada" (control Tancadas vs Jornal). Sobre este valor se aplica un recargo fijo de pulverización (×1,3) antes de comparar.
+
+**Personas mensualizadas**:
+Personas que cobran un sueldo mensual fijo, no por jornal. Sus líneas quedan excluidas de **toda** Verificación (excesos, resumen por empleado, Plantas/Tancadas vs Jornal) y de **todos** los cálculos de Mano de obra gastada de la Vista gerencial: esos controles miden razonabilidad del pago jornalizado y no aplican a un sueldo fijo. Es una lista fija, mantenida en el código y no editable desde la app.
+_Avoid_: excluirlas de Revisión (ahí siguen visibles y editables, porque igual hay que liquidarles el sueldo; la exclusión es solo para los controles de razonabilidad de jornal).
+
+## Vista gerencial
+
+**Vista gerencial**:
+Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).
+
+**Mano de obra gastada**:
+Costo total de la preliquidación de un período: la suma de **todos** los Conceptos adicionales de sus líneas, manuales incluidos (es lo que efectivamente se paga), **excepto** las líneas de Personas mensualizadas. Consolidada entre empresas por defecto, filtrable por empresa.
+_Avoid_: excluir los conceptos manuales de alguien jornalizado (haría mentir al indicador); leer la exclusión de mensualizados como "esconder plata" (no cobran por jornal, así que no hay costo de mano de obra jornalizada que atribuirles acá).
+
+**Desvío por persona**:
+Cuánto por encima (%) de su **propia media histórica** está cobrando una persona en el período: se compara contra sus últimas 6 quincenas con actividad, exigiendo al menos 3 para que la comparación exista (si no, la persona se lista como "sin historial comparable"). El umbral desde el que se resalta es configurable (default +30%). Se compara a cada persona contra sí misma, no contra otras, porque tareas distintas pagan distinto.
+_Avoid_: media global entre personas (mezcla poblaciones que cobran naturalmente distinto)

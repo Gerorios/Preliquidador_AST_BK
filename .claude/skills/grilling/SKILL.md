@@ -10,3 +10,14 @@ Ask the questions one at a time, waiting for feedback on each question before co
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
 Do not enact the plan until I confirm we have reached a shared understanding.
+
+## En este repo
+
+- **Paso 0, antes de la primera pregunta:** buscar antecedentes del tema con
+  `grep -n -i` en `docs/BITACORA.md` y en `docs/adr/`, leer las entradas que
+  coincidan, y decir qué se encontró (o que no se encontró nada). Ahí está lo ya
+  decidido y lo ya descartado; no se vuelve a proponer sin decir por qué reabrirlo.
+- Si el tema toca términos del dominio o una decisión difícil de revertir, usar
+  `domain-modeling`.
+- Los ADR los escribe el usuario, nunca un agente solo.
+- Las preguntas van en español.

@@ -2,7 +2,7 @@
 #
 # Vista gerencial (solo lectura): mano de obra gastada por período, por
 # cliente, por grupo de tareas, y desvíos por persona contra su propia media
-# histórica. Ver CONTEXT.md: "Mano de obra gastada", "Grupo de tareas",
+# histórica. Ver CONTEXT-preliquidacion.md: "Mano de obra gastada", "Grupo de tareas",
 # "Desvío por persona".
 #
 # Todas las agregaciones usan PreliquidacionLinea.importe_total, que ya es la
@@ -24,7 +24,7 @@ from app.modulos.preliquidacion.models import Preliquidacion, PreliquidacionLine
 from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
 
 
-# Desvío por persona (ver CONTEXT.md): últimas 6 quincenas con actividad,
+# Desvío por persona (ver CONTEXT-preliquidacion.md): últimas 6 quincenas con actividad,
 # mínimo 3 para que la comparación exista. El umbral es configurable por
 # request; esto es solo el default.
 VENTANA_HISTORICA = 6
@@ -380,7 +380,7 @@ class GerencialService:
         empresa: str | None,
         umbral_pct: float = UMBRAL_DESVIO_DEFAULT,
     ) -> dict:
-        """Cada persona contra su propia media histórica (ver CONTEXT.md,
+        """Cada persona contra su propia media histórica (ver CONTEXT-preliquidacion.md,
         "Desvío por persona"). Se comparan promedios POR QUINCENA: para un mes,
         el promedio de sus quincenas con actividad."""
         quincenas_periodo = set(self._resolver_periodo(quincena, mes))

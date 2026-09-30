@@ -366,3 +366,633 @@ Decisiones de diseño del módulo Terceros que el plan fija, todavía sin códig
   `main`. No se puede ensayar desde un worktree, porque git no permite tener
   `main` checkouteada dos veces. Se prueba en el checkout principal o la primera
   vez que se dispare de verdad.
+
+## 2026-09-18 — Tope de lectura en la externa y candado por quincena
+
+**Mergeado**
+- PR #48 (backend_preliquidacion) — dos barandas para "Generar / Actualizar
+  quincena" a raíz del incidente del mismo día: `read_timeout=60` y
+  `connect_timeout=10` en la conexión a la base externa de ADCP
+  (servidor de ADCP), con 503 "La base de datos de campo (ADCP) no respondió
+  a tiempo" si la consulta se traba; y un candado por quincena que devuelve 409
+  "Ya hay una generación en curso para esta quincena" a la segunda corrida
+  concurrente. Sin PR hermano en el front.
+
+**Por frontera**
+- Núcleo: `app/core/database.py` gana la excepción `ExternaNoDisponible`, junto
+  al engine que la origina. `app/main.py` suma un handler global que la traduce
+  a 503 para cualquier módulo.
+- Preliquidación: `services/consulta_externa.py` pasa todas sus consultas a la
+  externa por un helper que traduce `OperationalError` a `ExternaNoDisponible`
+  (no sólo la consulta principal: también catálogo de tareas, clientes, fincas).
+  `api/preliquidacion.py` incorpora el candado en memoria por quincena, que se
+  libera siempre, también si la corrida falla. Tests nuevos:
+  `tests/preliquidacion/test_consulta_externa_timeout.py` y 7 casos en
+  `test_generar_api.py`.
+- Prod y Datos: `docs/DEPLOY.md` anota que el candado, igual que el cache de
+  sueldos, vive en memoria del proceso y que el diseño asume `--workers 1`.
+- Docs: plan en `docs/superpowers/plans/2026-09-18-externa-timeout-y-concurrencia.md`.
+
+**Incidente que lo originó**
+- 2026-09-18, 15:45 a 15:57: el servidor de ADCP quedó bloqueado 12 minutos
+  (llegó a su tope de 151 conexiones; nosotros sólo tenemos SELECT ahí). La
+  consulta principal, que tarda 2 s, tardó entre 73 y 719 s. El front cortó a
+  los 300 s con "timeout of 300000ms exceeded" sin decir qué pasaba y se
+  acumularon 7 corridas simultáneas de la misma quincena, que se liberaron
+  todas en el mismo segundo. No duplicaron líneas esta vez (1998 y 110 líneas,
+  igual al campo), pero cada corrida calcula el diff antes de que las otras
+  escriban, así que la carrera existe.
+
+**Decisiones**
+- Tope de **60 s**. Porqué: la consulta normal tarda 2 s, hay margen de sobra y
+  el usuario se entera en un minuto en vez de en cinco; el front (300 s) y
+  nginx (300 s) ya no llegan a cortar.
+- El tope va **sólo en la externa**. Porqué: la base propia escribe y cortarla
+  a mitad de un commit es peor que esperar; la de sueldos no participa en este
+  flujo.
+- `ExternaNoDisponible` vive en el **núcleo** con handler en `main.py`, no en el
+  módulo. Porqué: así cualquier módulo recibe el 503 sin que el núcleo importe
+  módulos (ADR-0013). Surgió de la revisión: la primera versión traducía sólo la
+  consulta principal y un corte en las demás seguía dando 500 con "Lost
+  connection to MySQL server".
+- Candado **en memoria del proceso**, no en la base. Porqué: el deploy corre con
+  `--workers 1`, anotado en `docs/DEPLOY.md` y en el código. Si algún día hay
+  más workers, pasa a la base.
+- Descartado: tocar el front. Porqué: el interceptor de `api.js` ya muestra
+  `detail` de cualquier error y el botón ya se deshabilita mientras espera.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-18 ~17:45 UTC, con OK del usuario.
+- Migraciones: ninguna. Sin cambio de contrato con el front. Rollback: revertir
+  el merge.
+- Tests: 284 en verde (277 + 7 nuevos). Smoke real contra ADCP con
+  `read_timeout=1` y `SELECT SLEEP(10)`: corta a 1,00 s exacto, sin reintentos,
+  y llega al usuario como `ExternaNoDisponible`. La consulta real con tope de 60
+  sigue devolviendo las 1998 filas en ~2 s.
+
+**Pendiente**
+- Deuda preexistente, más seria que el candado: `Preliquidacion.quincena` guarda
+  la fecha cruda, así que generar con 09-16 y después con 09-17 crea dos
+  preliquidaciones con las mismas líneas. Amerita su propio fix.
+- La clave del candado tampoco se normaliza a inicio de quincena: 09-16 y 09-17
+  concurrentes esquivan el 409.
+- `except OperationalError` es amplio: un error de credenciales (1045) también
+  diría "reintentá en unos minutos"; la causa real queda en el log del servidor.
+- Un `db_externa.execute` crudo en `precios.py`, fuera del servicio, sigue sin
+  traducir.
+- La aserción de que `engine_propia` no tiene `read_timeout` es vacía:
+  `create_connect_args` no refleja `connect_args`.
+
+## 2026-09-18 — PR #49, la API rechaza quincenas que no empiezan el 1 o el 16
+
+**Mergeado**
+- PR #49 (backend) — `fix(preliquidacion)`: las tres entradas que escriben
+  (generar preliquidación, alta de concepto, copiar conceptos entre quincenas)
+  devuelven 422 "La quincena debe empezar el 1 o el 16 del mes, no el 17" ante
+  cualquier otra fecha. Sin PR hermano en el front.
+
+**Por frontera**
+- Núcleo: `app/core/quincena.py` gana `validar_quincena` y el tipo
+  `Quincena = Annotated[date, AfterValidator(validar_quincena)]`, que sirve en
+  esquemas Pydantic y en parámetros de FastAPI. Tests en
+  `tests/core/test_quincena.py`.
+- Preliquidación: `schemas.py` pasa `PreliquidacionGenerarRequest.quincena` y
+  `ConceptoUnifRequest.quincena` de `date` a `Quincena`; `api/precios.py`
+  cambia los dos Query de `copiar_quincena` a `Annotated[Quincena, Query()]`.
+  Tests en `tests/preliquidacion/test_validar_quincena_api.py`.
+- Docs: plan en `docs/superpowers/plans/2026-09-18-validar-quincena.md`.
+
+**Origen**
+- Deuda que dejó la revisión del PR #48 (anotada como pendiente en la entrada
+  anterior). `calcular_rango_quincena` normalizaba en silencio cualquier día
+  distinto de 1 a la segunda quincena, pero `Preliquidacion.quincena` es única
+  por fecha cruda: generar con 16/9 y después con 17/9 creaba dos
+  preliquidaciones con las mismas 110 líneas, y un concepto cargado al 17/9 no
+  se aplicaba a la del 16/9. Producción estaba limpia (6 preliquidaciones,
+  todas día 1 o 16) porque el front sólo ofrece esas dos fechas.
+
+**Decisiones**
+- **Rechazar con 422, no normalizar.** Porqué: una fecha que no es inicio de
+  quincena viene de un cliente que está mal; normalizarla lo escondería.
+- **El tipo `Quincena` vive en el núcleo**, junto a la definición del término
+  (`app/core/quincena.py`), no en el módulo.
+- **Sólo las tres entradas de escritura en este PR.** Porqué: los ~16
+  parámetros de lectura de precios y gerencial devuelven vacío con una fecha
+  mala, sin crear datos. Cubrirlos es mecánico y queda para otro PR si se
+  quiere.
+- **Trampa de FastAPI, documentada en el código:** en parámetros Query hay que
+  escribir `Annotated[Quincena, Query()]`. Con `Quincena = Query(...)` FastAPI
+  0.136 descarta el validador y un 17 pasa. Lo detectó el test de copiar en
+  rojo; queda comentado en el núcleo y en el endpoint.
+- Descartado: tocar el front. Porqué: ya manda 01 o 16.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-18 ~18:15 UTC, con OK del
+  usuario; health ok.
+- Migraciones: ninguna. Sin cambio de contrato con el front. Rollback: revertir
+  el merge.
+- Tests: 294 en verde (284 + 10 nuevos). Smoke real con la app completa y las
+  bases reales: generar 17/9 → 422; copiar destino 17/9 → 422; generar 16/9 →
+  200 con "0 nuevas · 0 eliminadas · 110 sin cambios".
+
+**Pendiente**
+- Los ~16 parámetros de lectura (precios y gerencial) siguen aceptando
+  cualquier fecha; devuelven vacío, no crean datos.
+- El interceptor del front muestra `detail` cuando es texto u objeto con
+  `mensaje`; el 422 de FastAPI trae una lista, así que si alguna vez llegara se
+  vería "Request failed with status 422". Hoy no puede llegar desde el front.
+- Siguen abiertos del PR #48: la clave del candado no se normaliza (ahora un
+  17 ya no entra, así que el caso 16/17 concurrente desaparece por esta vía),
+  `except OperationalError` amplio, el `db_externa.execute` crudo en
+  `precios.py`, y la aserción vacía sobre `engine_propia`.
+
+## 2026-09-23 — La externa distingue acceso rechazado de corte, y grupos de pago da 503
+
+**Mergeado**
+- PR #50 (backend) — `fix(preliquidacion)`: `GET /api/precios/grupos-pago` pasa
+  por `ConsultaExternaService._ejecutar` (503 claro en vez de 500 si ADCP se
+  bloquea), y un acceso rechazado por ADCP ya no pide reintentar. Merge
+  `c071e0b`. Sin PR hermano en el front.
+
+**Por frontera**
+- Preliquidación: `services/consulta_externa.py` gana `QUERY_GRUPOS_PAGO`,
+  `obtener_grupos_pago()` y `CODIGOS_ACCESO_RECHAZADO = {1044, 1045, 1142, 1143}`;
+  con esos códigos `_ejecutar` levanta `ExternaNoDisponible` con "rechazó el
+  acceso del sistema. Reintentar no sirve: avisá a sistemas". El log `[EXTERNA]`
+  ahora muestra el código. `api/precios.py` deja el `db_externa.execute` crudo.
+  Tests en `tests/preliquidacion/test_consulta_externa_timeout.py`.
+- Docs: plan en `docs/superpowers/plans/2026-09-23-externa-errores.md`.
+
+**Origen**
+- Dos deudas de la revisión del PR #48, anotadas como pendientes en las dos
+  entradas anteriores: el `db_externa.execute` crudo en `precios.py` y el
+  `except OperationalError` amplio. Porqué del segundo (del PR): si ADCP rota
+  las credenciales, el liquidador reintentaría algo que nunca va a andar, y el
+  log lo mostraría como lentitud.
+
+**Decisiones**
+- **Sigue siendo 503 en los dos casos**, aunque un acceso rechazado no es
+  técnicamente "no disponible". Porqué: el contrato con el front no cambia (ya
+  muestra el `detail` de un 503 tal cual) y no hace falta PR hermano.
+- **Lista cerrada de códigos de acceso; todo lo demás = "no respondió".**
+  Porqué: el default conservador es el comportamiento anterior. Descartado:
+  enumerar los transitorios (2003, 2006, 2013…), porque un código no previsto
+  quedaría sin traducir y volvería el 500.
+- La revisión encontró un hallazgo high: `orig.args` vacío levantaba
+  `IndexError` (500 en vez de 503). Se arregló en una línea con test.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-23, con OK explícito del usuario;
+  health ok, servicio activo, sin errores en logs.
+- Migraciones: ninguna. Sin cambio de API. Rollback: revertir el merge.
+- Tests: 3 nuevos, vistos en rojo primero. Suite completa 296 en verde antes
+  del arreglo de la revisión; después, el archivo afectado 6/6. Smoke real con
+  las bases reales: `/grupos-pago` → 200 con los mismos 12 grupos que la
+  consulta vieja corrida directo contra ADCP.
+- No probado en real: un 1045 contra ADCP (exigiría un login fallido a
+  propósito en un servidor que no controlamos). Cubierto sólo por test.
+
+**Pendiente**
+- El interceptor del front muestra mal el `detail` en lista de un 422. Se está
+  atendiendo en `frontend_preliquidacion`; no está cerrado.
+- Siguen abiertos del PR #48: la clave del candado no se normaliza y la
+  aserción vacía sobre `engine_propia`. Los ~16 parámetros de lectura siguen
+  aceptando cualquier fecha (del PR #49).
+
+## 2026-09-23 — El front muestra el texto de un 422 de validación
+
+**Mergeado**
+- PR #43 (frontend) — `fix(core)`: el interceptor de `src/core/api.js` arma el
+  mensaje con `mensajeDeError(detail)`, que entiende la lista de un 422 de
+  FastAPI. Merge `4d702c4`, commit `fa336e1`. Sin PR hermano en el backend.
+
+**Por frontera**
+- Núcleo (front): `src/core/mensajeError.js` nuevo, maneja las tres formas de
+  `detail`: texto, objeto con `mensaje` (el 409 de solapamiento) y lista de
+  validación, uniendo los `msg` con "; " y sacando el prefijo "Value error, "
+  de Pydantic. `err.status` y `err.detail` crudo no cambian (Conceptos.jsx
+  sigue leyendo el 409 igual).
+
+**Origen**
+- La lista del 422 también es `object`, así que el código viejo buscaba
+  `.mensaje`, no lo encontraba y mostraba "Request failed with status code
+  422". Última deuda del incidente de ADCP (PRs #48, #49 y #50 del backend).
+
+**Decisiones**
+- **Función pura aparte.** Porqué: para poder probarla sin axios ni el store.
+- **Sin framework de tests.** Porqué: el front no tiene, y sumar Vitest es una
+  dependencia nueva que requiere aprobación. Se probó con un script desechable.
+
+**Estado**
+- Deploy: sí, al VPS de producción el 2026-09-23, con OK explícito del usuario.
+  Swap de carpeta (`frontend_old` queda de rollback); md5 de `index.html`
+  idéntico local/VPS (`35cb892f…`), 31 assets, rutas 200, el bundle contiene
+  el código nuevo.
+- Migraciones: ninguna. Sin cambio de API. Rollback: revertir el merge y
+  redeployar el front.
+- Tests: script de Node con 6 casos, visto en rojo y después verde; `npm run
+  build` OK. Smoke real: `api.js` cargado con Vite desde Node contra el backend
+  local, `POST /preliquidacion/generar` con quincena 17/9 → antes "Request
+  failed with status code 422", ahora "La quincena debe empezar el 1 o el 16
+  del mes, no el 17".
+- No probado en el navegador (extensión de Chrome desconectada).
+- Revisión adversarial: 0 urgent, 0 high.
+
+**Pendiente**
+- Cerrada la deuda del 422 anotada en las entradas de #49 y #50.
+- Minor de la revisión, sin tocar: los 422 del propio Pydantic ("Field
+  required") siguen en inglés y sin nombre de campo; `Login.jsx:48` usa axios
+  directo y no pasa por este interceptor (preexistente).
+- Siguen abiertos del PR #48: la clave del candado no se normaliza y la
+  aserción vacía sobre `engine_propia`. Los ~16 parámetros de lectura siguen
+  aceptando cualquier fecha (del PR #49).
+
+## 2026-09-23 — Los README quedan como descripción general y los repos siguen públicos
+
+**Mergeado**
+- PR #51 (backend) — el README pasa a descripción general (qué es, stack,
+  estructura por módulos, cómo levantarlo en local, dónde está la
+  documentación); `docs/DEPLOY.md` sale del árbol y entra a `.gitignore`; se
+  tacha el host de ADCP. Merge `66b9bf0`, commits `9666257` y `6439a5b`.
+- PR #44 (frontend) — PR hermano, mismo criterio para el README del front.
+  Merge `55feca3`.
+
+**Por frontera**
+- Docs: `README.md` de los dos repos reescritos (backend -268/+43, front
+  -116/+31). `docs/DEPLOY.md` borrado del repo (186 líneas); queda sólo en la
+  máquina de quien deploya. El nombre del host de ADCP se reemplaza por
+  "servidor de ADCP" en `docs/superpowers/plans/2026-09-18-externa-timeout-y-concurrencia.md`
+  y en la entrada del PR #48 de esta bitácora (el commit `6439a5b` editó esa
+  línea vieja).
+- Prod y Datos: `.gitignore` suma `docs/DEPLOY.md` con el comentario "viven
+  sólo en la máquina de quien deploya, nunca en el repo público".
+
+**Decisiones**
+- **README sin detalle interno.** Porqué: el repo es público y el sistema es
+  interno; el README viejo explicaba la mecánica de identidad y contraseña
+  inicial, nombraba tablas y prefijos de las bases de terceros, describía la
+  infraestructura de producción y listaba todos los endpoints, lo que no le
+  sirve a quien lee el repo y le da un mapa a un tercero. La lista de endpoints
+  sigue en `/docs` para quien corre el sistema. De paso se va lo desactualizado
+  (el `create_all` al arrancar, sacado en el PR 3, y la base propia
+  "compartida", que hoy es dedicada).
+- **`docs/DEPLOY.md` fuera del repo.** Porqué: tenía IPs del VPS y del servidor
+  de bases con comandos de acceso. El PR aclara que sacarlo del árbol no lo
+  borra del historial. Descartado en el PR: limpiar el resto de `docs/`, por la
+  misma razón (no lo saca del historial).
+- **Los repos backend y frontend quedan públicos.** Decisión del usuario del
+  2026-09-23, posterior al merge; cierra lo que el PR dejó "para decidir
+  aparte". No está en el cuerpo del PR: la trae quien despachó esta anotación.
+  Porqué: en GitHub Free la protección de ramas (`main` exige 1 aprobación) no
+  se aplica en repos privados, y no se quiso pagar Pro (USD 4 por mes).
+  Descartado: hacerlos privados; una organización gratuita con Pitu en sólo
+  lectura trabajando desde un fork (demasiado cambio de remotes y de flujo); un
+  hook local de pre-push (se saltea con `--no-verify`).
+
+**Estado**
+- Deploy: ninguno, son sólo docs. El VPS toma los cambios con el próximo pull.
+- Migraciones: ninguna.
+- Verificación (del PR): grep de los README nuevos sin coincidencias para CUIL,
+  contraseña, dominio, hosting, IPs ni nombres de tablas externas; los archivos
+  que referencian existen.
+- Consecuencia de quedar públicos: en el historial de git siguen las IPs del
+  VPS y del servidor de bases y los comandos SSH del `DEPLOY.md` viejo. No se
+  encontraron contraseñas ni el `.env` en el historial.
+
+**Pendiente**
+- Confirmar que el VPS acepte SSH sólo con clave. No se verificó.
+
+## 2026-09-25 — El CLAUDE.md dice dónde se anota cada cosa, y el SSH del VPS queda sólo con clave
+
+**Mergeado**
+- PR #52 (backend) — la sección "Los cuatro documentos" del `CLAUDE.md` pasa a
+  ser "Dónde se anota cada cosa": una tabla única (qué pasó, archivo, cuándo) y
+  cuatro reglas debajo. Suma un plan en
+  `docs/superpowers/plans/2026-09-25-reglas-de-anotacion.md`. Merge `bdbd3da`,
+  commit `b2ca2c2`. Sin PR hermano en el front.
+
+**Por frontera**
+- Docs: `CLAUDE.md` +25/-7. La tabla suma lo que faltaba: `docs/DEPLOY.md`
+  (local, fuera de git) para todo lo operativo del VPS, el cuerpo del PR,
+  `PUESTA-A-PUNTO.md`, los planes y la memoria de Claude. La regla de trabajo
+  "anotar en la memoria del proyecto en cada hito" pasa a "en el lugar que
+  corresponda según la tabla".
+- Prod y Datos: sin cambios en el repo. El endurecimiento del SSH (abajo) se
+  hizo en el VPS, no por PR.
+
+**Decisiones**
+- **Una tabla única en el `CLAUDE.md`, en vez de corregir cada skill.** Porqué:
+  el usuario tenía que aclarar en cada sesión dónde anotar, y el endurecimiento
+  del SSH del mismo día quedó sólo en la memoria de Claude, que vive fuera del
+  repo y no la ve nadie más. La skill `flujo` es global, sirve a otro proyecto y
+  nombraba `.claude/Contexto/contexto-proyecto.md`, que en este repo no existe.
+  Descartado: reglas sueltas por skill.
+- **Cuatro reglas bajo la tabla**: la memoria no cuenta como anotación para una
+  persona; al avisar "quedó anotado" se nombra el archivo; IPs, hosts,
+  credenciales y datos de terceros no entran a git porque los repos son
+  públicos; si una skill manda anotar en otro lado, vale la tabla. Porqué: el
+  mismo del punto anterior.
+- **La skill global `flujo` remite al `CLAUDE.md` de cada repo.** Cambio fuera
+  del repo; lo nombra el PR y lo confirma quien despachó esta anotación.
+
+Lo que sigue no está en el PR: lo trae quien despachó esta anotación.
+- **SSH del VPS sólo con clave**, con OK del usuario, antes del PR. Antes
+  aceptaba contraseña para root por el orden en que se leen los drop-ins de
+  cloud-init. Se instaló fail2ban. Probado: el ingreso con clave anda y el
+  ingreso con contraseña se rechaza. El detalle operativo está en
+  `docs/DEPLOY.md`, que es local y está fuera de git.
+- **Se borraron las ramas remotas ya mergeadas** en los dos repos, 7 en total,
+  después de verificar que ninguna tenía commits fuera de `main`.
+
+**Estado**
+- Deploy: ninguno de código; el PR es sólo docs. En el VPS cambió la
+  configuración del SSH (ver arriba).
+- Migraciones: ninguna.
+- Verificación (del PR): existen todos los archivos que nombra la tabla;
+  `docs/modulos/*/fuentes/` sigue ignorado por git; no queda ninguna regla vieja
+  que contradiga la nueva (grep de "memoria" y "cuatro documentos").
+
+**Pendiente**
+- Cerrado el pendiente "Confirmar que el VPS acepte SSH sólo con clave" de la
+  entrada del 2026-09-23.
+
+## 2026-09-25 — Las reglas pasan a AGENTS.md y a controles, y la app no arranca contra producción sin permiso
+
+**Mergeado**
+- PR #53 (backend) — reorganiza el harness de agentes: controles en hooks y
+  `settings.json`, `AGENTS.md` como fuente de reglas, un glosario por contexto
+  con `CONTEXT-MAP.md` de índice y documentación al día sin listados de tablas.
+  Merge `d0be3f4`. Plan: `docs/superpowers/plans/2026-09-25-reorganizar-harness.md`.
+- PR #45 (frontend) — hermano del #53: `AGENTS.md` con el bloque común, controles
+  y dos comentarios que apuntan al glosario nuevo. Merge `f885563`.
+- PR #54 (backend) — la app no arranca contra la base de producción salvo que el
+  `.env` tenga `PERMITIR_BASE_PRODUCCION=1`, y el banner muestra qué base se
+  conectó. Merge `dad6649`.
+
+**Por frontera**
+- Núcleo: `app/core/config.py` suma `guardia_base_propia` y el campo
+  `permitir_base_produccion`; la guardia corre en el `lifespan` de `app/main.py`.
+  El asistente (`app/core/asistente.py`) carga el glosario del núcleo, el de
+  Preliquidación y `docs/AYUDA.md`, con un test que falla si falta alguno. 9 tests
+  nuevos de la guardia; la suite da 312 verdes.
+- Preliquidación: sólo comentarios y docstrings, "categoría 1-7" pasa a 1-12. El
+  front cambia dos comentarios.
+- Prod y Datos: `deploy/provision.sh` avisa que producción necesita el permiso.
+  `.env.example` pasa a `DB_PROPIA_NAME=testing` y explica cómo refrescar
+  `testing` con `DB_PROPIA_*` apuntando ahí.
+- Docs: `CLAUDE.md` baja a 20 líneas e importa `AGENTS.md` (en el front, 16).
+  `CONTEXT.md` queda para el núcleo y nace
+  `docs/modulos/preliquidacion/CONTEXT-preliquidacion.md`. `DOCUMENTACION.md` pasa
+  a ser el mapa técnico. PUESTA-A-PUNTO dice que los repos son públicos y suma
+  `instalar.sh`. El ADR-0008 se corrige (sin nombres de tablas, rango 1 a 12). El
+  plan histórico de ws1-ws6 se mueve a `docs/superpowers/plans/`. Las skills
+  `domain-modeling` y `grilling` suman pasos; `grilling` busca antecedentes en la
+  bitácora y los ADR antes de preguntar.
+- Controles (repo, fuera de las fronteras de código): `scripts/hooks/pre-commit`
+  frena los commits en `main`; en el backend deja pasar sólo un commit que toque
+  únicamente `docs/BITACORA.md`, en el front no tiene excepción.
+  `.claude/settings.json` pide confirmación para `ssh`, `scp`, `sftp` y `rsync`. Un
+  hook PostToolUse recuerda preguntar por `/bitacora` después de `gh pr merge`.
+  `.gitattributes` fuerza LF en los `.sh`; `.gitignore` suma `CLAUDE.local.md` y
+  `.claude/settings.local.json`.
+
+**Decisiones**
+- **Las reglas críticas van en hooks y permisos, no sólo en prosa.** Porqué: una
+  instrucción en CLAUDE.md "es un pedido, no una garantía", según Anthropic.
+  Descartado: `deny` para `ssh`/`scp`, porque el deploy legítimo existe; se usa
+  `ask`.
+- **El hook de bitácora usa `grep` y no `jq`, y mira sólo el comando.** Porqué:
+  para no sumar dependencias en Windows; con `grep` sobre el JSON entero avisaba
+  cuando un texto mencionaba el merge.
+- **`AGENTS.md` es la fuente de las reglas y `CLAUDE.md` lo importa con
+  `@AGENTS.md`.** Porqué: es el estándar que leen otros agentes, y a futuro puede
+  usarse otro además de Claude Code. Sin symlink, por Windows. Lo de cada máquina
+  (la ruta de `gh`) pasa a `CLAUDE.local.md`, fuera de git.
+- **El bloque común va duplicado en los dos repos, entre marcadores, y lo compara
+  `scripts/verificar_agents_comun.sh`.** Descartado: que el front remita al back,
+  porque otra herramienta no sigue el puntero; e importar el del back, porque sólo
+  le sirve a Claude Code.
+- **Un glosario por contexto, con `CONTEXT-MAP.md` de índice.** Porqué:
+  `CONTEXT.md` mezclaba el núcleo con Preliquidación, y la skill `domain-modeling`
+  no encontraba el glosario de Terceros sin un mapa. Se sacaron tablas, columnas,
+  endpoints, rutas y fechas, porque los repos son públicos y el glosario define qué
+  es cada cosa, no cómo se implementa.
+- **Los docs públicos no listan tablas; para saber qué hay, se consulta la base.**
+  Porqué: decisión del usuario, con los repos públicos.
+- **La app frena el arranque contra producción en vez de sólo avisar.** Porqué: el
+  `.env` de desarrollo apuntaba a producción y la app sólo lee `DB_PROPIA_*`, así
+  que un `uvicorn --reload` local escribía sobre el dato real. Un aviso en el
+  banner no evita el error.
+- **La guardia va en el `lifespan` y no en `Settings`.** Porqué: para no romper
+  `pytest` ni los scripts, que importan la configuración sin arrancar la app; así
+  el refresco de `testing` y `verificar_conexion.py` pueden seguir leyendo
+  producción. Es la única razón por la que se aborta el arranque: una tabla
+  faltante sigue sin abortarlo, para no meter a systemd en un bucle.
+
+Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
+- **No se borra ninguna skill**, aunque se superpongan. Decisión del usuario.
+- **`plan-terceros.md` conserva a propósito la tabla de las tablas que Pitu
+  planea crear**, como excepción a "los docs no listan tablas". Decisión del
+  usuario.
+- **El ADR-0008 lo corrigió un agente con OK explícito del usuario.**
+- **El `.env` local de Gero pasó a apuntar a `testing`**, con las credenciales de
+  producción guardadas aparte para el refresco de `testing`.
+- **Trampa encontrada**: la confirmación de `ssh` no funcionó en la sesión donde
+  se creó el `settings.json` (había arrancado antes) y sí en sesiones nuevas; los
+  hooks, en cambio, se recargaron en caliente.
+
+**Estado**
+- Deploy del backend el 2026-09-25, con OK del usuario (dato de quien despachó).
+  Orden obligatorio, que el PR #54 marca como riesgo: primero la variable del
+  permiso en el `.env` del VPS (el código viejo la ignora) y después el código.
+  Verificado: el servicio arrancó una sola vez, sin bucle de reinicios; el banner
+  muestra la base de producción; `/health` ok; sitio 200; el asistente responde
+  términos de los dos glosarios (en local no se había podido probar porque el
+  antivirus bloquea el HTTPS de Python).
+- Front: no se deployó; sólo cambiaron comentarios.
+- Migraciones: ninguna.
+- Verificación (de los PR): el `pre-commit` probado con commits reales en `main` y
+  en rama; la confirmación de `ssh` probada en sesiones nuevas; el hook de
+  bitácora con 9 comandos simulados; los 47 términos del glosario viejo están en
+  los dos nuevos; con el `.env` de producción sin permiso, `uvicorn` se niega a
+  arrancar (exit 3) antes de abrir conexiones; contra `testing` arranca y
+  `/health` da ok. `npm run build` compila en el front.
+
+**Pendiente**
+- Correr `sh scripts/hooks/instalar.sh` en cada clon, también los de Pitu.
+- Aceptados sin arreglar (dato de quien despachó; los lista el PR #53): el hook de
+  bitácora avisa si `gh pr merge` aparece al principio de una línea dentro de un
+  heredoc, y también si el merge falla o sólo queda programado con `--auto`. Lo
+  peor que pasa es una pregunta de más.
+
+## 2026-09-29 — ADR-0014: se desarrolla contra testing y sólo el VPS toca producción
+
+**Mergeado**
+- PR #55 (backend) — ADR-0014, que registra la decisión implementada en el PR #54;
+  `AGENTS.md`, `DOCUMENTACION.md` y `GUIA-MODULOS.md` se alinean con él.
+
+**Por frontera**
+- Docs: nuevo `docs/adr/0014-desarrollo-en-testing-produccion-solo-desde-el-vps.md`.
+  `AGENTS.md` cita el ADR y la guardia de arranque (`PERMITIR_BASE_PRODUCCION=1`, sólo
+  en el `.env` del VPS); `DOCUMENTACION.md` deja de fijar el rango de ADR ("numeradas en
+  orden"); `GUIA-MODULOS.md` pasa el próximo número a 0015.
+
+**Decisiones**
+- **La regla "desarrollo en `testing`, producción sólo desde el VPS" se hace cumplir con
+  código y no con una instrucción escrita.** Porqué: la app lee una sola conexión propia,
+  y un `.env` de desarrollo apuntando a producción hacía que un arranque local escribiera
+  sobre el dato real. Descartado: la base única; el aviso en el banner como única medida
+  (se conserva como complemento); la guardia en `Settings`, porque rompía tests y scripts.
+- Lo que sigue no está en el PR: lo trae quien despachó esta anotación. El ADR formaliza
+  una decisión ya tomada e implementada en el PR #54, no una nueva. El usuario eligió
+  cerrar este PR de documentación antes de arrancar un plan de 7 puntos de seguridad y
+  calidad surgido de un relevamiento del proyecto. Desde este merge, los merges los hace
+  el agente pidiendo confirmación al usuario.
+
+**Estado**
+- Deploy: ninguno (sólo documentación).
+- Migraciones: ninguna.
+
+**Pendiente**
+- El plan de 7 puntos de seguridad y calidad, todavía sin arrancar.
+
+## 2026-09-29 — Plan de seguridad, PR 1: errores sin detalle interno, PyJWT y límite de login
+
+**Mergeado**
+- PR #56 (backend) — primer PR (de 6) del plan de seguridad y calidad: 500 genérico con
+  código, `/health` sin textos, PyJWT en lugar de `python-jose`, `quote_plus` en las URLs
+  de conexión, límite de intentos de login; entra además el plan
+  `docs/superpowers/plans/2026-09-29-seguridad-y-calidad-relevamiento.md`. Sin PR hermano
+  en el front.
+
+**Por frontera**
+- Núcleo: handler global en `app/main.py` que devuelve un 500 genérico con un código de 6
+  caracteres y manda detalle y traceback al log (`app.errores`) con el mismo código.
+  `/health` devuelve sólo `status` y un booleano por base; errores y tablas faltantes van
+  al log (`app.health`). `auth.py` pasa a PyJWT; los tokens HS256 ya emitidos siguen
+  valiendo. Nuevo `app/core/limite_login.py`: 5 fallos en 15 minutos por identificador
+  normalizado (mail, email sintético o CUIL) dan 429 con `Retry-After` por 15 minutos; en
+  memoria, chequeado antes del bcrypt, cuenta también usuarios inexistentes y un login
+  correcto lo resetea. `utcnow()` sale: columnas con `ahora_utc()` (naive-UTC, mismos
+  valores que antes) y `exp` del JWT aware. `config.py` aplica `quote_plus` a la
+  contraseña de `url_externa` y `url_propia`, como ya hacía `url_sueldos`.
+  `requirements.txt`: entra `PyJWT==2.15.1`, salen `python-jose` y `alembic`.
+- Preliquidación: se borran los `except Exception → HTTPException(500, str(e))` de la
+  API (15, según el PR); los mensajes de negocio (`ValueError`, 503, 409) no
+  cambian. Se borra `POST /{id}/backfill-conceptos`, que llamaba a un método inexistente
+  (siempre 500) y el front no usaba. Los modelos del módulo pasan a `ahora_utc()`.
+- Docs: `README.md` y `GUIA-MODULOS.md` dejan de mencionar Alembic y nombran PyJWT; entra
+  el plan de 6 PRs.
+
+**Decisiones**
+- **El alta de conceptos pierde su `try/except` en vez de devolver "ya existe".** Porqué:
+  `uq_concepto_unif` nunca se dispara por la API, porque cliente o supervisor van siempre
+  en NULL (ADR-0011), así que ese mensaje describiría un caso que no ocurre. Según quien
+  despachó, fue la opción B que eligió el usuario durante la ejecución.
+- **Límite de login por identificador y no por IP.** Porqué: toda una oficina sale por la
+  misma IP. Descartado: `slowapi`/Redis, una dependencia nueva para un solo worker.
+- **PyJWT en lugar de `python-jose`, y fuera `alembic`.** Porqué: `python-jose` tiene
+  mantenimiento irregular y CVE-2024-33663/33664; `alembic` no se usaba. Según quien
+  despachó, las dos cosas las aprobó el usuario en la entrevista.
+- **Fechas naive-UTC en columnas y sólo el `exp` del JWT aware.** Porqué (del commit):
+  no mezclar objetos aware y naive en la misma sesión.
+- **El PR 2 del plan cambió de diseño a pedido del usuario:** no se crea ninguna tabla
+  nueva en la base; sólo un manifiesto de migraciones y un chequeo de tablas y columnas
+  faltantes al arrancar. Porqué (del plan): el riesgo es deployar código que necesita una
+  columna que la base no tiene, y eso se detecta comparando el modelo con el esquema real.
+  Descartados: la tabla de registro `migracion_aplicada` (el usuario no quiere tablas
+  nuevas para esto) y el registro en un archivo fuera de la base (se desincroniza).
+- Lo que sigue lo trae quien despachó: la ejecución fue por pares test rojo →
+  implementación con el agente ejecutor.
+
+**Estado**
+- Deploy: no se hizo. Necesita `pip install -r requirements.txt` antes del restart (si
+  falla, no reiniciar). PyJWT avisa si la `SECRET_KEY` tiene menos de 32 bytes; alargarla
+  corta las sesiones abiertas. Rollback: revert del merge, `pip install` y restart.
+- Migraciones: ninguna.
+- Verificación (del PR): 352 tests en verde, cada paso con test rojo antes; revisión con
+  0 urgent y 0 high; smoke contra `testing` con las tres bases OK, `/health` ok, 6 logins
+  malos dan 5×401 y un 429 con `Retry-After: 900`, token inválido da 401, sin tracebacks.
+  No probado: login con usuario real y navegación en el front.
+
+**Pendiente**
+- Deploy del backend (con OK del usuario).
+- PRs 2 a 6 del plan.
+- Hallazgo fuera de alcance que anota el PR: hoy se pueden cargar conceptos duplicados.
+- Minor aceptados sin tocar (los lista el PR): 4 tests de endpoints del módulo quedaron en
+  `tests/core/`; la fixture SQLite en memoria se repite en 5 archivos; `limite_login.py`
+  lee una tupla por índice; el 429 dice "1 minutos" en el último minuto.
+
+## 2026-09-30 — Plan de seguridad, PR 2: chequeo de tablas y columnas al arrancar y ORDEN.txt
+
+**Mergeado**
+- PR #57 (backend) — al arrancar, la app compara los modelos con la base propia y avisa
+  si faltan tablas o columnas; entra `migrations/ORDEN.txt` con el orden de las 18
+  migraciones. PR 2 de 6 del plan
+  `docs/superpowers/plans/2026-09-29-seguridad-y-calidad-relevamiento.md`. Sin PR hermano
+  en el front.
+
+**Por frontera**
+- Núcleo: nuevo `app/core/esquema.py` con `comparar_esquema(metadata, inspector)`, que
+  detecta tablas y columnas del modelo que faltan en la base propia; columnas de más en la
+  base no son error, y no compara tipos ni índices. Recibe el metadata por parámetro, así
+  el núcleo no importa módulos (ADR-0013). En `app/main.py` el banner de arranque dice
+  `ERROR: faltan tablas/columnas en la base propia (migraciones sin aplicar): ...` o
+  `Tablas y columnas BD propia: verificadas`, y nunca aborta. Si el chequeo mismo falla,
+  el banner avisa "no se pudo verificar" y el traceback va al log (`app.esquema`).
+  `/health` da `status: "error"` si falta algo, sin nombres: sigue con sólo `status` y
+  booleanos. Corrige lo anotado para el PR #56: los nombres de lo faltante ya no van al
+  log de `app.health`, que ahora sólo remite al banner. stdout pasa a `line_buffering`.
+- Prod y Datos: nuevo `migrations/ORDEN.txt`, orden explícito de todas las migraciones.
+  ws1..ws16 y `fix_trazabilidad` van marcadas `historica`: ya están dentro de
+  `000_esquema_base.sql` (exportado de producción) y fallan en una base nueva. Un test
+  exige que cada `.sql` figure una sola vez, que no haya entradas inexistentes, que
+  `historica` sea la única marca y que ninguna histórica vaya antes del 000. El orden
+  ws5 → fix → ws7 sale de `git log`.
+- Docs: `GUIA-MODULOS.md` §3.2, §3.3 y reglas 10 y 12 de §4.3 (toda migración nueva se
+  agrega al final de `ORDEN.txt` en el mismo PR; qué dice el banner después del deploy);
+  `README.md`; `migrations/terceros/LEEME.md`; el plan anota la opción A y el paso R1.
+
+**Decisiones**
+- **Sin tabla de registro de migraciones, sin script de aplicación y sin ADR.** Porqué:
+  el usuario no quiere tablas nuevas para esto, y comparar el modelo con el esquema real
+  detecta el caso que importa (código deployado sin su migración). Descartado: un
+  registro en un archivo fuera de la base, que se desincroniza de la base real.
+- **Si el chequeo mismo falla, `/health` no marca error** (opción A, elegida por el
+  usuario). Porqué: no confundir un fallo del chequeo con migraciones faltantes; un
+  problema de conexión ya se ve en `bd_propia`. Descartado: marcar `status: "error"`
+  también en ese caso.
+- **No abortar el arranque si falta algo.** Porqué: systemd entraría en bucle de
+  reinicios.
+- **No comparar tipos ni índices.** Porqué: darían falsos positivos entre MySQL y el ORM.
+- **La regla nueva se sumó a las reglas 10 y 12 de la guía en vez de crear una 13.**
+  Porqué: no renumerar reglas que se citan por número.
+- **stdout con `line_buffering` (paso R1).** Porqué: bajo systemd stdout es un pipe y el
+  banner, único lugar con los nombres faltantes, no llegaba al journal hasta el siguiente
+  restart. Salió como high de la revisión y, según quien despachó, se arregló sin consultar
+  al usuario, como manda el flujo para un high.
+
+**Estado**
+- Deploy: no se hizo. Según quien despachó, conviene deployarlo junto con el PR #56 (que
+  necesita `pip install -r requirements.txt` antes del restart). Tras el restart, el
+  journal tiene que mostrar `Tablas y columnas BD propia: verificadas`; si muestra
+  `ERROR: faltan ...`, es una migración sin aplicar en producción: frenar y revisar antes
+  de tocar nada. Rollback: revert del merge y restart.
+- Migraciones: ninguna (sin DDL).
+- Verificación (del PR): 364 tests en verde, y los 9 tocados por R1 en verde; cada paso
+  con test rojo antes. Revisión con 0 urgent y 1 high (arreglado como R1). Smoke contra
+  `testing` con stdout redirigido a archivo, como bajo systemd: el banner se leyó con el
+  proceso vivo y dijo `verificadas`; `/health` dio `ok` con las tres bases en `true`.
+
+**Pendiente**
+- Deploy de los PRs #56 y #57 (con OK del usuario).
+- Actualizar `docs/DEPLOY.md` (fuera de git): qué devuelve `/health` y que el orden de una
+  base nueva lo da `ORDEN.txt`.
+- PRs 3 a 6 del plan.
+- Minor aceptados sin tocar (los lista el PR): `bool(tablas or columnas)` en `main.py`
+  sería mejor como propiedad de `Diferencias`; "(migraciones sin aplicar)" repetido en
+  banner y log; fixtures SQLite duplicadas entre `test_esquema.py` y
+  `test_health_tablas.py`; el nombre de `test_health_tablas.py` ya no refleja que prueba
+  también el arranque; el docstring de `test_esquema.py` cita "(PR2, paso 2.1)";
+  `test_manifiesto_migraciones.py` tiene `BASE` ambiguo, `_entradas()` llamado dos veces y
+  `MARCAS_VALIDAS` de un elemento.

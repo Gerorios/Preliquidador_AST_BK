@@ -1,5 +1,5 @@
 """Tipo de concepto EXCENTO (WS14): etiqueta pura agregada al enum
-TipoConcepto. Grafía deliberada ('EXCENTO', no 'exento') — ver CONTEXT.md.
+TipoConcepto. Grafía deliberada ('EXCENTO', no 'exento') — ver CONTEXT-preliquidacion.md.
 Ningún cálculo la distingue; solo verificamos que el enum y los schemas de
 entrada la aceptan."""
 from datetime import date

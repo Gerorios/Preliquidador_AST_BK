@@ -1,8 +1,8 @@
 # Liquidación Terceros — La Asturiana SRL
 
-Lenguaje ubicuo del módulo **Liquidación Terceros**, el segundo módulo del Sistema (ver "Sistema y módulos" en `CONTEXT.md`). Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
+Lenguaje ubicuo del módulo **Liquidación Terceros**, el segundo módulo del Sistema (ver "Sistema y módulos" en `CONTEXT.md`; el índice de glosarios es `CONTEXT-MAP.md`). Este archivo es un glosario: define qué ES cada término, no cómo se implementa.
 
-Escrito a partir de la sesión de grilling del 2026-09-09 y revisado el 2026-09-16, cuando apareció el segundo circuito (servicio de maquinaria). Las decisiones de diseño y el orden de trabajo están en [`plan-terceros.md`](plan-terceros.md); las fuentes originales están en `fuentes/`, fuera de git.
+Escrito a partir de la sesión de grilling sobre el Excel que hoy resuelve el circuito, y revisado cuando apareció el segundo circuito (el servicio de maquinaria). Las decisiones de diseño y el orden de trabajo están en [`plan-terceros.md`](plan-terceros.md); las fuentes originales (el Excel maestro, las consultas de Power Query y los archivos de las estaciones y de seguros) están en `fuentes/`, fuera de git.
 
 ---
 
@@ -25,7 +25,7 @@ Un Tercero pone su Maquinaria a trabajar en las fincas de la empresa. Lo que se 
 _Avoid_: confundirlo con el taller — acá la máquina del Tercero **trabaja**; en el taller la **reparan**
 
 **Colectivo**:
-El vehículo con el que un Tercero presta el Servicio de flete, identificado por su **patente**. Un Tercero puede tener muchos. En el sistema de campo cada colectivo es una fila cuyo `nombre` es, en realidad, el nombre de su dueño.
+El vehículo con el que un Tercero presta el Servicio de flete, identificado por su **patente**. Un Tercero puede tener muchos colectivos. En el sistema de campo cada colectivo figura con **el nombre de su dueño** como nombre, por eso un mismo nombre aparece repetido tantas veces como vehículos tenga.
 _Avoid_: usar "colectivo" para hablar del dueño, aunque el sistema de campo lo haga
 
 **Maquinaria de tercero**:

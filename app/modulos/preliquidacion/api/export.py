@@ -29,8 +29,6 @@ def export_excel(preliq_id: int, db: Session = Depends(get_db_propia)):
         buffer = generar_export_excel(db, preliq_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
     nombre_archivo = f"preliquidacion-{preliquidacion.quincena}.xlsx"
     return StreamingResponse(

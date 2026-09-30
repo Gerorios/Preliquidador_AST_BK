@@ -1,3 +1,4 @@
+import threading
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,6 +8,7 @@ from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
 from app.core.auth import get_usuario_actual
 from app.modulos.preliquidacion.permisos import requiere_operativo
 from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.services.consulta_externa import ExternaNoDisponible
 from app.modulos.preliquidacion.schemas import (
     PreliquidacionGenerarRequest, PreliquidacionResponse,
     LineaResponse, LineaUpdateRequest,
@@ -38,12 +40,30 @@ def get_service(
     return PreliquidacionService(db_propia, db_externa, db_sueldos)
 
 
+# Candado de proceso: una sola generación/actualización por quincena a la vez.
+# Incidente 2026-09-18: con la externa bloqueada se acumularon 7 corridas de la
+# misma quincena; cada una calcula el diff contra la base ANTES de que las otras
+# escriban, así que pueden insertar las mismas líneas dos veces. Alcanza con un
+# candado en memoria porque uvicorn corre con --workers 1 (deploy/); si algún
+# día hay más de un worker, esto tiene que pasar a la base.
+_GENERACIONES_EN_CURSO: set = set()
+_CANDADO_GENERACIONES = threading.Lock()
+
+
 @router.post("/generar", response_model=MensajeResponse)
 def generar(
     req: PreliquidacionGenerarRequest,
     usuario=Depends(get_usuario_actual),
     service: PreliquidacionService = Depends(get_service),
 ):
+    with _CANDADO_GENERACIONES:
+        if req.quincena in _GENERACIONES_EN_CURSO:
+            raise HTTPException(
+                status_code=409,
+                detail="Ya hay una generación en curso para esta quincena. "
+                       "Esperá a que termine antes de volver a intentar.",
+            )
+        _GENERACIONES_EN_CURSO.add(req.quincena)
     try:
         resultado = service.generar(quincena=req.quincena, usuario_id=usuario.id)
         stats = service.estadisticas(resultado["preliquidacion_id"])
@@ -58,10 +78,13 @@ def generar(
                 f"{stats['duplicados']} duplicados"
             ),
         )
+    except ExternaNoDisponible as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        with _CANDADO_GENERACIONES:
+            _GENERACIONES_EN_CURSO.discard(req.quincena)
 
 
 @router.post("/refrescar-sueldos", response_model=MensajeResponse)
@@ -118,15 +141,6 @@ def listar(service: PreliquidacionService = Depends(get_service)):
     return resultado
 
 
-@router.post("/{preliq_id}/backfill-conceptos", response_model=MensajeResponse)
-def backfill_conceptos(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
-    try:
-        resultado = service.backfill_detalles_conceptos(preliq_id)
-        return MensajeResponse(mensaje="Detalles cargados", detalle=f"{resultado['insertados']} nuevos")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # Estos endpoints ya no hacen el obtener() previo: el servicio detecta la
 # preliquidación inexistente (ValueError → 404). Con la base remota, ese
 # precheck costaba un round-trip entero (~200ms) en cada carga de pantalla.
@@ -137,8 +151,6 @@ def dashboard_verificacion(preliq_id: int, service: PreliquidacionService = Depe
         return service.dashboard_verificacion(preliq_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{preliq_id}/control-plantas-jornal")
@@ -147,8 +159,6 @@ def control_plantas_jornal(preliq_id: int, service: PreliquidacionService = Depe
         return service.control_plantas_jornal(preliq_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{preliq_id}/control-tancadas-jornal")
@@ -157,8 +167,6 @@ def control_tancadas_jornal(preliq_id: int, service: PreliquidacionService = Dep
         return service.control_tancadas_jornal(preliq_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{preliq_id}/operarios-mantenimiento", response_model=list[OperarioMantenimientoResponse])
@@ -169,8 +177,6 @@ def operarios_mantenimiento(preliq_id: int, service: PreliquidacionService = Dep
         return service.operarios_mantenimiento(preliq_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/{preliq_id}/categoria-operario")
@@ -185,8 +191,6 @@ def set_categoria_operario(
         return service.set_categoria_operario(preliq_id, datos.cuil, datos.categoria)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{preliq_id}/categorias-operario/heredar", response_model=MensajeResponse)
@@ -198,8 +202,6 @@ def heredar_categorias_operario(preliq_id: int, service: PreliquidacionService =
         return MensajeResponse(mensaje="Categorías heredadas", detalle=f"{resultado['heredados']} operarios")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.patch("/{preliq_id}/valor-hora-pulv")
@@ -209,8 +211,6 @@ def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Dep
         return {"valor_hora_pulv": float(preliq.valor_hora_pulv) if preliq.valor_hora_pulv is not None else None}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.patch("/{preliq_id}/valor-hora-tractorista")
@@ -220,8 +220,6 @@ def set_valor_hora_tractorista(preliq_id: int, datos: ValorHoraTractoristaReques
         return {"valor_hora_tractorista": float(preliq.valor_hora_tractorista) if preliq.valor_hora_tractorista is not None else None}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{preliq_id}/estadisticas")
@@ -257,8 +255,6 @@ def actualizar_linea(linea_id: int, datos: LineaUpdateRequest, usuario=Depends(g
         return service.actualizar_linea(linea_id=linea_id, datos=datos, usuario_id=usuario.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/linea/{linea_id}/legajos-disponibles")
@@ -293,8 +289,6 @@ def agregar_concepto_por_codigo(
         return service.agregar_concepto_por_codigo(linea_id, datos.codigo, usuario.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/linea/concepto/{concepto_id}", response_model=MensajeResponse)
@@ -320,19 +314,14 @@ def agregar_concepto_masivo(datos: ConceptoMasivoRequest, usuario=Depends(get_us
         return MensajeResponse(mensaje="Concepto agregado", detalle=f"{resultado['aplicadas']} líneas actualizadas")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/lineas/concepto-masivo/eliminar", response_model=MensajeResponse)
 def eliminar_concepto_masivo(datos: ConceptoMasivoRequest, service: PreliquidacionService = Depends(get_service)):
     if not datos.linea_ids or not datos.codigo:
         raise HTTPException(status_code=400, detail="Se requieren linea_ids y codigo")
-    try:
-        resultado = service.eliminar_concepto_masivo(datos.linea_ids, datos.codigo)
-        return MensajeResponse(mensaje="Concepto eliminado", detalle=f"{resultado['eliminados']} conceptos eliminados de {resultado['lineas']} líneas")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    resultado = service.eliminar_concepto_masivo(datos.linea_ids, datos.codigo)
+    return MensajeResponse(mensaje="Concepto eliminado", detalle=f"{resultado['eliminados']} conceptos eliminados de {resultado['lineas']} líneas")
 
 
 # ─── Reasignación masiva de empresa ────────────────────────────────────────────
@@ -380,5 +369,3 @@ def reasignar_empresa_masivo(
         return MensajeResponse(mensaje="Empresa reasignada", detalle=detalle)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

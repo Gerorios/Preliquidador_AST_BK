@@ -1,11 +1,12 @@
 from datetime import date
-from typing import Optional
+from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.core.database import get_db_propia, get_db_externa
 from app.core.auth import get_usuario_actual
+from app.core.quincena import Quincena
 from app.modulos.preliquidacion.permisos import requiere_conceptos
 from app.modulos.preliquidacion.models import ConceptoLiquidacion, Preliquidacion
 from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
@@ -88,16 +89,7 @@ def listar_tareas(db_externa: Session = Depends(get_db_externa)):
 
 @router.get("/grupos-pago")
 def listar_grupos_pago(db_externa: Session = Depends(get_db_externa)):
-    resultado = db_externa.execute(text("""
-        SELECT DISTINCT
-            TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(ta.descripcion, ';', 2), ';', -1)) AS grupo_pago
-        FROM laa_tareas ta
-        WHERE ta.estado <> 9
-          AND ta.descripcion IS NOT NULL
-          AND ta.descripcion <> ''
-        ORDER BY grupo_pago
-    """))
-    return [fila[0] for fila in resultado.fetchall() if fila[0]]
+    return ConsultaExternaService(db_externa).obtener_grupos_pago()
 
 
 # ─── Maestro unificado de Conceptos de Liquidación ───────────────────────────
@@ -343,11 +335,12 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
         reemplaza_comun=reemplaza_comun,
     )
     db.add(nuevo)
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=f"No se pudo guardar: {e}")
+    # Sin try: un error de base acá cae en el 500 genérico de main.py (el
+    # detalle va al log, no al front). No hay un duplicado "esperable" que
+    # atajar: uq_concepto_unif incluye cliente_nombre y supervisor_nombre, uno
+    # siempre es NULL (ADR-0011) y cada NULL es distinto en un índice único.
+    # La sesión la cierra get_db_propia, que descarta la transacción fallida.
+    db.commit()
     db.refresh(nuevo)
 
     PreliquidacionService(db).recalcular_por_concepto(nuevo.quincena, actual=_match(nuevo))
@@ -408,8 +401,10 @@ def eliminar_concepto(concepto_id: int, db: Session = Depends(get_db_propia)):
 @router.post("/conceptos/copiar", response_model=MensajeResponse,
              dependencies=[Depends(requiere_conceptos)])
 def copiar_quincena(
-    quincena_origen: date = Query(...),
-    quincena_destino: date = Query(...),
+    # Annotated[Quincena, Query()] y no `Quincena = Query(...)`: con la segunda
+    # forma FastAPI descarta el validador y un 17 pasa (ver app/core/quincena.py).
+    quincena_origen: Annotated[Quincena, Query()],
+    quincena_destino: Annotated[Quincena, Query()],
     db: Session = Depends(get_db_propia),
 ):
     """Copia todos los conceptos de una quincena a otra. Omite los que ya existen."""
@@ -490,7 +485,7 @@ def solapamientos_quincena(
     db: Session = Depends(get_db_propia),
 ):
     """
-    Solapamientos por cliente vigentes en la quincena (CONTEXT.md): pares
+    Solapamientos por cliente vigentes en la quincena (CONTEXT-preliquidacion.md): pares
     tarea+cliente donde conviven una regla por cliente y específicas del
     mismo cliente con categorías compatibles. Suman por ADR-0011; el
     liquidador debe controlarlos. Vacío = todo en orden.

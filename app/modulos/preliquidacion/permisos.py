@@ -1,5 +1,5 @@
 """Dependencias de autorización del módulo Preliquidación sobre el núcleo
-(app/core/permisos.py). Quién pasa: ver CONTEXT.md "Rol" y ADR-0013."""
+(app/core/permisos.py). Quién pasa: ver CONTEXT-preliquidacion.md "Roles en Preliquidación" y ADR-0013."""
 from app.core.permisos import requiere_modulo
 
 MODULO = "preliquidacion"
