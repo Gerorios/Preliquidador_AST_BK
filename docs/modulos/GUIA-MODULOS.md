@@ -283,7 +283,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 ### 4.6 Tests y calidad
 
 23. **Cada módulo tiene sus tests en `tests/<modulo>/`** y la lógica de negocio (cálculos, reglas, cruces) se testea sin base real: los tests de hoy usan SQLite en memoria y fixtures sembradas. Un PR que agrega una regla de negocio sin test no se mergea.
-24. **Antes de abrir un PR**: `python -m pytest -q` en verde completo (no solo los tests del módulo) y `npm run build` sin errores.
+24. **Antes de abrir un PR**: `python -m pytest -q` en verde completo (no solo los tests del módulo), `npm run build` sin errores y `npm run lint` sin errores.
 25. **Lo que hace falta explicar se explica en un comentario que diga el porqué**, no el qué. El código actual tiene muchos comentarios de este estilo; mirar `preliquidacion_service.py` para el tono.
 
 ### 4.7 Documentación del módulo
@@ -374,6 +374,7 @@ Tests y build:
 ```bash
 python -m pytest -q            # backend, tiene que dar todo verde
 npm run build                  # frontend, tiene que terminar sin errores
+npm run lint                   # frontend, tiene que terminar sin errores
 ```
 
 ### 6.2 El `.env` y la base de desarrollo

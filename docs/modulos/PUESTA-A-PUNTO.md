@@ -209,6 +209,7 @@ Antes de abrir un PR:
 ```bash
 python -m pytest -q      # backend, todo verde
 npm run build            # frontend, sin errores
+npm run lint             # frontend, sin errores
 ```
 
 ---
