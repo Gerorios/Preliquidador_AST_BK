@@ -922,3 +922,77 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
 - Minor aceptados sin tocar (los lista el PR): 4 tests de endpoints del módulo quedaron en
   `tests/core/`; la fixture SQLite en memoria se repite en 5 archivos; `limite_login.py`
   lee una tupla por índice; el 429 dice "1 minutos" en el último minuto.
+
+## 2026-09-30 — Plan de seguridad, PR 2: chequeo de tablas y columnas al arrancar y ORDEN.txt
+
+**Mergeado**
+- PR #57 (backend) — al arrancar, la app compara los modelos con la base propia y avisa
+  si faltan tablas o columnas; entra `migrations/ORDEN.txt` con el orden de las 18
+  migraciones. PR 2 de 6 del plan
+  `docs/superpowers/plans/2026-09-29-seguridad-y-calidad-relevamiento.md`. Sin PR hermano
+  en el front.
+
+**Por frontera**
+- Núcleo: nuevo `app/core/esquema.py` con `comparar_esquema(metadata, inspector)`, que
+  detecta tablas y columnas del modelo que faltan en la base propia; columnas de más en la
+  base no son error, y no compara tipos ni índices. Recibe el metadata por parámetro, así
+  el núcleo no importa módulos (ADR-0013). En `app/main.py` el banner de arranque dice
+  `ERROR: faltan tablas/columnas en la base propia (migraciones sin aplicar): ...` o
+  `Tablas y columnas BD propia: verificadas`, y nunca aborta. Si el chequeo mismo falla,
+  el banner avisa "no se pudo verificar" y el traceback va al log (`app.esquema`).
+  `/health` da `status: "error"` si falta algo, sin nombres: sigue con sólo `status` y
+  booleanos. Corrige lo anotado para el PR #56: los nombres de lo faltante ya no van al
+  log de `app.health`, que ahora sólo remite al banner. stdout pasa a `line_buffering`.
+- Prod y Datos: nuevo `migrations/ORDEN.txt`, orden explícito de todas las migraciones.
+  ws1..ws16 y `fix_trazabilidad` van marcadas `historica`: ya están dentro de
+  `000_esquema_base.sql` (exportado de producción) y fallan en una base nueva. Un test
+  exige que cada `.sql` figure una sola vez, que no haya entradas inexistentes, que
+  `historica` sea la única marca y que ninguna histórica vaya antes del 000. El orden
+  ws5 → fix → ws7 sale de `git log`.
+- Docs: `GUIA-MODULOS.md` §3.2, §3.3 y reglas 10 y 12 de §4.3 (toda migración nueva se
+  agrega al final de `ORDEN.txt` en el mismo PR; qué dice el banner después del deploy);
+  `README.md`; `migrations/terceros/LEEME.md`; el plan anota la opción A y el paso R1.
+
+**Decisiones**
+- **Sin tabla de registro de migraciones, sin script de aplicación y sin ADR.** Porqué:
+  el usuario no quiere tablas nuevas para esto, y comparar el modelo con el esquema real
+  detecta el caso que importa (código deployado sin su migración). Descartado: un
+  registro en un archivo fuera de la base, que se desincroniza de la base real.
+- **Si el chequeo mismo falla, `/health` no marca error** (opción A, elegida por el
+  usuario). Porqué: no confundir un fallo del chequeo con migraciones faltantes; un
+  problema de conexión ya se ve en `bd_propia`. Descartado: marcar `status: "error"`
+  también en ese caso.
+- **No abortar el arranque si falta algo.** Porqué: systemd entraría en bucle de
+  reinicios.
+- **No comparar tipos ni índices.** Porqué: darían falsos positivos entre MySQL y el ORM.
+- **La regla nueva se sumó a las reglas 10 y 12 de la guía en vez de crear una 13.**
+  Porqué: no renumerar reglas que se citan por número.
+- **stdout con `line_buffering` (paso R1).** Porqué: bajo systemd stdout es un pipe y el
+  banner, único lugar con los nombres faltantes, no llegaba al journal hasta el siguiente
+  restart. Salió como high de la revisión y, según quien despachó, se arregló sin consultar
+  al usuario, como manda el flujo para un high.
+
+**Estado**
+- Deploy: no se hizo. Según quien despachó, conviene deployarlo junto con el PR #56 (que
+  necesita `pip install -r requirements.txt` antes del restart). Tras el restart, el
+  journal tiene que mostrar `Tablas y columnas BD propia: verificadas`; si muestra
+  `ERROR: faltan ...`, es una migración sin aplicar en producción: frenar y revisar antes
+  de tocar nada. Rollback: revert del merge y restart.
+- Migraciones: ninguna (sin DDL).
+- Verificación (del PR): 364 tests en verde, y los 9 tocados por R1 en verde; cada paso
+  con test rojo antes. Revisión con 0 urgent y 1 high (arreglado como R1). Smoke contra
+  `testing` con stdout redirigido a archivo, como bajo systemd: el banner se leyó con el
+  proceso vivo y dijo `verificadas`; `/health` dio `ok` con las tres bases en `true`.
+
+**Pendiente**
+- Deploy de los PRs #56 y #57 (con OK del usuario).
+- Actualizar `docs/DEPLOY.md` (fuera de git): qué devuelve `/health` y que el orden de una
+  base nueva lo da `ORDEN.txt`.
+- PRs 3 a 6 del plan.
+- Minor aceptados sin tocar (los lista el PR): `bool(tablas or columnas)` en `main.py`
+  sería mejor como propiedad de `Diferencias`; "(migraciones sin aplicar)" repetido en
+  banner y log; fixtures SQLite duplicadas entre `test_esquema.py` y
+  `test_health_tablas.py`; el nombre de `test_health_tablas.py` ya no refleja que prueba
+  también el arranque; el docstring de `test_esquema.py` cita "(PR2, paso 2.1)";
+  `test_manifiesto_migraciones.py` tiene `BASE` ambiguo, `_entradas()` llamado dos veces y
+  `MARCAS_VALIDAS` de un elemento.
