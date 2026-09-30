@@ -162,6 +162,7 @@ backend_preliquidacion/
 │           ├── services/
 │           └── consulta_externa.py   # las consultas del Excel, en SQL parametrizado
 ├── migrations/
+│   ├── ORDEN.txt                     # orden de aplicación de todas las migraciones; marca `historica` las ya contenidas en el 000
 │   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
 │   └── terceros/                     # (molde, inactivo) LEEME.md; 001_crear_tablas.sql cuando arranque
 ├── tests/
@@ -210,10 +211,10 @@ El molde ya existe en los dos repos, registrado pero inactivo (ver "Módulo acti
 
 **1. Backend — activar y completar.**
 
-- `app/modulos/terceros/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta). Los modelos del módulo se registran con el campo `modelos` de `ModuloInfo`; el arranque los importa y con eso el chequeo de tablas faltantes de `/health` cubre al módulo.
+- `app/modulos/terceros/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta). Los modelos del módulo se registran con el campo `modelos` de `ModuloInfo`; el arranque los importa y con eso el chequeo de tablas y columnas faltantes del arranque (y de `/health`) cubre al módulo.
 - `app/modulos/terceros/api/terceros.py` hoy tiene un único endpoint de estado (`GET /api/terceros/` → `{"modulo": "terceros", "estado": "en construcción"}`); ahí se agregan los endpoints reales, o se parte en más archivos dentro de `api/` (ver el patrón de `app/modulos/preliquidacion/api/`).
 - Modelos en `app/modulos/terceros/models.py`, tablas con prefijo `terceros_` (regla 5 de la sección 4.2).
-- Migraciones en `migrations/terceros/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/terceros/LEEME.md`), probadas primero contra `testing`.
+- Migraciones en `migrations/terceros/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/terceros/LEEME.md`), anotadas al final de `migrations/ORDEN.txt` y probadas primero contra `testing`.
 - Tests en `tests/terceros/` (hoy solo `test_molde.py`, que confirma que el módulo compila inactivo).
 - Glosario del dominio en `docs/modulos/terceros/CONTEXT-terceros.md`: ya tiene el cuestionario de la sección 8.1 de esta guía: responderlo ahí antes de diseñar el modelo.
 
@@ -259,9 +260,9 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 ### 4.3 Migraciones
 
-10. **SQL manual, versionado, un archivo por cambio**: `migrations/terceros/001_crear_tablas.sql`, `002_agregar_columna_x.sql`. Numeración propia del módulo, correlativa.
+10. **SQL manual, versionado, un archivo por cambio**: `migrations/terceros/001_crear_tablas.sql`, `002_agregar_columna_x.sql`. Numeración propia del módulo, correlativa. **Cada archivo nuevo se agrega al final de `migrations/ORDEN.txt` en el mismo PR**: ese manifiesto fija el orden de aplicación de todas las carpetas y marca `historica` las migraciones ya contenidas en `preliquidacion/000_esquema_base.sql`, que no se corren en una base nueva. Un test falla si un `.sql` bajo `migrations/` no figura ahí.
 11. **Cada migración es idempotente o dice claramente que no lo es** en un comentario arriba (`-- NO DIFERIBLE: crea columnas que el código de esta versión necesita`).
-12. **Se prueba primero contra `testing`**, se incluye en el PR, y a producción la aplica Gero junto con el deploy del código que la necesita. Nunca antes ni por separado sin coordinar.
+12. **Se prueba primero contra `testing`**, se incluye en el PR, y a producción la aplica Gero junto con el deploy del código que la necesita. Nunca antes ni por separado sin coordinar. Al arrancar, la app compara los modelos con la base propia: si falta una tabla o una columna, lo imprime en el banner (`ERROR: faltan ...`, queda en el journal) y `/health` da `status: "error"`, sin abortar el arranque. Después del deploy, el banner tiene que decir `Tablas y columnas BD propia: verificadas`.
 
 ### 4.4 Endpoints y permisos
 

@@ -22,7 +22,8 @@ Repositorio hermano (frontend React + Vite): `Gerorios/Preliquidador_AST_FT`.
 | Exportación | openpyxl |
 | Tests | pytest (SQLite en memoria) |
 
-Las migraciones son SQL manual versionado en `migrations/<core|modulo>/`.
+Las migraciones son SQL manual versionado en `migrations/<core|modulo>/`; el orden de aplicación
+está en `migrations/ORDEN.txt`. Al arrancar, la app avisa si a la base le faltan tablas o columnas.
 
 ---
 
@@ -35,7 +36,7 @@ app/
 └── modulos/
     ├── preliquidacion/   # módulo Preliquidación (activo): api/, services/, models.py, schemas.py
     └── terceros/         # módulo Liquidación Terceros (en construcción, inactivo)
-migrations/            # SQL por núcleo y por módulo
+migrations/            # SQL por núcleo y por módulo; ORDEN.txt fija el orden de aplicación
 tests/                 # core/, preliquidacion/, terceros/
 scripts/               # utilidades de administración y desarrollo
 docs/                  # documentación funcional, ADRs y guías
