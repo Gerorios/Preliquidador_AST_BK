@@ -18,3 +18,5 @@ Se introduce el concepto de **tarea alias de pago**: un mapeo hardcodeado `TAREA
 - El control de excesos (>13 hs/día) sigue sumando las horas reales de la persona sin importar la tarea: 15 comunes + 5 de guardia el mismo día siguen siendo un exceso de 20 hs (deseado — el desdoblamiento es administrativo, las horas son reales).
 - Crear un concepto para la tarea alias devuelve 422 con mensaje explicando con qué tarea paga.
 - Sin migración de base: el mapeo vive en código.
+
+> Nota (2026-09-30): la constante `EMPLEADOS_MENSUALIZADOS` que se cita como antecedente se reemplazó por la variable `EMPLEADOS_MENSUALIZADOS_CUIL` del `.env` del servidor (PR de mensualizados por CUIL). La decisión de este ADR no cambia.

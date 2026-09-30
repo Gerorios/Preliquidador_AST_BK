@@ -54,7 +54,7 @@ Espejo de la estructura del backend.
 
 ### Dónde se edita algo que no está en la app
 
-- **Personas mensualizadas**: la lista es fija y vive en el código, en **dos copias** que hay que cambiar juntas: `EMPLEADOS_MENSUALIZADOS` en `app/modulos/preliquidacion/services/preliquidacion_service.py` (backend) y en `src/modulos/preliquidacion/pages/Verificacion.jsx` (frontend).
+- **Personas mensualizadas**: se configuran por CUIL en el `.env` del servidor, en la variable `EMPLEADOS_MENSUALIZADOS_CUIL` (CUILes separados por coma, con o sin guiones; vacía = nadie). La lee el backend al arrancar, así que un cambio necesita reiniciar el servicio. El frontend no tiene lista propia: usa el campo `mensualizado` que trae cada línea.
 
 ---
 

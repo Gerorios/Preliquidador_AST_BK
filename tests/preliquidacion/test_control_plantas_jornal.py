@@ -24,7 +24,18 @@ from app.modulos.preliquidacion.models import (
     Preliquidacion, PreliquidacionLinea, ConceptoLiquidacion,
     ConceptoAdicional, UnidadBaseConcepto, TipoConcepto,
 )
+from app.modulos.preliquidacion.config import config
 from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+
+# CUIL ficticio: la lista real de mensualizados vive sólo en el .env del
+# servidor (el repo es público).
+CUIL_MENSUALIZADO = "20111111119"
+
+
+@pytest.fixture()
+def mensualizado(monkeypatch):
+    monkeypatch.setattr(config, "empleados_mensualizados_cuil", CUIL_MENSUALIZADO)
+    return CUIL_MENSUALIZADO
 
 
 @pytest.fixture()
@@ -45,11 +56,11 @@ def _preliq(db, valor_hora=None):
 
 
 def _linea(db, preliq, unidades, hsmaquina, tarea="DESBROTE", cliente="CLIENTE A",
-           finca="FINCA 1", supervisor=None, nombre_empleado=None):
+           finca="FINCA 1", supervisor=None, nombre_empleado=None, cuit=None):
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id, nombre_tarea=tarea, nombre_cliente=cliente,
         nombre_finca=finca, nombre_supervisor=supervisor, grupo_pago_aplicado="PLANTA",
-        nombre_empleado=nombre_empleado,
+        nombre_empleado=nombre_empleado, cuit=cuit,
         unidades=Decimal(unidades), hsmaquina=Decimal(hsmaquina),
         tancadas=Decimal("0"), hsjornal=Decimal("0"),
         importe_total=Decimal("0"), linea_incompleta=False,
@@ -93,23 +104,60 @@ def test_precio_sale_del_pago_real_no_del_maestro(db):
     assert res["filas"][0]["precio_promedio"] == 12.0
 
 
-def test_excluye_lineas_de_empleados_mensualizados(db):
-    """Las líneas de personas mensualizadas (hardcodeadas en
-    EMPLEADOS_MENSUALIZADOS) no entran a este control — pagan sueldo fijo,
-    no jornal, así que la comparación no les aplica."""
-    from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+def test_excluye_lineas_de_empleados_mensualizados(db, mensualizado):
+    """Las líneas de personas mensualizadas (por CUIL, desde la config del
+    módulo) no entran a este control — pagan sueldo fijo, no jornal, así que
+    la comparación no les aplica."""
     preliq = _preliq(db)
     l1 = _linea(db, preliq, unidades="1000", hsmaquina="16",
-                nombre_empleado=EMPLEADOS_MENSUALIZADOS[0])
+                nombre_empleado="EMPLEADO, MENSUALIZADO", cuit=mensualizado)
     _pagar(db, l1, precio="12", cantidad="1000")
     l2 = _linea(db, preliq, unidades="500", hsmaquina="8",
-                nombre_empleado="OTRO, EMPLEADO")
+                nombre_empleado="OTRO, EMPLEADO", cuit="20333333339")
     _pagar(db, l2, precio="12", cantidad="500")
 
     res = _control(db, preliq)
 
     assert len(res["filas"]) == 1
     assert res["filas"][0]["unidades"] == 500.0
+
+
+def test_mensualizado_se_reconoce_con_espacios_en_la_columna(db, mensualizado):
+    """La columna se compara con strip: un CUIL con espacios alrededor igual
+    es el mismo mensualizado."""
+    preliq = _preliq(db)
+    l1 = _linea(db, preliq, unidades="1000", hsmaquina="16", cuit=f" {mensualizado} ")
+    _pagar(db, l1, precio="12", cantidad="1000")
+
+    assert _control(db, preliq)["filas"] == []
+
+
+def test_mensualizado_con_guiones_en_la_columna_no_se_excluye(db, mensualizado):
+    """Pregunta 3 del plan: los CUIL del .env se normalizan a 11 dígitos y se
+    comparan contra la columna tal cual (sólo con strip). En `testing` la
+    columna viene siempre sin guiones; si algún día viniera con guiones, esa
+    línea no se excluye. Este test fija esa decisión."""
+    preliq = _preliq(db)
+    l1 = _linea(db, preliq, unidades="1000", hsmaquina="16", cuit="20-11111111-9")
+    _pagar(db, l1, precio="12", cantidad="1000")
+
+    res = _control(db, preliq)
+
+    assert len(res["filas"]) == 1
+    assert res["filas"][0]["unidades"] == 1000.0
+
+
+def test_linea_sin_cuit_no_se_excluye(db, mensualizado):
+    """NOT IN con NULL da NULL en SQL (fila afuera): una línea sin CUIL no es
+    de ningún mensualizado y tiene que seguir entrando al control."""
+    preliq = _preliq(db)
+    l1 = _linea(db, preliq, unidades="1000", hsmaquina="16", cuit=None)
+    _pagar(db, l1, precio="12", cantidad="1000")
+
+    res = _control(db, preliq)
+
+    assert len(res["filas"]) == 1
+    assert res["filas"][0]["unidades"] == 1000.0
 
 
 def test_precio_promedio_ponderado_con_precios_mezclados(db):

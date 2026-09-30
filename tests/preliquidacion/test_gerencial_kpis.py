@@ -7,7 +7,18 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.modulos.preliquidacion.models import Preliquidacion, PreliquidacionLinea
+from app.modulos.preliquidacion.config import config
 from app.modulos.preliquidacion.services.gerencial_service import GerencialService, PeriodoInvalidoError
+
+# CUIL ficticio: la lista real de mensualizados vive sólo en el .env del
+# servidor (el repo es público).
+CUIL_MENSUALIZADO = "20111111119"
+
+
+@pytest.fixture()
+def mensualizado(monkeypatch):
+    monkeypatch.setattr(config, "empleados_mensualizados_cuil", CUIL_MENSUALIZADO)
+    return CUIL_MENSUALIZADO
 
 
 @pytest.fixture()
@@ -92,17 +103,26 @@ def test_resumen_quincena_y_variacion(db):
     assert r["variacion_pct"] == 50.0
 
 
-def test_resumen_excluye_mensualizados(db):
+def test_resumen_excluye_mensualizados(db, mensualizado):
     """La plata de las personas mensualizadas (sueldo fijo, no jornal) no
     entra a ningún cálculo de mano de obra de Gerencial."""
-    from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
     p = _preliq(db, Q_MAY_1)
     _linea(db, p, 1000, cuil="20-1", nombre="OTRO")
-    _linea(db, p, 5000, cuil="20-2", nombre=EMPLEADOS_MENSUALIZADOS[0])
+    _linea(db, p, 5000, cuil=mensualizado, nombre="EMPLEADO, MENSUALIZADO")
 
     r = GerencialService(db).resumen(Q_MAY_1, None, None)
     assert r["total"] == 1000.0
     assert r["personas"] == 1
+
+
+def test_resumen_no_excluye_lineas_sin_cuil(db, mensualizado):
+    """NOT IN con NULL da NULL en SQL: una línea sin CUIL sigue sumando."""
+    p = _preliq(db, Q_MAY_1)
+    _linea(db, p, 1000, cuil="20-1", nombre="OTRO")
+    _linea(db, p, 500, cuil=None, nombre="SIN CUIL")
+
+    r = GerencialService(db).resumen(Q_MAY_1, None, None)
+    assert r["total"] == 1500.0
 
 
 def test_resumen_mes_agrupa_sus_quincenas_y_compara_mes_anterior(db):
@@ -207,16 +227,15 @@ def test_desvios_persona_contra_su_media(db):
     assert [p["nombre"] for p in r["sin_historial"]] == ["PEDRO"]
 
 
-def test_desvios_persona_excluye_mensualizados(db):
-    from app.modulos.preliquidacion.services.preliquidacion_service import EMPLEADOS_MENSUALIZADOS
+def test_desvios_persona_excluye_mensualizados(db, mensualizado):
     p = _preliq(db, Q_MAY_1)
     _linea(db, p, 1000, cuil="20-1", nombre="JUAN")
-    _linea(db, p, 9000, cuil="20-2", nombre=EMPLEADOS_MENSUALIZADOS[0])
+    _linea(db, p, 9000, cuil=mensualizado, nombre="EMPLEADO, MENSUALIZADO")
 
     r = GerencialService(db).desvios_por_persona(Q_MAY_1, None, None)
 
     nombres = {p["nombre"] for p in r["personas"] + r["sin_historial"]}
-    assert EMPLEADOS_MENSUALIZADOS[0] not in nombres
+    assert nombres == {"JUAN"}
 
 
 def test_desvios_ventana_limita_a_6_quincenas(db):
