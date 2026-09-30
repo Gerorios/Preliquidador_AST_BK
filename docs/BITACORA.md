@@ -1065,3 +1065,160 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
   tiene dos asserts y sólo avisa cuando se arreglan excesos y resumen a la vez;
   `_con_service` en `test_endpoints_lineas.py` está fuera de un fixture; docstrings que
   citan pasos del plan.
+
+## 2026-09-30 — Plan de seguridad, PR 4: mensualizados por CUIL desde el .env del servidor
+
+**Mergeado**
+- PR #60 (backend) — la lista de mensualizados sale del código y pasa a la variable
+  `EMPLEADOS_MENSUALIZADOS_CUIL` del `.env` del servidor; cada línea trae `mensualizado`.
+- PR #47 (frontend, hermano) — Verificación filtra con `!l.mensualizado` y deja de tener
+  la lista de nombres en el código.
+
+**Por frontera**
+- Preliquidación: nuevo `app/modulos/preliquidacion/config.py` (`ConfigPreliquidacion`,
+  `cuils_mensualizados()`, `es_mensualizado()`); un valor inválido en la variable se
+  ignora con un aviso en el log, no aborta. `filtro_no_mensualizado()` reemplaza el filtro
+  por nombre en los tres controles del servicio (Plantas/Tancadas vs Jornal) y en los
+  cuatro KPIs de Gerencial; líneas sin CUIL no se excluyen y con la lista vacía el filtro
+  no agrega condición. `GET /api/preliquidacion/{id}/lineas` trae `mensualizado: bool`
+  (propiedad del modelo, default `False` en `LineaResponse`). En el front,
+  `Verificacion.jsx` filtra por ese campo y pierde un `useEffect` importado sin uso.
+- Prod y Datos: `.env.example` suma `EMPLEADOS_MENSUALIZADOS_CUIL` vacía (vacío = nadie).
+- Docs: `DOCUMENTACION.md` y `CONTEXT-preliquidacion.md` dicen qué es un mensualizado
+  (configuración del servidor, por CUIL); nota de una línea al ADR-0012, que citaba la
+  constante borrada, aclarando que su decisión no cambia.
+
+**Decisiones**
+- **Por CUIL y no por nombre.** Porqué: el nombre cambia de formato entre sistemas y es un
+  dato personal en un repo público.
+- **En el módulo y no en el núcleo.** Porqué: lo usa un solo módulo (ADR-0013).
+- **El campo viaja en la línea.** Porqué: así el front no guarda datos de personas.
+  Descartado: una tabla con pantalla de administración (demasiado para dos personas);
+  dejar la lista en el código.
+- **La diferencia de normalización queda como minor**, decidido por el usuario en la
+  revisión: la propiedad `mensualizado` normaliza guiones y el filtro SQL sólo hace
+  `TRIM`, así que con un `cuit` con guiones en la base darían distinto. Porqué: hoy no
+  pasa, el `cuit` viene como 11 dígitos sin guiones (verificado en `testing`).
+- **Nota de una línea al ADR-0012**, decidido por el usuario en la revisión, en vez de
+  dejarlo citando una constante que ya no existe.
+
+**Estado**
+- Deploy: no.
+- Migraciones: ninguna.
+- Verificación (del PR): `python -m pytest -q` con 460 passed y 4 xfailed; revisión en los
+  dos repos con 0 urgent y 0 high. Smoke contra `testing` con los CUIL cargados sólo
+  durante la prueba: todas las líneas de las dos personas marcadas, ninguna ajena marcada
+  por error, y el filtro nuevo deja las mismas líneas que el viejo por nombre. El front
+  compila. No probado: Verificación en el navegador. Los nombres de la lista vieja siguen
+  en el historial de git de los dos repos (no se reescribe).
+
+**Pendiente**
+- Deploy, con OK del usuario y en este orden obligatorio: (1) agregar
+  `EMPLEADOS_MENSUALIZADOS_CUIL` al `.env` del VPS (sin ella nadie queda mensualizado y
+  esas personas vuelven a los controles y a Gerencial); (2) backend (el front viejo sigue
+  andando: filtra por nombre e ignora el campo); (3) frontend (contra un backend viejo no
+  filtra nada). Rollback: revert + restart en el back, swap a `frontend_old` en el front.
+- Minor aceptados sin tocar (los lista el PR): comentarios que citan pasos del plan;
+  `CUIL_MENSUALIZADO` y el fixture `mensualizado` repetidos en tres archivos de test;
+  `test_mensualizados_config.py` importa `filtro_no_mensualizado` dentro de cada test.
+- PRs 5 y 6 del plan.
+
+## 2026-09-30 — Liquidación Terceros: etapas 1 a 10, cuotas y mover de quincena
+
+**Mergeado**
+- PR #59 (backend) — módulo Liquidación Terceros de la etapa 1 a la 10 del plan, más mover
+  hechos de quincena y repartir repuestos en cuotas. Reemplaza el Excel de 19 hojas con el
+  que hoy se liquida a los terceros. Trabajo de otro desarrollador del equipo.
+- PR #46 (frontend, hermano) — pantallas del módulo: Inicio (tablero de quincenas),
+  Quincena, Tarifario, Estaciones y Verificaciones, más los diálogos de mover de quincena
+  y de cuotas.
+
+**Por frontera**
+- Liquidación Terceros: el módulo pasa a `activo=True` (deja de ser molde). Servicios
+  nuevos en `app/modulos/terceros/services/`: consultas de origen, alertas de cruce, horas
+  de taller, generar y actualizar la quincena, tarifario, cálculo del neto, grilla,
+  verificaciones, estaciones de servicio y destino (mover de quincena). Scripts
+  `importar_tarifas_del_excel.py` y `validar_terceros_etapa1.py`. En el front, la Quincena
+  es el molde de las pantallas y la lógica de filtros encadenados vive en `filtrar.js`.
+- Núcleo: `app/core/config.py` suma `taller_sheet_url` (vacío = la consulta de horas
+  avisa que falta, sin romper el arranque); `tests/core/test_registro_modulos.py` se
+  ajusta al módulo activo.
+- Prod y Datos: siete migraciones nuevas, `migrations/terceros/001` a `007`, todas con
+  prefijo `terceros_` y sin tocar tablas existentes, registradas en `migrations/ORDEN.txt`
+  **sin** la marca `historica`. Dependencia nueva aprobada: `xlrd` (sólo para el `.xls` de
+  Excel 97 de una estación). `.env.example` suma `TALLER_SHEET_URL`.
+- Docs: `CONTEXT-terceros.md` y `plan-terceros.md` ampliados; nuevos
+  `docs/modulos/taller/ESPECIFICACION-taller.md`, `docs/modulos/taller/fuentes/LEEME.md` y
+  `docs/modulos/terceros/historial-conversaciones-previas.md`; `GUIA-MODULOS.md` dice que
+  Terceros está activo y en construcción; `PUESTA-A-PUNTO.md` explica `TALLER_SHEET_URL`.
+
+**Decisiones** (del cuerpo de los PR; cada commit del BK #59 trae además su porqué)
+- **Las consultas de origen se traen tal cual del Excel.** Porqué: para poder validarlas
+  contra él (07-2Q y 08-1Q coinciden fila por fila).
+- **Sólo se alerta de lo accionable**, y cada alerta dice en qué sistema se corrige.
+  Porqué no registrado en el PR.
+- **Dos servicios de maquinaria**: la máquina del tercero trabaja (se le paga) o se repara
+  (se le descuenta). La hora de jornal no se paga nunca. Porqué no registrado en el PR.
+- **Actualizar la quincena reconcilia por clave en vez de rehacer**, como Preliquidación.
+  Porqué: no pisa lo cargado a mano.
+- **Tarifario por quincena: gana la regla más específica y el empate queda ambiguo.**
+  Porqué: el módulo nunca elige un precio en silencio.
+- **El neto cierra en dos cifras**: Total a facturar y, restándole los seguros, Total a
+  pagar; siete estados con nombre en vez de un importe en cero. Porqué no registrado en
+  el PR.
+- **Verificaciones**: duplicados con la misma clave que la reconciliación, agrupados por el
+  sistema donde se corrigen. Porqué no registrado en el PR.
+- **Estaciones**: el mapeo de cada archivo vive en la base y no en el código. Cruce por
+  vale, por patente y litros con dos días de tolerancia, y por patente a un carácter sólo
+  si la del archivo no es de ningún colectivo. Porqué no registrado en el PR.
+- **Un hecho movido de quincena se cobra con el tarifario de la quincena en que se
+  generó.** Porqué: moverlo cambia cuándo, no cuánto.
+- **Cuotas quincenales e iguales, con el importe escrito y no derivado.** Porqué no
+  registrado en el PR.
+- **Datos personales**: antes de publicar la rama se reescribió su historial (nunca se
+  había publicado) para sacar la IP del servidor de las bases, mails personales y nombres
+  reales de terceros; en tests y documentos son inventados, siempre el mismo por persona.
+  Porqué: el repo es público.
+- **Front: la Quincena es el molde de todas las pantallas.** Porqué: en Estaciones una
+  tabla por problema obligaba a elegir cuál mirar antes de saber qué se buscaba.
+- **Front: los filtros encadenan y su lógica vive en `filtrar.js`.** Porqué: estaba
+  copiada en cuatro pantallas y alguna iba a quedar sin encadenar.
+- **Front: al cargar una tarifa, nada tildado es «cualquiera»** (alcanza a lo que
+  aparezca mañana) **y todos tildados es una regla por cada uno.** Porqué: así un capataz
+  nuevo no cobra un precio que nadie le pactó.
+- **Front: sin leyendas explicativas en pantalla**; las dos que avisaban algo que cambia
+  lo que pasa pasaron a la ayuda del botón. Porqué no registrado en el PR.
+- **Front: mover de quincena y cuotas se editan en un diálogo.** Porqué: la tabla es más
+  ancha que la pantalla y el formulario quedaba lejos del botón.
+- **El conflicto de `.env.example` con `main`** (las dos ramas agregaban una variable al
+  final: `TALLER_SHEET_URL` y `EMPLEADOS_MENSUALIZADOS_CUIL`) se resolvió, a pedido del
+  usuario, con un commit de merge en la rama del PR (c15b4f7) que deja los dos bloques.
+- **Se mergeó sin pasar por la revisión de código de dos ejes**, por decisión del usuario.
+  Porqué no registrado en el PR.
+
+**Estado**
+- Deploy: no.
+- Migraciones: `terceros/001` a `007` traen DDL, a aplicar en testing y producción con el
+  deploy. El PR dice que se aplicaron y probaron en `testing` durante el desarrollo, y
+  que en producción no existe ninguna tabla `terceros_`.
+- Verificación: el PR informa `pytest` con 688 en verde, arranque contra `testing` con el
+  chequeo de esquema confirmando tablas y columnas, y pruebas por HTTP contra `testing`
+  con datos reales de agosto (cruce de estaciones, mover un viaje conservando su precio,
+  un repuesto repartido en tres cuotas que suman exacto). Después del merge de `main`
+  (c15b4f7), la suite con todo mezclado dio 783 passed y 4 xfailed. El FT #46 no tenía
+  conflictos y compiló; cada pantalla la revisó el usuario contra agosto en `testing`. No
+  probados de punta a punta en el navegador: los diálogos de mover de quincena y de
+  cuotas.
+
+**Pendiente**
+- Deploy, con OK del usuario: migraciones `terceros/001` a `007` en testing y producción;
+  `TALLER_SHEET_URL` en el `.env` del VPS (la URL la entrega el usuario); instalar `xlrd`;
+  backend y después frontend (el FT #46 no tiene de dónde leer sin los endpoints y las
+  migraciones del BK #59). Con el deploy el módulo queda activo en producción. Se suma al
+  deploy pendiente del PR 4, que también necesita su variable en el `.env` del VPS.
+- La aceptación de la etapa 7: que agosto dé igual que la liquidación hecha a mano.
+  Faltan precios de horas de servicio y definir quién aprueba las horas de taller; está
+  en el plan.
+- El desarrollador de Terceros tiene que hacer `git pull` en su rama, que ahora tiene el
+  merge c15b4f7.
+- La revisión de código de dos ejes sobre este PR, que no se hizo.
