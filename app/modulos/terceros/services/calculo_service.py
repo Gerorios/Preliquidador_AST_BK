@@ -26,14 +26,14 @@ from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import case, func, update
+from sqlalchemy import case, exists, func, update
 from sqlalchemy.orm import Session
 
 from app.modulos.terceros.models import (
     CALCULADO, NO_APROBADA, NO_COBRAR, SIGNO, SIN_CANTIDAD, SIN_DIMENSION,
     SIN_TARIFA, SIN_TERCERO, TARIFA_AMBIGUA, UNIDAD_HORA_MAQUINA,
-    CargaCombustible, HoraReparacion, HoraServicio, Liquidacion, PrecioSeguro,
-    Repuesto, Viaje,
+    CargaCombustible, CuotaRepuesto, HoraReparacion, HoraServicio, Liquidacion,
+    PrecioSeguro, Repuesto, Viaje,
 )
 from app.modulos.terceros.services.consulta_taller import ESTADO_APROBADO
 from app.modulos.terceros.services.tarifario_service import TIPOS, especificidad
@@ -114,6 +114,19 @@ def _cant_servicio(hecho, tarifa):
     if tarifa.unidad_base == UNIDAD_HORA_MAQUINA:
         return hecho.horas_maquina, UNIDAD_HORA_MAQUINA
     return hecho.unidades, tarifa.unidad_base
+
+
+def sin_cuotas(consulta, modelo):
+    """Deja afuera los repuestos que se descuentan en cuotas.
+
+    Un repuesto con cuotas no se descuenta en su quincena sino en cada una de
+    las de sus cuotas. Toda consulta que sume repuestos por quincena tiene que
+    pasar por acá, o ese repuesto se descontaría dos veces: entero en la suya y
+    en partes en las otras.
+    """
+    if modelo is not Repuesto:
+        return consulta
+    return consulta.filter(~exists().where(CuotaRepuesto.repuesto_id == Repuesto.id))
 
 
 CONCEPTOS = {
@@ -211,6 +224,8 @@ class CalculoService:
     def _calcular_concepto(self, concepto: str, conf: dict,
                            liquidacion: Liquidacion) -> dict:
         modelo = conf["modelo"]
+        # Los traídos en esta quincena, se liquiden acá o en otra: todos cobran
+        # con el tarifario de esta quincena, que es la del hecho.
         hechos = (self.db.query(modelo)
                   .filter(modelo.liquidacion_id == liquidacion.id).all())
 
@@ -281,8 +296,11 @@ class CalculoService:
             return {**vacio, "estado_calculo": SIN_TERCERO}
 
         dimensiones = conf["dimensiones"](hecho)
-        buscador = self._buscador(conf["tarifario"],
-                                  self._quincena_liquidacion(hecho, liquidacion))
+        # Con el tarifario de la quincena en la que se generó el hecho, aunque
+        # se liquide en otra. Lo decidió el usuario (2026-09-30): moverlo de
+        # quincena cambia cuándo se cobra, no cuánto. Un viaje que llegó tarde
+        # se paga lo que valía el día que se hizo.
+        buscador = self._buscador(conf["tarifario"], liquidacion.quincena)
         tarifa, ambigua = buscador.buscar(dimensiones)
         if tarifa is None:
             return {**vacio,
@@ -349,6 +367,9 @@ class CalculoService:
             for tercero, suma in self._sumar(conf["modelo"], quincena):
                 entrada(tercero)[concepto] = suma
 
+        for tercero, suma in self._sumar_cuotas(quincena):
+            entrada(tercero)["repuestos"] += suma
+
         for tercero, suma in self._sumar_seguros(quincena):
             entrada(tercero)["seguros"] = suma
 
@@ -369,12 +390,26 @@ class CalculoService:
         """
         quincena_liq = func.coalesce(modelo.quincena_efectiva,
                                      Liquidacion.quincena)
-        return (self.db.query(modelo.tercero, func.sum(modelo.importe))
-                .join(Liquidacion, Liquidacion.id == modelo.liquidacion_id)
-                .filter(quincena_liq == quincena)
-                .filter(modelo.estado_calculo == CALCULADO)
-                .filter(modelo.tercero.isnot(None))
-                .group_by(modelo.tercero).all())
+        consulta = (self.db.query(modelo.tercero, func.sum(modelo.importe))
+                    .join(Liquidacion, Liquidacion.id == modelo.liquidacion_id)
+                    .filter(quincena_liq == quincena)
+                    .filter(modelo.estado_calculo == CALCULADO)
+                    .filter(modelo.tercero.isnot(None)))
+        return sin_cuotas(consulta, modelo).group_by(modelo.tercero).all()
+
+    def _sumar_cuotas(self, quincena: date):
+        """Las cuotas de repuestos que se descuentan en esta quincena.
+
+        Suma lo escrito en cada cuota y no una parte del repuesto: una cuota
+        emitida es un cobro y no cambia si el repuesto cambia. El estado del
+        repuesto sí se mira: si alguien decide no cobrarlo, sus cuotas tampoco.
+        """
+        return (self.db.query(Repuesto.tercero, func.sum(CuotaRepuesto.importe))
+                .join(Repuesto, Repuesto.id == CuotaRepuesto.repuesto_id)
+                .filter(CuotaRepuesto.quincena == quincena)
+                .filter(Repuesto.estado_calculo == CALCULADO)
+                .filter(Repuesto.tercero.isnot(None))
+                .group_by(Repuesto.tercero).all())
 
     def _sumar_seguros(self, quincena: date):
         return (self.db.query(PrecioSeguro.tercero,
@@ -395,12 +430,18 @@ class CalculoService:
         for concepto, conf in CONCEPTOS.items():
             modelo = conf["modelo"]
             quincena_liq = func.coalesce(modelo.quincena_efectiva, Liquidacion.quincena)
-            filas = (self.db.query(quincena_liq, func.sum(modelo.importe))
-                     .join(Liquidacion, Liquidacion.id == modelo.liquidacion_id)
-                     .filter(modelo.estado_calculo == CALCULADO)
-                     .group_by(quincena_liq).all())
-            for quincena, suma in filas:
+            consulta = (self.db.query(quincena_liq, func.sum(modelo.importe))
+                        .join(Liquidacion, Liquidacion.id == modelo.liquidacion_id)
+                        .filter(modelo.estado_calculo == CALCULADO))
+            for quincena, suma in sin_cuotas(consulta, modelo).group_by(quincena_liq).all():
                 salida[quincena][concepto] = suma or CERO
+
+        for quincena, suma in (self.db.query(CuotaRepuesto.quincena,
+                                             func.sum(CuotaRepuesto.importe))
+                               .join(Repuesto, Repuesto.id == CuotaRepuesto.repuesto_id)
+                               .filter(Repuesto.estado_calculo == CALCULADO)
+                               .group_by(CuotaRepuesto.quincena).all()):
+            salida[quincena]["repuestos"] += suma or CERO
 
         for quincena, suma in (self.db.query(PrecioSeguro.quincena,
                                              func.sum(PrecioSeguro.importe))
@@ -435,10 +476,12 @@ class CalculoService:
 
         conf = CONCEPTOS[concepto]
         modelo = conf["modelo"]
-        quincena_liq = func.coalesce(modelo.quincena_efectiva, Liquidacion.quincena)
+        # Las que cobran con el tarifario de esta quincena: las traídas en ella.
+        # Una movida a otra quincena igual se paga con estos precios, así que es
+        # acá donde le falta la tarifa, no en la quincena a la que se fue.
         hechos = (self.db.query(modelo)
                   .join(Liquidacion, Liquidacion.id == modelo.liquidacion_id)
-                  .filter(quincena_liq == quincena).all())
+                  .filter(Liquidacion.quincena == quincena).all())
 
         dimensiones = TIPOS[tipo]["dimensiones"]
         grupos: dict[tuple, dict] = {}
@@ -493,11 +536,6 @@ class CalculoService:
         return salida
 
     # ─── Interno ────────────────────────────────────────────────────────────
-
-    def _quincena_liquidacion(self, hecho, liquidacion: Liquidacion) -> date:
-        """En qué quincena se cobra este hecho, que es la del tarifario que le
-        toca: si se difirió, paga los precios de la quincena a la que se fue."""
-        return hecho.quincena_efectiva or liquidacion.quincena
 
     def _buscador(self, tipo: str, quincena: date) -> Buscador:
         clave = (tipo, quincena)

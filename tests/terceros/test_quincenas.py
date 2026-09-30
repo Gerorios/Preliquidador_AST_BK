@@ -66,3 +66,21 @@ def test_dos_años_de_quincenas_son_cuarenta_y_ocho():
     lista = quincenas.recientes(hasta=date(2026, 12, 16), cantidad=48)
     assert len(lista) == len(set(lista)) == 48
     assert lista[-1] == date(2025, 1, 1)
+
+
+def test_la_siguiente_de_la_1ra_es_la_2da_del_mismo_mes():
+    from app.modulos.terceros.services.quincenas import siguiente
+    assert siguiente(date(2026, 8, 1)) == date(2026, 8, 16)
+
+
+def test_la_siguiente_de_la_2da_de_diciembre_es_la_1ra_de_enero():
+    from app.modulos.terceros.services.quincenas import siguiente
+    assert siguiente(date(2026, 12, 16)) == date(2027, 1, 1)
+
+
+def test_siguiente_y_anterior_son_inversas():
+    from app.modulos.terceros.services.quincenas import anterior, siguiente
+    q = date(2026, 1, 1)
+    for _ in range(30):
+        assert anterior(siguiente(q)) == q
+        q = siguiente(q)

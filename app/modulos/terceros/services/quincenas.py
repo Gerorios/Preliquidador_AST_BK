@@ -49,6 +49,15 @@ def anterior(quincena: date) -> date:
     return ultimo_del_mes_anterior.replace(day=16)
 
 
+def siguiente(quincena: date) -> date:
+    """La quincena inmediatamente posterior a una dada."""
+    if quincena.day == 1:
+        return quincena.replace(day=16)
+    if quincena.month == 12:
+        return date(quincena.year + 1, 1, 1)
+    return date(quincena.year, quincena.month + 1, 1)
+
+
 def recientes(hasta: date | None = None, cantidad: int = 24) -> list[date]:
     """Las últimas `cantidad` quincenas, de la más nueva a la más vieja.
 

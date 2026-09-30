@@ -463,3 +463,36 @@ class CargaFacturada(Base):
     subido_por  = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     estacion = relationship("Estacion")
+
+
+# ─── Cuotas de repuestos ────────────────────────────────────────────────────
+
+
+class CuotaRepuesto(Base):
+    """Una cuota de un repuesto que se le descuenta al tercero en partes.
+
+    Una fila por cuota con el importe escrito, y no el importe del repuesto
+    dividido en cada lectura: una cuota emitida es un cobro, y si se derivara
+    del repuesto, una corrección en el sistema de compras cambiaría cuotas que
+    el tercero ya pagó. La última absorbe el redondeo.
+
+    Un repuesto con cuotas deja de descontarse en su quincena: se descuenta
+    en cada una de las de sus cuotas.
+    """
+    __tablename__ = "terceros_cuota_repuesto"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    repuesto_id = Column(Integer, ForeignKey("terceros_repuesto.id"), nullable=False)
+    numero      = Column(Integer, nullable=False)
+    de          = Column(Integer, nullable=False)
+    quincena    = Column(Date, nullable=False, index=True)
+    importe     = Column(Numeric(14, 2), nullable=False)
+    motivo      = Column(String(255), nullable=True)
+    creado_en   = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por  = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    repuesto = relationship("Repuesto")
+
+    __table_args__ = (
+        UniqueConstraint("repuesto_id", "numero", name="uq_cuota_repuesto"),
+    )

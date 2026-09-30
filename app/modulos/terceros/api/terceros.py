@@ -44,6 +44,10 @@ from app.modulos.terceros.schemas import (
     ConfirmarEnLoteRequest,
     CargaSinEstacion,
     CruceResponse,
+    CuotaResponse,
+    CuotasRequest,
+    MoverRequest,
+    MovidoResponse,
     FilaComparada,
     EstacionResponse,
     LineaFacturada,
@@ -76,6 +80,9 @@ from app.modulos.terceros.services.calculo_service import (
 from app.modulos.terceros.services.consulta_externa import ConsultaExternaService
 from app.modulos.terceros.services.estaciones_service import (
     ArchivoInvalido, EstacionesService, patente_de,
+)
+from app.modulos.terceros.services.destino_service import (
+    DestinoInvalido, DestinoService,
 )
 from app.modulos.terceros.services.grilla_service import GrillaService
 from app.modulos.terceros.services.verificaciones_service import VerificacionesService
@@ -199,6 +206,12 @@ def get_grilla(
     db_propia: Session = Depends(get_db_propia),
 ) -> GrillaService:
     return GrillaService(db_propia)
+
+
+def get_destino(
+    db_propia: Session = Depends(get_db_propia),
+) -> DestinoService:
+    return DestinoService(db_propia)
 
 
 def get_verificaciones(
@@ -349,6 +362,65 @@ def lineas_de_la_quincena(
     quincena no se calculó, y eso se arregla en `/liquidaciones/calcular`.
     """
     return servicio.lineas(quincena)
+
+
+@router.patch("/hechos/{concepto}/{id_}/quincena", response_model=MovidoResponse)
+def mover_de_quincena(
+    concepto: str,
+    id_: int,
+    req: MoverRequest,
+    servicio: DestinoService = Depends(get_destino),
+):
+    """Que un hecho se liquide en otra quincena.
+
+    Pide motivo, porque el recibo lo muestra como un ajuste —«ajuste viajes:
+    llegó tarde»— y quien lo lea tiene que entender por qué está ahí. Se cobra
+    con el tarifario de la quincena a la que va.
+    """
+    try:
+        h = servicio.mover(concepto, id_, req.quincena, req.motivo)
+    except DestinoInvalido as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"concepto": concepto, "id": h.id,
+            "quincena_efectiva": h.quincena_efectiva, "motivo": h.motivo_efectiva}
+
+
+@router.get("/repuestos/{id_}/cuotas", response_model=list[CuotaResponse])
+def cuotas_de_un_repuesto(
+    id_: int,
+    servicio: DestinoService = Depends(get_destino),
+):
+    """El plan de cuotas de un repuesto. Vacío si se descuenta entero."""
+    return servicio.cuotas_de(id_)
+
+
+@router.put("/repuestos/{id_}/cuotas", response_model=list[CuotaResponse])
+def repartir_en_cuotas(
+    id_: int,
+    req: CuotasRequest,
+    usuario=Depends(get_usuario_actual),
+    servicio: DestinoService = Depends(get_destino),
+):
+    """Reparte un repuesto en cuotas quincenales iguales.
+
+    Reemplaza el plan que tuviera: un repuesto tiene uno solo. La última cuota
+    absorbe el redondeo, así la suma da exacta.
+    """
+    try:
+        return servicio.repartir_en_cuotas(
+            id_, req.desde, req.cuotas, req.motivo,
+            usuario_id=getattr(usuario, "id", None))
+    except DestinoInvalido as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.delete("/repuestos/{id_}/cuotas", status_code=204)
+def quitar_cuotas(
+    id_: int,
+    servicio: DestinoService = Depends(get_destino),
+):
+    """Vuelve a descontarlo entero, en su quincena."""
+    servicio.quitar_cuotas(id_)
 
 
 @router.get("/liquidaciones/totales", response_model=list[TotalTerceroResponse])
@@ -618,13 +690,21 @@ def eliminar_tarifa(
 @router.get("/quincenas", response_model=list[QuincenaResponse])
 def listar_quincenas(
     cantidad: int = Query(24, ge=1, le=48, description="Cuántas traer, de la más nueva a la más vieja"),
+    adelante: int = Query(0, ge=0, le=24, description="Cuántas quincenas futuras sumar arriba"),
 ):
-    """Las quincenas elegibles del selector. Se calculan por calendario."""
+    """Las quincenas elegibles del selector. Se calculan por calendario.
+
+    `adelante` es para mover una línea o repartir un repuesto en cuotas: eso
+    mira hacia las quincenas que vienen, y el selector de arriba no.
+    """
+    hasta = quincenas.inicio_de_quincena(date.today())
+    for _ in range(adelante):
+        hasta = quincenas.siguiente(hasta)
     return [
         QuincenaResponse(
             quincena=q, etiqueta=quincenas.etiqueta(q), nombre=quincenas.nombre(q)
         )
-        for q in quincenas.recientes(cantidad=cantidad)
+        for q in quincenas.recientes(hasta=hasta, cantidad=cantidad + adelante)
     ]
 
 

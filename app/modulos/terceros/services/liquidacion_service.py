@@ -30,7 +30,8 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from app.modulos.terceros.models import (
-    CargaCombustible, HoraReparacion, HoraServicio, Liquidacion, Repuesto, Viaje,
+    CargaCombustible, CuotaRepuesto, HoraReparacion, HoraServicio, Liquidacion,
+    Repuesto, Viaje,
 )
 from app.modulos.terceros.services.consulta_taller import _detectar_tercero
 
@@ -313,17 +314,34 @@ class LiquidacionService:
             datos = {c: getattr(fila, c) for c in campos}
             guardadas[_clave(datos, campos)].append(fila)
 
+        # Un repuesto repartido en cuotas es trabajo manual aunque no tenga
+        # ningún campo propio cargado: el plan vive en otra tabla.
+        con_cuotas = self._con_cuotas(liq) if modelo is Repuesto else set()
+
+        def manual(fila) -> bool:
+            return tiene_trabajo_manual(fila) or fila.id in con_cuotas
+
         # Sobran: se borran, sacrificando primero las que no tienen nada a mano.
         a_borrar = []
         for clave, filas in guardadas.items():
             exceso = len(filas) - len(del_origen.get(clave, ()))
             if exceso <= 0:
                 continue
-            sin_manual = [f for f in filas if not tiene_trabajo_manual(f)]
-            con_manual = [f for f in filas if tiene_trabajo_manual(f)]
+            sin_manual = [f for f in filas if not manual(f)]
+            con_manual = [f for f in filas if manual(f)]
             a_borrar.extend((sin_manual + con_manual)[:exceso])
+        cuotas_borradas = 0
         if a_borrar:
             ids = [f.id for f in a_borrar]
+            # Si el repuesto dejó de existir en compras, sus cuotas no tienen
+            # qué descontar. Se cuentan aparte para que se vea: que desaparezca
+            # un plan de cuotas es algo que el liquidador tiene que saber.
+            planes = [i for i in ids if i in con_cuotas]
+            if planes:
+                cuotas_borradas = len(planes)
+                (self.db.query(CuotaRepuesto)
+                 .filter(CuotaRepuesto.repuesto_id.in_(planes))
+                 .delete(synchronize_session=False))
             (self.db.query(modelo).filter(modelo.id.in_(ids))
              .delete(synchronize_session=False))
         borradas = len(a_borrar)
@@ -373,4 +391,12 @@ class LiquidacionService:
             "borradas": borradas,
             "refrescadas": refrescadas,
             "sin_cambios": len(filas_origen) - insertadas - refrescadas,
+            "planes_de_cuotas_borrados": cuotas_borradas,
         }
+
+    def _con_cuotas(self, liq: Liquidacion) -> set[int]:
+        """Los repuestos de esta quincena que se descuentan en cuotas."""
+        return {i for (i,) in (self.db.query(CuotaRepuesto.repuesto_id)
+                               .join(Repuesto, Repuesto.id == CuotaRepuesto.repuesto_id)
+                               .filter(Repuesto.liquidacion_id == liq.id)
+                               .distinct())}

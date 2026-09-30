@@ -393,3 +393,58 @@ def test_un_cambio_de_verdad_en_un_numero_si_se_refresca(db):
     # Los litros son parte de la clave, así que un cambio ahí es otra carga.
     assert r["detalle"]["combustible"]["insertadas"] == 1
     assert r["detalle"]["combustible"]["borradas"] == 1
+
+
+# ─── Los repuestos repartidos en cuotas ────────────────────────────────────
+
+def _repartido(db, cuotas=3):
+    """Un repuesto generado, calculado y repartido en cuotas."""
+    from app.modulos.terceros.services.calculo_service import CalculoService
+    from app.modulos.terceros.services.destino_service import DestinoService
+
+    CalculoService(db).calcular(Q, ("repuestos",))
+    r = db.query(Repuesto).one()
+    DestinoService(db).repartir_en_cuotas(r.id, Q, cuotas)
+    return r
+
+
+def test_actualizar_no_toca_las_cuotas_de_un_repuesto_que_sigue(db):
+    from app.modulos.terceros.models import CuotaRepuesto
+
+    s = armar(db, repuestos=[repuesto()])
+    s.generar(Q)
+    _repartido(db)
+
+    r = s.generar(Q)
+    assert db.query(CuotaRepuesto).count() == 3
+    assert r["detalle"]["repuestos"]["planes_de_cuotas_borrados"] == 0
+
+
+def test_si_el_repuesto_desaparece_de_compras_se_va_con_su_plan_y_se_avisa(db):
+    """Sin repuesto no hay qué descontar. Pero es un descuento que deja de
+    hacerse, y eso tiene que verse en el resultado de actualizar."""
+    from app.modulos.terceros.models import CuotaRepuesto
+
+    armar(db, repuestos=[repuesto()]).generar(Q)
+    _repartido(db)
+
+    r = armar(db, repuestos=[]).generar(Q)
+    assert db.query(Repuesto).count() == 0
+    assert db.query(CuotaRepuesto).count() == 0
+    assert r["detalle"]["repuestos"]["planes_de_cuotas_borrados"] == 1
+
+
+def test_con_dos_repuestos_iguales_se_borra_primero_el_que_no_tiene_cuotas(db):
+    """Un plan de cuotas es trabajo manual aunque viva en otra tabla."""
+    from app.modulos.terceros.models import CuotaRepuesto
+    from app.modulos.terceros.services.calculo_service import CalculoService
+    from app.modulos.terceros.services.destino_service import DestinoService
+
+    armar(db, repuestos=[repuesto(), repuesto()]).generar(Q)
+    CalculoService(db).calcular(Q, ("repuestos",))
+    primero = db.query(Repuesto).order_by(Repuesto.id).first()
+    DestinoService(db).repartir_en_cuotas(primero.id, Q, 2)
+
+    armar(db, repuestos=[repuesto()]).generar(Q)
+    assert [r.id for r in db.query(Repuesto).all()] == [primero.id]
+    assert db.query(CuotaRepuesto).count() == 2

@@ -340,9 +340,11 @@ def test_no_se_puede_calcular_una_quincena_que_nadie_genero(calculo):
 
 # ─── La quincena efectiva ───────────────────────────────────────────────────
 
-def test_un_hecho_diferido_paga_los_precios_de_la_quincena_a_la_que_se_fue(db, calculo, tarifario):
-    """Si el liquidador lo corrió a la quincena siguiente, cobra con el
-    tarifario de esa quincena, no con el de la quincena en que se cargó."""
+def test_un_hecho_diferido_paga_los_precios_de_la_quincena_en_que_se_genero(db, calculo, tarifario):
+    """Si el liquidador lo corrió a la quincena siguiente, cambia cuándo se
+    cobra, no cuánto: paga lo que valía en la quincena en que se generó. Lo
+    decidió el usuario (2026-09-30) y da vuelta la regla anterior, que lo
+    cobraba con el tarifario de la quincena a la que se fue."""
     siguiente = date(2026, 8, 16)
     tarifario.crear("viajes", Q, {"tercero": "ARANDA, HUGO", "precio": "200000"})
     tarifario.crear("viajes", siguiente, {"tercero": "ARANDA, HUGO", "precio": "260000"})
@@ -350,11 +352,11 @@ def test_un_hecho_diferido_paga_los_precios_de_la_quincena_a_la_que_se_fue(db, c
 
     calculo.calcular(Q)
     db.refresh(v)
-    assert v.importe == Decimal("260000.00")
+    assert v.importe == Decimal("200000.00")
     # Y no suma en la quincena en que se cargó, sino en aquella en que se cobra.
     assert all(f["tercero"] != "ARANDA, HUGO" for f in calculo.totales(Q))
     assert next(f for f in calculo.totales(siguiente)
-                if f["tercero"] == "ARANDA, HUGO")["viajes"] == Decimal("260000.00")
+                if f["tercero"] == "ARANDA, HUGO")["viajes"] == Decimal("200000.00")
 
 
 # ─── Cargar un precio ya lo aplica ──────────────────────────────────────────

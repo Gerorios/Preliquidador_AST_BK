@@ -206,11 +206,49 @@ class DetalleConjunto(BaseModel):
     # —el dueño de un colectivo, por ejemplo—. Lo manual nunca se refresca.
     refrescadas: int = 0
     sin_cambios: int
+    # Repuestos repartidos en cuotas que dejaron de existir en compras, y con
+    # ellos su plan. Tiene que verse: es un descuento que deja de hacerse.
+    planes_de_cuotas_borrados: int = 0
 
 
 class GenerarResponse(LiquidacionResponse):
     nueva: bool                            # False = era una actualización
     detalle: dict[str, DetalleConjunto]
+
+
+# ─── En qué quincena se liquida cada hecho ──────────────────────────────────
+
+class MoverRequest(BaseModel):
+    """A qué quincena va un hecho, y por qué.
+
+    Mandarlo a la quincena en la que se trajo deshace el movimiento, y ahí el
+    motivo no hace falta.
+    """
+    quincena: date
+    motivo: str | None = None
+
+
+class MovidoResponse(BaseModel):
+    concepto: str
+    id: int
+    # Nulo si volvió a liquidarse en la quincena en la que se trajo.
+    quincena_efectiva: date | None = None
+    motivo: str | None = None
+
+
+class CuotasRequest(BaseModel):
+    """Repartir un repuesto en cuotas quincenales iguales."""
+    desde: date
+    cuotas: int
+    motivo: str | None = None
+
+
+class CuotaResponse(BaseModel):
+    numero: int
+    de: int
+    quincena: date
+    importe: Decimal
+    motivo: str | None = None
 
 
 # ─── Estaciones de servicio (etapa 10) ──────────────────────────────────────
@@ -449,6 +487,11 @@ class LineaGrillaResponse(BaseModel):
     # combustible: si la estación facturó esta carga. Nulo mientras no se haya
     # subido el archivo de esa estación — no es lo mismo que "no facturada".
     facturada: bool | None = None
+    # De qué quincena viene, si se liquida en otra, y por qué se movió.
+    viene_de: date | None = None
+    motivo: str | None = None
+    # «2 de 5», en un repuesto que se descuenta en cuotas.
+    cuota: str | None = None
     maquina: str | None = None          # servicio, repuestos, reparación
     planilla: str | None = None         # servicio
     supervisor: str | None = None       # servicio
