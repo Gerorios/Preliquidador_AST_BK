@@ -1299,3 +1299,29 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
 - Tarea aparte ofrecida: `scripts/verificar_agents_comun.sh` no compara nada cuando se
   corre desde un worktree, porque reconoce el repo por el nombre de la carpeta.
 - PR 6 del plan.
+
+## 2026-09-30 — Plan de seguridad, PR 5: `npm run lint` entra en los chequeos antes de un PR
+
+**Mergeado**
+- PR #61 (backend) — la regla 24 de `GUIA-MODULOS.md` suma `npm run lint` sin errores a
+  los chequeos antes de abrir un PR; cierra el PR 5 del plan. PR hermano ya mergeado: el
+  FT #48, que trajo el lint.
+
+**Por frontera**
+- Docs: regla 24 y lista de "Tests y build" de §6.1 en `GUIA-MODULOS.md`; la misma línea
+  en "Antes de abrir un PR" de `PUESTA-A-PUNTO.md`. El plan
+  (`docs/superpowers/plans/2026-09-29-seguridad-y-calidad-relevamiento.md`) registra lo
+  decidido al ejecutar el PR 5: el comando de instalación con `@eslint/js@^9`, la
+  corrección de `FiltrosBar` y los 5 warnings de Terceros como pendientes.
+
+**Decisiones**
+- **La regla va en un PR aparte, después del lint.** Porqué: la guía vive en el backend y
+  el lint en el front; mergeada antes, pedía un comando que no existía.
+
+**Estado**
+- Deploy: nada que deployar.
+- Migraciones: ninguna.
+
+**Pendiente**
+- Queda cerrado el pendiente "regla 24 de `GUIA-MODULOS.md`" de la entrada del FT #48.
+- PR 6 del plan.
