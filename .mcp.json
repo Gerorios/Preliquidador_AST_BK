@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "asturiana_db": {
+      "command": "npx",
+      "args": [
+        "-y", "@bytebase/dbhub@1.2.0",
+        "--transport", "stdio",
+        "--config", "./dbhub.toml"
+      ]
+    },
+    "powerbi": {
+      "command": "C:\\Users\\midez\\.vscode\\extensions\\analysis-services.powerbi-modeling-mcp-0.4.0-win32-x64\\server\\powerbi-modeling-mcp.exe",
+      "args": ["--readwrite", "--skip-confirmation"]
+    }
+  }
+}

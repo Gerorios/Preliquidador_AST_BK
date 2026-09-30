@@ -35,7 +35,7 @@ app/
 ├── core/              # núcleo compartido: config, conexiones, auth, permisos, usuarios
 └── modulos/
     ├── preliquidacion/   # módulo Preliquidación (activo): api/, services/, models.py, schemas.py
-    └── terceros/         # módulo Liquidación Terceros (en construcción, inactivo)
+    └── terceros/         # módulo Liquidación Terceros (en construcción)
 migrations/            # SQL por núcleo y por módulo; ORDEN.txt fija el orden de aplicación
 tests/                 # core/, preliquidacion/, terceros/
 scripts/               # utilidades de administración y desarrollo

@@ -13,11 +13,14 @@ from app import main as app_main
 from app.main import app
 
 
-def test_registro_tiene_preliquidacion_activa_y_terceros_inactivo():
+def test_los_dos_modulos_estan_en_el_registro():
     por_clave = {m.clave: m for m in REGISTRO}
-    assert por_clave["preliquidacion"].activo is True
-    assert por_clave["terceros"].activo is False
+    assert set(por_clave) == {"preliquidacion", "terceros"}
     assert all(isinstance(m, ModuloInfo) for m in REGISTRO)
+    # Terceros se activó en la etapa 2 de su plan, al tener su primera pantalla
+    # real. No se afirma acá qué módulo está activo: eso cambia con cada módulo
+    # nuevo y lo que importa es que el núcleo monte lo que `activos()` diga,
+    # que es lo que prueban los dos tests de abajo.
 
 
 def test_claves_del_registro_coinciden_con_permisos():
@@ -30,9 +33,14 @@ def test_etiquetas_rol_preliquidacion():
     assert m.panel_gerencial is True
 
 
-def test_rutas_de_terceros_no_estan_montadas():
+def test_se_montan_las_rutas_de_los_activos_y_ninguna_de_los_inactivos():
     paths = app.openapi()["paths"]
-    assert not any(p.startswith("/api/terceros") for p in paths)
+    prefijos_activos = {f"/api/{m.clave}" for m in activos()}
+    inactivos = {f"/api/{m.clave}" for m in REGISTRO if not m.activo}
+    for prefijo in prefijos_activos:
+        assert any(p.startswith(prefijo) for p in paths), f"{prefijo} no se montó"
+    for prefijo in inactivos:
+        assert not any(p.startswith(prefijo) for p in paths), f"{prefijo} se montó estando inactivo"
 
 
 def test_endpoint_modulos_devuelve_solo_activos():
@@ -45,7 +53,8 @@ def test_endpoint_modulos_devuelve_solo_activos():
     assert r.status_code == 200
     claves_resp = [m["clave"] for m in r.json()]
     assert claves_resp == [m.clave for m in activos()]
-    assert "terceros" not in claves_resp
+    assert all(m.clave in claves_resp for m in REGISTRO if m.activo)
+    assert all(m.clave not in claves_resp for m in REGISTRO if not m.activo)
     assert r.json()[0]["etiquetas_rol"]["operador"] == "Preliquidador"
 
 

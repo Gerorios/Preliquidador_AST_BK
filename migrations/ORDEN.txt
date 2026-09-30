@@ -34,3 +34,13 @@ preliquidacion/ws13_jornal_tope1_mas_excedente.sql historica
 preliquidacion/ws14_tipo_excento.sql historica
 preliquidacion/ws15_conceptos_cliente_supervisor.sql historica
 preliquidacion/ws16_valor_hora_tractorista.sql historica
+
+# Liquidación Terceros. Ninguna se aplicó todavía en producción: se crearon
+# y probaron en `testing`, y llegan con el primer deploy del módulo.
+terceros/001_crear_tablas.sql
+terceros/002_tarifario.sql
+terceros/003_seguros_por_tipo_y_sujeto.sql
+terceros/004_calculo.sql
+terceros/005_observacion_combustible.sql
+terceros/006_estaciones.sql
+terceros/007_cuotas_repuesto.sql

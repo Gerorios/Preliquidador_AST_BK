@@ -7,6 +7,9 @@ python-dotenv==1.0.1
 pydantic==2.9.2
 pydantic-settings==2.5.2
 openpyxl==3.1.5
+# Sólo para leer los .xls viejos de una de las estaciones de servicio.
+# openpyxl no los abre: son formato binario de Excel 97, no ZIP+XML.
+xlrd==2.0.1
 PyJWT==2.15.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1

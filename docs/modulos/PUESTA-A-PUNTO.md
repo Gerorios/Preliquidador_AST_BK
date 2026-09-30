@@ -139,6 +139,8 @@ El backend no arranca sin un `.env` en la raíz de `backend_preliquidacion/` con
 
 La plantilla con todas las variables está en `.env.example`. Para desarrollo, `DB_PROPIA_NAME` tiene que ser `testing`, no `preliquidacion` (ver `GUIA-MODULOS.md`, sección 6.2).
 
+`TALLER_SHEET_URL` es la URL del Google Sheet publicado de la app del taller, de donde el módulo Liquidación Terceros lee las horas. Viene en el mismo `.env`. Dejarla vacía no rompe nada: solo esa consulta avisa que falta configurarla.
+
 ### Comprobación
 
 ```bash

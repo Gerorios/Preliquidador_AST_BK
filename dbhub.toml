@@ -1,0 +1,40 @@
+# Configuración del servidor MCP asturiana_db (@bytebase/dbhub).
+# Los DSN llegan por variables de entorno, nunca en el repo:
+#   ASTURIANA_DSN -> adcp_laasturiana_prod (Joomla/Fabrik, tablas ast_* y laa_*)
+#   LAFALDA_DSN   -> lafalda (sistema de maquinarias: movdet, movim, nuemaquinas, fact*)
+#   PRELIQUIDACION_DSN -> preliquidacion (preliquidación quincenal de tareas:
+#                        preliquidacion, preliquidacion_linea, concepto_adicional,
+#                        categoria_operario, concepto_liquidacion)
+# Son tres bases en dos servidores: lafalda y preliquidacion comparten el mismo servidor.
+# Las consultas de sql/lafalda-*.sql van contra La Falda.
+# Desde dbhub 1.x los flags --readonly / --max-rows ya no existen: se configuran acá.
+
+[[sources]]
+id = "asturiana"
+dsn = "${ASTURIANA_DSN}"
+
+[[sources]]
+id = "lafalda"
+dsn = "${LAFALDA_DSN}"
+
+[[sources]]
+id = "preliquidacion"
+dsn = "${PRELIQUIDACION_DSN}"
+
+[[tools]]
+name = "execute_sql"
+source = "asturiana"
+readonly = true
+max_rows = 1000
+
+[[tools]]
+name = "execute_sql"
+source = "lafalda"
+readonly = true
+max_rows = 1000
+
+[[tools]]
+name = "execute_sql"
+source = "preliquidacion"
+readonly = true
+max_rows = 1000

@@ -1,0 +1,496 @@
+"""Los endpoints de la etapa 2: los cuatro conjuntos de una quincena.
+
+Las consultas contra los orígenes ya están probadas en test_consulta_externa y
+test_consulta_taller. Acá se prueba lo que agrega la capa HTTP: qué quincena se
+acepta, quién entra, cómo se serializa, y qué pasa cuando un origen no contesta.
+Los servicios se reemplazan por dobles, así que no hay ni base ni red.
+"""
+from datetime import date, datetime
+from decimal import Decimal
+from types import SimpleNamespace
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+
+from app.core.auth import get_usuario_actual
+from app.main import app
+from app.modulos.terceros.api import terceros as api
+from app.modulos.terceros.services.calculo_service import LiquidacionInexistente
+from app.modulos.terceros.services.consulta_taller import TallerNoConfigurado
+
+Q = "2026-08-01"
+
+VIAJE = {
+    "fecha_carga": "2026-08-01", "fecha_uso": "2026-08-01", "quincena_mes": "08-1Q",
+    "colectivo_nombre": "ARANDA, HUGO", "colectivo_patente": " FAP480",
+    "colectivo_propiedad": "TERCEROS", "cliente": "SAN MIGUEL", "finca": "CASPINCHANGO",
+    "nombre_tarea": "COSECHA LIMON HORAS", "nombre_supervisor": "SORIA, FEDERICO",
+    "nombre_capataz": None, "nombre_chofer": "ACOSTA, GRACIELA",
+    "cantidadviajes": Decimal("1.00"), "cantpersonas": 32,
+}
+# Los litros llegan como texto desde la base: es el caso que rompe cualquier
+# cuenta ingenua, y por eso está así en el doble y no como número prolijo.
+CARGA = {
+    "fecha_carga": "2026-08-04", "fecha_uso": "2026-08-03", "quincena_mes": "08-1Q",
+    "colectivo_nombre": "ARANDA, HUGO", "colectivo_patente": " FAP480",
+    "colectivo_propiedad": "TERCEROS", "litros_cargados": "150", "vale": "60023",
+    "origen_combustible": "SHELL FAMAILLA", "usuario_carga": "SORIA, FEDERICO",
+}
+REPUESTO = {
+    "id_maquina": 721, "maquina": "SER-TEC", "fecha": date(2026, 8, 5),
+    "fecha_descarga": date(2026, 8, 14), "quincena_mes": "08-1Q",
+    "tipo_insumo": "REPUESTOS", "rubro": "BULONERIA", "repuesto": 'TORNILLO 3/8X2"',
+    "cantidad": Decimal("3.00"), "precargas": Decimal("263.27"),
+    "monto_total": Decimal("789.81"), "reparacion": "", "nombreprove": "BULONERIA",
+    "propiedad_maquina": "TERCEROS",
+}
+HORA = {
+    "fecha": date(2026, 8, 3), "quincena_mes": "08-1Q", "anio": 2026,
+    "tercero": "PABLO ROJAS", "maquina": "CARGADORA MANITOU N°9872 PABLO ROJAS",
+    "tipo_maquina": "CARGADORAS", "rubro": "HIDRAULICA", "sub_rubro": "475. TORRE",
+    "finca": "EL CORTE", "lugar": "CAMPO LA FALDA", "estado": "Pendiente",
+    "horas": 2.0, "horas_preparacion": 1.0, "horas_traslado": 2.0,
+    "horas_total": 5.0, "id_maquina": 735,
+}
+SERVICIO = {
+    "fecha": date(2026, 8, 16), "quincena_mes": "08-2Q", "planilla": "MAQUINARIA",
+    "cliente": "CITROMAX", "finca": "TAJAMAR 2", "tarea": "CARGA FRUTA POR BINS",
+    "maquinaria": "MANITOU MANITOU N°0060 BARRIOS", "tercero": "BARRIOS",
+    "supervisor": "MOLINA, ALFREDO FEDERICO",
+    # Las dos medidas, distintas entre sí: es el caso que importa.
+    "horas_maquina": Decimal("6.00"), "unidades": Decimal("297.00"), "unidad": "BINS",
+}
+ESTADOS = {"aprobadas": 1, "pendientes": 2, "rechazadas": 3,
+           "horas_aprobadas": 5.0, "horas_pendientes": 9.5}
+
+
+class ExternaFalsa:
+    def __init__(self, error=None):
+        self.error = error
+        self.quincenas_pedidas = []
+        self.anios_pedidos = []
+
+    def _responder(self, quincena, filas):
+        self.quincenas_pedidas.append(quincena)
+        if self.error:
+            raise self.error
+        return filas
+
+    def viajes(self, quincena):
+        return self._responder(quincena, [VIAJE])
+
+    def cargas_combustible(self, quincena):
+        return self._responder(quincena, [CARGA])
+
+    def repuestos(self, quincena):
+        return self._responder(quincena, [REPUESTO])
+
+    def horas_servicio(self, quincena):
+        return self._responder(quincena, [SERVICIO])
+
+    # ─── maestros, para /alertas ───
+    def maquinarias_terceros_campo(self):
+        if self.error:
+            raise self.error
+        return [{"id": 1, "nombre": "MANITOU N0046 BARRIOS", "descripcion": "TERCEROS;;;;"}]
+
+    def colectivos_campo(self):
+        if self.error:
+            raise self.error
+        return [{"id": 216, "nombre": "DEMARCO, OSCAR", "patente": "KPH682",
+                 "patente_descripcion": "HFU440", "propiedad": "TERCEROS", "descripcion": ""}]
+
+    def maquinas_terceros_compras(self):
+        if self.error:
+            raise self.error
+        return [{"id_maquina": 981, "nombre": "FUMIGADORA 400 LTS", "codigo": "",
+                 "propiedad": "TERCEROS"}]
+
+    def lineas_por_maquina(self, anio):
+        self.anios_pedidos.append(anio)
+        if self.error:
+            raise self.error
+        return {981: 24}
+
+
+class TallerFalso:
+    def __init__(self, error=None, filas=None, estados=None):
+        self.error = error
+        self.filas = [HORA] if filas is None else filas
+        self.estados = estados or ESTADOS
+        self.lecturas = 0
+
+    def horas_quincena(self, quincena):
+        self.lecturas += 1
+        if self.error:
+            raise self.error
+        return self.filas
+
+    def estados_quincena(self, quincena):
+        if self.error:
+            raise self.error
+        return self.estados
+
+    def maestro(self):
+        if self.error:
+            raise self.error
+        return [{"id_maquina": 990, "nombre": "FUMIGADORA 400 LTS", "tipo": "",
+                 "propiedad": "TERCEROS"}]
+
+
+LIQUIDADOR = SimpleNamespace(
+    id=1, nombre="Lorena", email="l@t.com", rol="usuario", activo=True,
+    modulos=[SimpleNamespace(modulo="terceros", rol="operador")],
+)
+
+
+def _con_origenes(externa=None, taller=None):
+    app.dependency_overrides[get_usuario_actual] = lambda: LIQUIDADOR
+    app.dependency_overrides[api.get_consulta_externa] = lambda: externa or ExternaFalsa()
+    app.dependency_overrides[api.get_consulta_taller] = lambda: taller or TallerFalso()
+    return TestClient(app)
+
+
+@pytest.fixture
+def cliente():
+    """Un cliente con el liquidador de terceros y los dos orígenes falsos."""
+    externa, taller = ExternaFalsa(), TallerFalso()
+    yield _con_origenes(externa, taller), externa, taller
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _limpiar():
+    yield
+    app.dependency_overrides.clear()
+
+
+# ─── Qué quincena se acepta ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-reparacion", "horas-servicio"])
+def test_la_quincena_llega_al_servicio_como_fecha(ruta, cliente):
+    c, externa, _ = cliente
+    assert c.get(f"/api/terceros/{ruta}?quincena={Q}").status_code == 200
+    if externa.quincenas_pedidas:
+        assert externa.quincenas_pedidas == [date(2026, 8, 1)]
+
+
+@pytest.mark.parametrize("dia", ["2026-08-07", "2026-08-15", "2026-08-31"])
+def test_una_fecha_que_no_es_inicio_de_quincena_se_rechaza(dia, cliente):
+    c, _, _ = cliente
+    r = c.get(f"/api/terceros/viajes?quincena={dia}")
+    assert r.status_code == 422
+    assert "1 o el 16" in r.json()["detail"]
+
+
+def test_sin_quincena_no_se_adivina_ninguna(cliente):
+    c, _, _ = cliente
+    assert c.get("/api/terceros/viajes").status_code == 422
+
+
+# ─── Quién entra ────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-reparacion", "horas-servicio", "alertas"])
+def test_un_operador_de_otro_modulo_no_entra(ruta):
+    otro = SimpleNamespace(id=2, nombre="X", email="x@t.com", rol="usuario", activo=True,
+                           modulos=[SimpleNamespace(modulo="preliquidacion", rol="operador")])
+    app.dependency_overrides[get_usuario_actual] = lambda: otro
+    app.dependency_overrides[api.get_consulta_externa] = lambda: ExternaFalsa()
+    app.dependency_overrides[api.get_consulta_taller] = lambda: TallerFalso()
+    assert TestClient(app).get(f"/api/terceros/{ruta}?quincena={Q}").status_code == 403
+
+
+# ─── Qué devuelve ───────────────────────────────────────────────────────────
+
+def test_los_viajes_salen_con_sus_columnas(cliente):
+    c, _, _ = cliente
+    fila = c.get(f"/api/terceros/viajes?quincena={Q}").json()[0]
+    assert fila["colectivo_patente"] == " FAP480"
+    assert fila["cantidadviajes"] == "1.00"
+    assert fila["nombre_capataz"] is None      # no se rellena lo que no vino
+
+
+def test_el_combustible_conserva_el_vale():
+    """Es la clave con la que después se concilia contra la estación."""
+    c = _con_origenes()
+    assert c.get(f"/api/terceros/combustible?quincena={Q}").json()[0]["vale"] == "60023"
+
+
+def test_los_repuestos_traen_las_dos_fechas(cliente):
+    c, _, _ = cliente
+    fila = c.get(f"/api/terceros/repuestos?quincena={Q}").json()[0]
+    assert fila["fecha"] == "2026-08-05"
+    assert fila["fecha_descarga"] == "2026-08-14"
+
+
+def test_las_reparaciones_traen_listado_y_tablero_juntos(cliente):
+    """Una sola lectura del Sheet para las dos vistas."""
+    c, _, taller = cliente
+    d = c.get(f"/api/terceros/horas-reparacion?quincena={Q}").json()
+    assert d["horas"][0]["estado"] == "Pendiente"
+    assert d["estados"] == ESTADOS
+    assert taller.lecturas == 1
+
+
+def test_el_tablero_cuenta_rechazadas_que_el_listado_no_muestra():
+    """Las rechazadas no se cobran nunca, pero hay que verlas para reclamarlas."""
+    c = _con_origenes(taller=TallerFalso(filas=[HORA]))
+    d = c.get(f"/api/terceros/horas-reparacion?quincena={Q}").json()
+    assert len(d["horas"]) == 1
+    assert d["estados"]["rechazadas"] == 3
+
+
+def test_las_quincenas_del_selector_vienen_de_la_mas_nueva_a_la_mas_vieja(cliente):
+    c, _, _ = cliente
+    lista = c.get("/api/terceros/quincenas?cantidad=3").json()
+    assert len(lista) == 3
+    assert lista[0]["quincena"] > lista[1]["quincena"] > lista[2]["quincena"]
+    assert set(lista[0]) == {"quincena", "etiqueta", "nombre"}
+
+
+def test_no_hay_un_endpoint_que_junte_los_cuatro_conjuntos():
+    """Lo hubo y se sacó: pedía los cuatro orígenes en serie y tardaba 15
+    segundos en la primera pantalla del módulo. El navegador los pide en
+    paralelo. Si alguien lo reintroduce, que sea una decisión, no un descuido."""
+    rutas = {r.path for r in app.routes}
+    assert "/api/terceros/resumen" not in rutas
+
+
+# ─── Cuando un origen falla ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize("error,texto", [
+    (TallerNoConfigurado(), "TALLER_SHEET_URL"),
+    (httpx.ConnectError("sin red"), "no respondió"),
+    (ValueError("La hoja 'BD_Horas' no tiene las columnas ['Horas']"), "no tiene las columnas"),
+])
+def test_las_reparaciones_explican_por_que_no_se_pudieron_leer(error, texto):
+    """Un 502 con el motivo, no un 500 mudo: el liquidador hace algo distinto
+    según sea configuración, red o un cambio de formato del Sheet."""
+    c = _con_origenes(taller=TallerFalso(error=error))
+    r = c.get(f"/api/terceros/horas-reparacion?quincena={Q}")
+    assert r.status_code == 502
+    assert texto in r.json()["detail"]
+
+
+def test_que_el_taller_falle_no_afecta_a_los_otros_tres_conjuntos():
+    """Cada conjunto es su propio pedido: que Google no conteste no puede dejar
+    al liquidador sin ver sus viajes."""
+    c = _con_origenes(taller=TallerFalso(error=httpx.ConnectError("sin red")))
+    assert c.get(f"/api/terceros/horas-reparacion?quincena={Q}").status_code == 502
+    assert c.get(f"/api/terceros/viajes?quincena={Q}").status_code == 200
+    assert c.get(f"/api/terceros/repuestos?quincena={Q}").status_code == 200
+
+
+def test_un_error_de_programacion_no_se_disfraza_de_origen_caido():
+    """Atrapar Exception acá escondería nuestros propios bugs detrás de un 502."""
+    c = _con_origenes(taller=TallerFalso(error=TypeError("bug nuestro")))
+    with pytest.raises(TypeError):
+        c.get(f"/api/terceros/horas-reparacion?quincena={Q}")
+
+
+# ─── Alertas de cruce ───────────────────────────────────────────────────────
+
+def test_las_alertas_no_llevan_quincena_pero_si_año(cliente):
+    """Un problema de cruce es del maestro, no de un período. El año sirve para
+    una sola cosa: saber si una máquina descolgada tuvo movimiento."""
+    c, externa, _ = cliente
+    r = c.get("/api/terceros/alertas?anio=2026")
+    assert r.status_code == 200
+    assert r.json()["anio"] == 2026
+    assert externa.anios_pedidos == [2026]
+    assert externa.quincenas_pedidas == []
+
+
+def test_sin_año_se_usa_el_corriente(cliente):
+    from datetime import date
+    c, externa, _ = cliente
+    assert c.get("/api/terceros/alertas").json()["anio"] == date.today().year
+
+
+def test_las_alertas_dicen_en_que_sistema_se_corrigen(cliente):
+    """Es el punto de la pantalla: no señalar el error, sino a quién avisarle."""
+    c, _, _ = cliente
+    alertas = c.get("/api/terceros/alertas?anio=2026").json()["alertas"]
+    assert alertas
+    assert all(a["sistema"] for a in alertas)
+    assert all(a["severidad"] in ("alta", "media", "baja") for a in alertas)
+
+
+def test_las_alertas_vienen_de_la_mas_urgente_a_la_menos(cliente):
+    c, _, _ = cliente
+    orden = {"alta": 0, "media": 1, "baja": 2}
+    severidades = [a["severidad"] for a in c.get("/api/terceros/alertas?anio=2026").json()["alertas"]]
+    assert severidades == sorted(severidades, key=lambda s: orden[s])
+
+
+def test_el_resumen_de_maquinaria_del_campo_viene_con_las_alertas(cliente):
+    c, _, _ = cliente
+    m = c.get("/api/terceros/alertas?anio=2026").json()["maquinaria_campo"]
+    assert set(m) == {"total", "cruzan", "sin_patente", "con_patente_sin_par"}
+    assert m["total"] == 1 and m["sin_patente"] == 1
+
+
+def test_sin_el_maestro_del_taller_no_se_devuelven_alertas_a_medias():
+    """Sin el maestro del taller toda máquina parecería no tener par: media
+    lista sería falsa, y una alerta falsa hace perder más tiempo que ninguna."""
+    c = _con_origenes(taller=TallerFalso(error=httpx.ConnectError("sin red")))
+    r = c.get("/api/terceros/alertas?anio=2026")
+    assert r.status_code == 502
+    assert "no respondió" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("anio", [1999, 2101])
+def test_un_año_disparatado_se_rechaza(anio, cliente):
+    c, _, _ = cliente
+    assert c.get(f"/api/terceros/alertas?anio={anio}").status_code == 422
+
+
+# ─── Horas de servicio ──────────────────────────────────────────────────────
+
+def test_las_horas_de_servicio_traen_las_dos_medidas(cliente):
+    """Sobre cuál se paga decide la Unidad base de la tarifa, no el dato: si la
+    consulta trajera una sola, esa elección no se podría hacer."""
+    c, _, _ = cliente
+    fila = c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]
+    assert fila["horas_maquina"] == "6.00"
+    assert fila["unidades"] == "297.00"
+    assert "horas_jornal" not in fila      # no se paga por jornal
+
+
+def test_la_unidad_dice_que_mide_la_tarea(cliente):
+    """No dice cómo se paga: una tarea medida en bins puede pagarse por hora.
+    Es el mismo papel que el Grupo de pago en Preliquidación."""
+    c, _, _ = cliente
+    assert c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]["unidad"] == "BINS"
+
+
+def test_las_filas_sin_cantidad_no_se_rellenan_con_cero():
+    """Cosecha y pulverizadas no cargan cantidad. Un cero ahí se sumaría como
+    si la tarea hubiera medido cero, y lo que pasa es que no mide nada."""
+    externa = ExternaFalsa()
+    externa.horas_servicio = lambda q: [dict(SERVICIO, planilla="COSECHA", unidades=None, unidad=None)]
+    c = _con_origenes(externa=externa)
+    fila = c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]
+    assert fila["unidades"] is None and fila["unidad"] is None
+
+
+def test_las_horas_de_servicio_dicen_de_que_parte_diario_salieron(cliente):
+    """Las horas se cargan en tres planillas distintas del sistema de campo y
+    cada una las guarda en otro lado; saber de cuál vino una fila es lo que
+    permite rastrearla."""
+    c, _, _ = cliente
+    assert c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]["planilla"] == "MAQUINARIA"
+
+
+def test_las_horas_de_servicio_traen_el_tercero(cliente):
+    c, _, _ = cliente
+    assert c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]["tercero"] == "BARRIOS"
+
+
+def test_el_tercero_puede_venir_vacio_y_no_se_rellena():
+    """Cuando la descripción de la máquina trae una patente en vez de un nombre,
+    el hueco se muestra: liquidarle las horas a una patente sería peor."""
+    externa = ExternaFalsa()
+    externa.horas_servicio = lambda q: [dict(SERVICIO, tercero=None)]
+    c = _con_origenes(externa=externa)
+    assert c.get(f"/api/terceros/horas-servicio?quincena={Q}").json()[0]["tercero"] is None
+
+
+def test_servicio_y_reparacion_son_endpoints_distintos():
+    """Van en sentidos opuestos del recibo: una se paga y la otra se descuenta.
+    Que compartan nombre fue el error que el glosario corrigió."""
+    rutas = {r.path for r in app.routes}
+    assert "/api/terceros/horas-servicio" in rutas
+    assert "/api/terceros/horas-reparacion" in rutas
+    assert "/api/terceros/horas-taller" not in rutas
+
+
+
+# ─── El cálculo del neto (etapa 7) ──────────────────────────────────────────
+
+class CalculoFalso:
+    """Doble del servicio de cálculo: acá se prueba la capa HTTP, no la cuenta.
+    La cuenta está probada contra una base de verdad en test_calculo.py."""
+
+    def __init__(self, falta=False):
+        self.falta = falta
+        self.calculadas = []
+
+    def calcular(self, quincena):
+        if self.falta:
+            raise LiquidacionInexistente(
+                "La quincena del %s no está generada. Generala antes de "
+                "ponerle precios." % quincena)
+        self.calculadas.append(quincena)
+        return {"viajes": {"hechos": 756,
+                           "por_estado": {"CALCULADO": 689, "SIN_TARIFA": 67}}}
+
+    def totales(self, quincena):
+        return [{"tercero": "ARANDA, HUGO",
+                 "viajes": Decimal("200000"), "servicio": Decimal("0"),
+                 "combustible": Decimal("50000"), "repuestos": Decimal("0"),
+                 "reparacion": Decimal("0"), "seguros": Decimal("30000"),
+                 "total_a_facturar": Decimal("150000"),
+                 "total_a_pagar": Decimal("120000")}]
+
+    def pendientes(self, quincena):
+        return {"viajes": {"SIN_TARIFA": 67}, "reparacion": {"NO_APROBADA": 51}}
+
+
+def _con_calculo(calculo):
+    app.dependency_overrides[get_usuario_actual] = lambda: LIQUIDADOR
+    app.dependency_overrides[api.get_calculo] = lambda: calculo
+    return TestClient(app)
+
+
+def test_calcular_devuelve_cuantos_quedaron_en_cada_estado():
+    calculo = CalculoFalso()
+    r = _con_calculo(calculo).post("/api/terceros/liquidaciones/calcular",
+                                   json={"quincena": Q})
+    assert r.status_code == 200
+    assert calculo.calculadas == [date(2026, 8, 1)]
+    assert r.json()["conjuntos"]["viajes"]["por_estado"]["SIN_TARIFA"] == 67
+
+
+def test_calcular_una_quincena_que_nadie_genero_da_404():
+    r = _con_calculo(CalculoFalso(falta=True)).post(
+        "/api/terceros/liquidaciones/calcular", json={"quincena": Q})
+    assert r.status_code == 404
+    assert "Generala antes" in r.json()["detail"]
+
+
+def test_los_totales_traen_las_dos_cifras_del_recibo():
+    """El total a facturar no lleva los seguros; el total a pagar sí."""
+    fila = _con_calculo(CalculoFalso()).get(
+        f"/api/terceros/liquidaciones/totales?quincena={Q}").json()[0]
+    assert fila["total_a_facturar"] == "150000"
+    assert fila["seguros"] == "30000"
+    assert fila["total_a_pagar"] == "120000"
+
+
+def test_los_pendientes_vienen_separados_por_motivo():
+    """Cada motivo lo resuelve alguien distinto, así que no se suman."""
+    d = _con_calculo(CalculoFalso()).get(
+        f"/api/terceros/liquidaciones/pendientes?quincena={Q}").json()
+    assert d["viajes"] == {"SIN_TARIFA": 67}
+    assert d["reparacion"] == {"NO_APROBADA": 51}
+
+
+def test_generar_deja_la_quincena_con_los_precios_puestos():
+    """Sin esto el liquidador ve ceros y no sabe si faltan tarifas o un botón."""
+    calculo = CalculoFalso()
+    app.dependency_overrides[get_usuario_actual] = lambda: LIQUIDADOR
+    app.dependency_overrides[api.get_calculo] = lambda: calculo
+    app.dependency_overrides[api.get_liquidacion] = lambda: LiquidacionFalsa()
+    r = TestClient(app).post("/api/terceros/liquidaciones/generar",
+                             json={"quincena": Q})
+    assert r.status_code == 200
+    assert calculo.calculadas == [date(2026, 8, 1)]
+
+
+class LiquidacionFalsa:
+    def generar(self, quincena, usuario_id=None):
+        return {"id": 1, "quincena": quincena, "generada_en": datetime(2026, 9, 21, 10, 0),
+                "actualizada_en": None, "filas": {"viajes": 756}, "total_filas": 756,
+                "nueva": True, "detalle": {}}

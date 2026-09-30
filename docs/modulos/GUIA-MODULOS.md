@@ -6,7 +6,7 @@
 
 **Antes de leer esto**: si la máquina todavía no tiene los proyectos corriendo, empezar por [`PUESTA-A-PUNTO.md`](PUESTA-A-PUNTO.md), que dice qué instalar y cómo dejar backend y frontend andando.
 
-**Estado**: la etapa 0 está completa. El molde de **Liquidación Terceros** existe en ambos repos, inactivo. Su dominio ya está relevado: el glosario está en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y el plan por etapas en [`terceros/plan-terceros.md`](terceros/plan-terceros.md).
+**Estado**: la etapa 0 está completa. **Liquidación Terceros** está activo y en construcción en ambos repos; en qué etapa va lo dice su plan. Su dominio está relevado: el glosario está en [`terceros/CONTEXT-terceros.md`](terceros/CONTEXT-terceros.md) y el plan por etapas en [`terceros/plan-terceros.md`](terceros/plan-terceros.md).
 
 ---
 
