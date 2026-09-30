@@ -1222,3 +1222,80 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
 - El desarrollador de Terceros tiene que hacer `git pull` en su rama, que ahora tiene el
   merge c15b4f7.
 - La revisión de código de dos ejes sobre este PR, que no se hizo.
+
+## 2026-09-30 — Plan de seguridad, PR 5: ESLint con reglas de hooks en el front
+
+**Mergeado**
+- PR #48 (frontend) — ESLint 9 con las reglas de hooks, script `npm run lint`, y cada
+  warning de hooks de Preliquidación corregido a mano. Sin PR hermano en el backend.
+
+**Por frontera**
+- Preliquidación (front): `eslint.config.js` nuevo (flat config: `@eslint/js`
+  recommended, `eslint-plugin-react-hooks` con `rules-of-hooks` en error y
+  `exhaustive-deps` en warn, `globals`; `no-unused-vars` ignora nombres con mayúscula o
+  `_` porque, sin `eslint-plugin-react`, no ve el uso en JSX). Dependencias de desarrollo
+  nuevas: `eslint` 9.39.5, `@eslint/js` 9.39.5, `eslint-plugin-react-hooks` 7.1.1,
+  `globals` 17.12.0 (hay que pedir `@eslint/js@^9`: sin eso baja la 10, que pide eslint
+  10). Código muerto fuera: la prop `mutCrear` de `FilaFaltante` (Conceptos) y
+  `TIPOS_CONCEPTO` (PanelLinea). Correcciones: `InputBusqueda` (debounce con
+  `onChangeRef`; el borrado externo compara contra el `value` anterior guardado en un ref),
+  `PanelLinea` (el reset por cambio de línea queda en `[linea.id]` con el lint silenciado;
+  el dedup de conceptos optimistas suma la dependencia con un guard que devuelve la misma
+  referencia), `Revision` (sale `lineas` de un `useMemo` que no la leía), `Verificacion`
+  (`filtrarBusqueda` pasa a función pura fuera del componente) y `FiltrosBar` (queda como
+  estaba, con el lint silenciado y su porqué en un comentario).
+- Liquidación Terceros (front): sin cambios; el lint le marca 5 warnings (ver Pendiente).
+- Docs (front): `npm run lint` en el README ("Puesta en marcha") y en `AGENTS.md`
+  ("Comandos"), como paso antes de un PR.
+
+**Decisiones**
+- **Cada warning se razonó a mano, uno por uno.** Porqué: en pantallas sin tests, agregar
+  dependencias mecánicamente puede dejar un input que no tipea o un refetch en bucle.
+  Descartado: Prettier (reformatearía todo el repo) y el lint en el pre-commit.
+- **`FiltrosBar` queda como estaba.** El paso del plan (agregar `busqueda` a las
+  dependencias) estaba mal: lo detectó el agente ejecutor, frenó, y el usuario eligió
+  dejar el comportamiento como estaba. Porqué: con ese cambio el buscador de Verificación
+  se borraba 200 ms después de cada tecla.
+- **`PanelLinea` resetea sólo por cambio de línea.** Porqué: un refetch pisaría lo que se
+  está editando. El guard del dedup, porque sin él entra en bucle infinito. Descartado
+  (queda como alternativa no hecha): montar `<PanelLinea key={linea.id}>` y resetear por
+  remount.
+- **`InputBusqueda` guarda el `value` anterior en un ref.** Porqué: agregar `texto` a las
+  dependencias borraba lo que se tipea.
+- **Los archivos de Liquidación Terceros no se tocan**, por decisión del usuario. Porqué
+  (del PR): cada warning se revisa a mano y agregar la dependencia puede no ser lo
+  correcto.
+- **Sin `eslint-plugin-react`.** Porqué no registrado en el PR.
+
+**Estado**
+- Deploy: no.
+- Migraciones: ninguna.
+- Verificación (del PR): `npm run lint` con 0 errores y 5 warnings, todos en Terceros;
+  `npm run build` verde. Prueba manual del usuario en el navegador contra `testing`:
+  Verificación (tipear y esperar sin que se borre, limpiar, contadores por sección),
+  Revisión (buscador; editar sin guardar y agregar concepto sin que se pise ni se duplique;
+  cambiar de línea; liquidación por persona), Conceptos (filtro del panel de precios),
+  Mantenimiento, Gerencial y logout; sin errores de la app en la consola. Revisión de
+  código: 0 urgent, 1 high (faltaba `npm run lint` en README y `AGENTS.md`, arreglado).
+
+**Pendiente**
+- **Para el usuario, dueño del proyecto, y para el desarrollador de Liquidación
+  Terceros**: los 5 warnings de `react-hooks/exhaustive-deps` que quedaron sin tocar, a
+  revisar uno por uno:
+  - `src/modulos/terceros/components/FiltroMultiple.jsx:51` (falta `mostrar`)
+  - `src/modulos/terceros/pages/Grilla.jsx:131` (falta `pasaTercero`)
+  - `src/modulos/terceros/pages/Grilla.jsx:150` (falta `pasa`)
+  - `src/modulos/terceros/pages/Grilla.jsx:184` (falta `pasaTercero`)
+  - `src/modulos/terceros/pages/Grilla.jsx:188` (falta `pasa`)
+- El checkout principal del front necesita `npm install` para tener eslint.
+- La regla 24 de `GUIA-MODULOS.md` (`npm run lint` antes de un PR), en un PR de docs del
+  backend.
+- Deploy, con OK del usuario: sólo frontend (`npm run build` y swap de carpeta; sin
+  cambios de contrato con el backend).
+- Minor sin tocar (los lista el PR): `onChangeRef.current = onChange` se asigna durante el
+  render en `InputBusqueda` (para endurecerlo, en un `useLayoutEffect`); un comentario
+  suelto en `PanelLinea.jsx:6`; el comentario del lint silenciado en `FiltrosBar` nombra a
+  Verificación.
+- Tarea aparte ofrecida: `scripts/verificar_agents_comun.sh` no compara nada cuando se
+  corre desde un worktree, porque reconoce el repo por el nombre de la carpeta.
+- PR 6 del plan.
