@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Annotated, Optional
+from pydantic import AfterValidator, BaseModel, Field
 from app.core.quincena import Quincena
 from app.modulos.preliquidacion.models import TipoConcepto, UnidadBaseConcepto
 
@@ -114,12 +114,36 @@ class ValorHoraTractoristaRequest(BaseModel):
 
 # ─── Maestro unificado de Conceptos ───────────────────────────────────────────
 
+def _codigo_obligatorio(v):
+    """ADR-0016: una regla del maestro no se guarda sin código. El ValueError
+    en español sale tal cual en el 422 (convención de app/core/quincena.py)."""
+    if v is None:
+        raise ValueError("Ingresá el código del concepto")
+    return v
+
+
+def _precio_positivo(v):
+    """ADR-0016: una regla del maestro no se guarda sin precio ni con precio <= 0."""
+    if v is None:
+        raise ValueError("Ingresá el precio del concepto")
+    if v <= 0:
+        raise ValueError("El precio tiene que ser mayor que 0")
+    return v
+
+
+# Son Optional a propósito: así el null explícito llega al validador y da el
+# mensaje en español, en vez del error de tipo de Pydantic (en inglés).
+CodigoObligatorio = Annotated[Optional[int], AfterValidator(_codigo_obligatorio)]
+PrecioPositivo = Annotated[Optional[Decimal], AfterValidator(_precio_positivo)]
+
+
 class ConceptoUnifResponse(BaseModel):
     id: int
     quincena: date
     tarea_nombre: str
     cliente_nombre: Optional[str] = None
     finca_nombre: Optional[str] = None
+    # codigo y precio siguen Optional: puede haber reglas viejas incompletas (ADR-0016).
     codigo: Optional[int] = None
     unidad_base: UnidadBaseConcepto
     precio: Optional[Decimal] = None
@@ -149,9 +173,12 @@ class ConceptoUnifRequest(BaseModel):
     finca_nombre: Optional[str] = None     # NULL con cliente = por cliente (cualquier finca)
     # ADR-0011: excluyente con cliente_nombre (422 si vienen ambos).
     supervisor_nombre: Optional[str] = None
-    codigo: Optional[int] = None
+    # ADR-0016: obligatorios. validate_default=True hace que "no vino" pase por
+    # el mismo validador que "vino null" y dé el mismo mensaje en español (con
+    # `int` a secas, Pydantic contestaría "Field required" en inglés).
+    codigo: CodigoObligatorio = Field(default=None, validate_default=True)
     unidad_base: UnidadBaseConcepto = UnidadBaseConcepto.FIJO
-    precio: Optional[Decimal] = None
+    precio: PrecioPositivo = Field(default=None, validate_default=True)
     tipo: TipoConcepto = TipoConcepto.OTRO
     categoria: Optional[int] = Field(default=None, ge=1, le=12)
     # None = no lo mandaron: crear_concepto decide el default (True si NO es
@@ -166,9 +193,12 @@ class ConceptoUnifRequest(BaseModel):
 
 
 class ConceptoUnifUpdateRequest(BaseModel):
-    codigo: Optional[int] = None
+    # ADR-0016: SIN validate_default a propósito. Si el campo se omite, el
+    # validador no corre y el PATCH sigue siendo parcial; si viene null o
+    # <= 0, rechaza. Agregarle validate_default rompería la edición parcial.
+    codigo: CodigoObligatorio = None
     unidad_base: Optional[UnidadBaseConcepto] = None
-    precio: Optional[Decimal] = None
+    precio: PrecioPositivo = None
     tipo: Optional[TipoConcepto] = None
     categoria: Optional[int] = Field(default=None, ge=1, le=12)
     supervisor_nombre: Optional[str] = None
@@ -185,6 +215,7 @@ class ConceptoPanelResponse(BaseModel):
     comparar."""
     id: int
     tarea_nombre: str
+    # codigo y precio siguen Optional: puede haber reglas viejas incompletas (ADR-0016).
     codigo: Optional[int] = None
     cliente_nombre: Optional[str] = None
     finca_nombre: Optional[str] = None
@@ -203,7 +234,8 @@ class ConceptoPanelResponse(BaseModel):
 
 class ConceptoPrecioMasivoRequest(BaseModel):
     ids: list[int]
-    precio: Decimal
+    # ADR-0016: sigue obligatorio y además tiene que ser > 0.
+    precio: Annotated[Decimal, AfterValidator(_precio_positivo)]
 
 
 class ConceptoPrecioMasivoResponse(BaseModel):

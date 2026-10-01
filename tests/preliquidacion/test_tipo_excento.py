@@ -16,6 +16,8 @@ def test_concepto_unif_request_acepta_tipo_excento():
     obj = ConceptoUnifRequest(
         quincena=date(2026, 5, 1),
         tarea_nombre="PODA",
+        codigo=1,           # ADR-0016: código y precio > 0 son obligatorios
+        precio="100",
         tipo="EXCENTO",
     )
     assert obj.tipo == TipoConcepto.EXCENTO

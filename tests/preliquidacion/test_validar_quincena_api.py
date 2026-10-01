@@ -43,6 +43,8 @@ def test_crear_concepto_con_dia_2_da_422(cliente):
     r = cliente.post("/api/precios/conceptos", json={
         "quincena": "2026-09-02", "tarea_nombre": "COSECHA", "tipo": "PRECIO",
         "unidad_base": "JORNAL", "valor": 100,
+        # Código y precio válidos (ADR-0016): el 422 tiene que salir sólo por la quincena.
+        "codigo": 1, "precio": 100,
     })
     assert r.status_code == 422, r.text
     assert "1 o el 16" in r.text
