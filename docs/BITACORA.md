@@ -1400,3 +1400,44 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
   está repetido en tres lugares (Conceptos dos veces, Dashboard); el comentario del núcleo
   en `src/core/api.js` usa "Revisión" como ejemplo.
 - Queda cerrado el pendiente "PR 6 del plan" de las entradas anteriores.
+
+## 2026-09-30 — `verificar_agents_comun.sh` reconoce el repo por su origin, también desde un worktree
+
+**Mergeado**
+- PR #63 (backend) — `scripts/verificar_agents_comun.sh` identifica el repo por
+  `git remote get-url origin` en vez de por el nombre de la carpeta; suma el plan
+  `docs/superpowers/plans/2026-09-30-verificar-agents-worktree.md`.
+- PR #50 (frontend) — el mismo script, idéntico byte a byte.
+
+**Por frontera**
+- Docs: el script que compara el bloque común de `AGENTS.md` entre los dos repos (vive en
+  `scripts/`, fuera de las cinco fronteras). Reconoce `Gerorios/Preliquidador_AST_BK` y
+  `Gerorios/Preliquidador_AST_FT` en https o ssh, con o sin `.git`. Al hermano lo busca
+  entre las carpetas al lado del checkout principal (padre de
+  `git rev-parse --git-common-dir`), también por su origin. Plan nuevo en
+  `docs/superpowers/plans/`.
+
+**Decisiones**
+- **El hermano se busca por su origin, no por el nombre de la carpeta.** Porqué: corrido
+  desde un worktree (`.claude/worktrees/<algo>`) el script imprimía "no reconozco el repo"
+  y salía con 0 sin comparar, así que un cambio al bloque común hecho en un worktree podía
+  pasar sin aviso; buscando por origin deja de depender de cómo se llamen las carpetas.
+- **Exit 2 con mensaje claro** si no reconoce el repo, no encuentra al hermano o el
+  hermano no tiene `AGENTS.md` (antes, exit 0 en silencio). Exit 1 sigue siendo "el bloque
+  difiere". El hook `pre-commit` no cambia: avisa sin frenar.
+
+**Estado**
+- Deploy: nada que deployar (tooling de desarrollo). Los hooks instalados ya llaman al
+  script desde `scripts/`; no hace falta reinstalarlos.
+- Migraciones: ninguna.
+- Verificación (del PR): rojo con el script viejo desde un worktree; exit 0 con el nuevo
+  desde worktree y checkout principal en los dos repos; bloque alterado a propósito, exit 1
+  con el diff; repos de juguete con origin desconocido o sin hermano, exit 2. Suite del
+  backend 783 passed, 4 xfailed; build del front OK. Revisión: 0 urgent, 0 high, 2 minor.
+
+**Pendiente**
+- Queda cerrada la tarea aparte ofrecida "`scripts/verificar_agents_comun.sh` no compara
+  nada desde un worktree" de las entradas del FT #48 y del FT #49.
+- Minor sin tocar (los lista el PR): nombres mejorables en el script (`otro`, `comun`,
+  `BK`/`FT`); fuera de un repo, `git rev-parse` deja su propio `fatal:` además del
+  mensaje del script.
