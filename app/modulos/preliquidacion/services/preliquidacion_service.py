@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
@@ -109,6 +110,15 @@ class ExtraCodigoRepetido(Exception):
     def __init__(self, detalle: dict):
         self.detalle = detalle
         super().__init__(detalle.get("mensaje", "El código ya está en la línea"))
+
+
+@dataclass
+class PlanExtras:
+    """Qué pasa con cada extra atado a las reglas tocadas (ADR-0015, plan §4).
+    `reatar`: pares (extra, regla destino); `seguir` y `borrar`: extras."""
+    reatar: list = field(default_factory=list)
+    seguir: list = field(default_factory=list)
+    borrar: list = field(default_factory=list)
 
 
 class PreliquidacionService:
@@ -1616,6 +1626,120 @@ class PreliquidacionService:
         self.db.commit()
         self.db.refresh(concepto)
         return concepto
+
+    @staticmethod
+    def _regla_elegible_extra(regla) -> bool:
+        """La misma condición que _reglas_elegibles_extra, sobre una regla ya
+        cargada. Sin código cuenta como sin precio (decisión 9)."""
+        return (
+            regla.precio is not None
+            and regla.codigo is not None
+            and regla.categoria is None
+        )
+
+    def planificar_extras(self, regla_ids, excluir_ids=()) -> PlanExtras:
+        """Qué pasa con los extras atados a `regla_ids` (plan §4). No escribe:
+        trabaja sobre el estado ya flusheado, y el que llama hace el flush
+        antes. `excluir_ids`: reglas que se van a borrar (no cuentan como
+        propias ni como destino). Para cada extra, con R su regla y `op` su
+        opción (código, precio, unidad, tipo):
+        1. R no excluida, elegible y con `op` → no cambia (no entra al plan).
+        2. Otra regla elegible de la quincena ofrece `op` → reatar a la
+           representante de ellas.
+        3. R existe, no excluida, con precio y código y sin categoría → seguir.
+        4. El resto (R borrada o excluida, sin precio, sin código o con
+           categoría) → borrar."""
+        plan = PlanExtras()
+        regla_ids = list(regla_ids)
+        if not regla_ids:
+            return plan
+        excluir = set(excluir_ids)
+
+        extras = self.db.query(ConceptoAdicional).filter(
+            ConceptoAdicional.ingresado_por.isnot(None),
+            ConceptoAdicional.concepto_liquidacion_id.in_(regla_ids),
+        ).options(
+            joinedload(ConceptoAdicional.linea).joinedload(PreliquidacionLinea.preliquidacion),
+        ).order_by(ConceptoAdicional.id).all()
+
+        elegibles_por_codigo = {}
+        for extra in extras:
+            # R puede no existir si ya se borró en la sesión: se decide con la
+            # quincena de la línea, que es la de R.
+            regla = self.db.get(ConceptoLiquidacion, extra.concepto_liquidacion_id)
+            propia = regla is not None and regla.id not in excluir
+            quincena = extra.linea.preliquidacion.quincena
+            op = self._clave_opcion(extra.precio, extra.unidad_base, extra.tipo)
+
+            if (
+                propia and self._regla_elegible_extra(regla)
+                and regla.codigo == extra.codigo_concepto
+                and self._clave_de_regla(regla) == op
+            ):
+                continue
+
+            clave = (quincena, extra.codigo_concepto)
+            if clave not in elegibles_por_codigo:
+                elegibles_por_codigo[clave] = self._reglas_elegibles_extra(
+                    quincena, extra.codigo_concepto,
+                )
+            candidatas = [
+                r for r in self._reglas_de_opcion(
+                    elegibles_por_codigo[clave], extra.precio, extra.unidad_base, extra.tipo,
+                )
+                if r.id != extra.concepto_liquidacion_id and r.id not in excluir
+            ]
+            if candidatas:
+                plan.reatar.append((extra, self._representante(candidatas)))
+            elif propia and self._regla_elegible_extra(regla):
+                plan.seguir.append(extra)
+            else:
+                plan.borrar.append(extra)
+        return plan
+
+    def aplicar_plan_extras(self, plan: PlanExtras) -> dict:
+        """Escribe el plan en la sesión, sin commit (el que llama commitea), y
+        recalcula el importe_total de las líneas afectadas (plan §4).
+        - reatar: cambia la regla y la descripción; la opción guardada
+          (precio, unidad, tipo, código), la cantidad y el importe quedan igual.
+        - seguir: recalcula desde su regla, como un concepto automático.
+        - borrar: borra el extra."""
+        lineas = {}
+
+        for extra, destino in plan.reatar:
+            extra.concepto_liquidacion_id = destino.id
+            extra.descripcion = self._descripcion_extra(destino)
+            lineas[extra.linea.id] = extra.linea
+
+        for extra in plan.seguir:
+            regla = self.db.get(ConceptoLiquidacion, extra.concepto_liquidacion_id)
+            linea = extra.linea
+            # Mismo cálculo que el alta: se genera el concepto y se copian los
+            # campos. El generado no se agrega a la sesión.
+            nuevo = self._generar_conceptos_automaticos(linea, [regla])[0]
+            for campo in ("precio", "unidad_base", "tipo", "codigo_concepto", "cantidad", "importe"):
+                setattr(extra, campo, getattr(nuevo, campo))
+            extra.descripcion = self._descripcion_extra(regla)
+            lineas[linea.id] = linea
+
+        for extra in plan.borrar:
+            linea = extra.linea
+            # Se saca de la colección cargada para que el total no lo cuente.
+            if extra in linea.conceptos:
+                linea.conceptos.remove(extra)
+            self.db.delete(extra)
+            lineas[linea.id] = linea
+
+        for linea in lineas.values():
+            self._recalcular_importe(linea)
+        self.db.flush()
+
+        return {
+            "reatados": len(plan.reatar),
+            "seguidos": len(plan.seguir),
+            "borrados": len(plan.borrar),
+            "lineas": len(lineas),
+        }
 
     # ─── Estadísticas ────────────────────────────────────────────────────────
 
