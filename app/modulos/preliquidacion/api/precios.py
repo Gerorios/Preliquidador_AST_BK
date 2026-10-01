@@ -2,7 +2,7 @@ from datetime import date
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 from app.core.database import get_db_propia, get_db_externa
 from app.core.auth import get_usuario_actual
@@ -554,9 +554,24 @@ def buscar_conceptos_para_combo(
     quincena: Optional[date] = Query(None),
     db: Session = Depends(get_db_propia),
 ):
-    """Búsqueda de códigos para el combo del PanelLinea."""
-    query = db.query(ConceptoLiquidacion).filter(
-        ConceptoLiquidacion.codigo.isnot(None)
+    """Búsqueda de códigos para el combo del PanelLinea.
+
+    Un renglón por código, sólo códigos con al menos una fila con precio.
+    Se agrupa en SQL por (código, tipo) contando filas con precio; el tipo
+    que se muestra es el más frecuente, con desempate por nombre de tipo
+    ascendente. Ese "más frecuente por grupo" se resuelve en Python: en SQL
+    pediría window functions o subconsultas correlacionadas, y tiene que
+    andar igual en MySQL (producción) y SQLite (tests). Sin `quincena`
+    agrupa todas las quincenas. Con `q` texto el filtro de tipo se aplica
+    antes de agrupar.
+    """
+    query = db.query(
+        ConceptoLiquidacion.codigo,
+        ConceptoLiquidacion.tipo,
+        func.count().label("n"),
+    ).filter(
+        ConceptoLiquidacion.codigo.isnot(None),
+        ConceptoLiquidacion.precio.isnot(None),
     )
     if quincena:
         query = query.filter(ConceptoLiquidacion.quincena == quincena)
@@ -565,15 +580,26 @@ def buscar_conceptos_para_combo(
     elif q:
         query = query.filter(ConceptoLiquidacion.tipo.ilike(f"%{q}%"))
 
-    filas = query.order_by(ConceptoLiquidacion.codigo).limit(200).all()
-    vistos = set()
+    filas = (
+        query.group_by(ConceptoLiquidacion.codigo, ConceptoLiquidacion.tipo)
+        .order_by(ConceptoLiquidacion.codigo)
+        .all()
+    )
+
+    def nombre_tipo(tipo):
+        return tipo.value if hasattr(tipo, "value") else tipo
+
+    # Candidatas (código, tipo, n) por código; el dict conserva el orden por
+    # código que trae la query.
+    por_codigo = {}
+    for f in filas:
+        por_codigo.setdefault(f.codigo, []).append(f)
+
     resultado = []
-    for c in filas:
-        if c.codigo in vistos:
-            continue
-        vistos.add(c.codigo)
-        resultado.append({
-            "codigo": c.codigo,
-            "tipo": c.tipo.value if hasattr(c.tipo, "value") else c.tipo,
-        })
-    return resultado
+    for codigo, candidatas in por_codigo.items():
+        # Desempate en Python, no en SQL, para no depender de la collation.
+        elegida = min(candidatas, key=lambda f: (-f.n, nombre_tipo(f.tipo)))
+        resultado.append({"codigo": codigo, "tipo": nombre_tipo(elegida.tipo)})
+    # El tope de 200 va después de agrupar: muchas filas de un mismo código
+    # no pueden dejar afuera a los códigos siguientes.
+    return resultado[:200]

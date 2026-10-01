@@ -114,10 +114,11 @@ def _linea(db, preliq, cuit, nombre_empleado):
     return l
 
 
-def _concepto(db, codigo, tipo=TipoConcepto.OTRO, quincena=Q1, tarea="TAREA X"):
+def _concepto(db, codigo, tipo=TipoConcepto.OTRO, quincena=Q1, tarea="TAREA X",
+              precio=Decimal("100")):
     c = ConceptoLiquidacion(
         quincena=quincena, tarea_nombre=tarea, codigo=codigo,
-        precio=Decimal("100"), tipo=tipo,
+        precio=precio, tipo=tipo,
     )
     db.add(c)
     db.commit()
@@ -279,3 +280,66 @@ def test_buscar_devuelve_como_maximo_200(cliente, db):
     codigos = [f["codigo"] for f in r.json()]
     assert len(codigos) == 200
     assert codigos == list(range(1, 201))
+
+
+def test_buscar_no_pierde_codigos_con_mas_de_200_filas_del_mismo_codigo(cliente, db):
+    # El tope de 200 se aplica después de agrupar por código: 250 filas del
+    # mismo código no pueden tapar a los códigos que vienen después.
+    for i in range(250):
+        db.add(ConceptoLiquidacion(
+            quincena=Q1, tarea_nombre=f"TAREA {i}", codigo=1,
+            precio=Decimal("1"), tipo=TipoConcepto.OTRO,
+        ))
+    db.commit()
+    _concepto(db, 2, TipoConcepto.JORNAL)
+
+    esperado = [
+        {"codigo": 1, "tipo": "OTRO"},
+        {"codigo": 2, "tipo": "JORNAL"},
+    ]
+    r = cliente.get(URL_BUSCAR, params={"quincena": Q1.isoformat()})
+    assert r.status_code == 200, r.text
+    assert r.json() == esperado
+
+    r = cliente.get(URL_BUSCAR)
+    assert r.status_code == 200, r.text
+    assert r.json() == esperado
+
+
+def test_buscar_excluye_codigos_sin_ninguna_fila_con_precio(cliente, db):
+    _concepto(db, 700, TipoConcepto.OTRO, precio=None)
+    _concepto(db, 701, TipoConcepto.OTRO, precio=None)
+    _concepto(db, 701, TipoConcepto.OTRO, tarea="TAREA Y")  # con precio
+
+    r = cliente.get(URL_BUSCAR)
+    assert r.status_code == 200, r.text
+    assert r.json() == [{"codigo": 701, "tipo": "OTRO"}]
+
+    r = cliente.get(URL_BUSCAR, params={"q": "700"})
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
+def test_buscar_tipo_mas_frecuente_entre_filas_con_precio(cliente, db):
+    # Las filas sin precio no cuentan: OTRO tiene más filas pero ninguna con
+    # precio, así que gana JORNAL (2) sobre REMUNERATIVO (1).
+    _concepto(db, 800, TipoConcepto.REMUNERATIVO, tarea="TAREA R")
+    _concepto(db, 800, TipoConcepto.JORNAL, tarea="TAREA J1")
+    _concepto(db, 800, TipoConcepto.JORNAL, tarea="TAREA J2")
+    for i in range(3):
+        _concepto(db, 800, TipoConcepto.OTRO, tarea=f"TAREA O{i}", precio=None)
+
+    r = cliente.get(URL_BUSCAR)
+    assert r.status_code == 200, r.text
+    assert r.json() == [{"codigo": 800, "tipo": "JORNAL"}]
+
+
+def test_buscar_empate_de_tipos_desempata_por_nombre_de_tipo(cliente, db):
+    # Empate 1 a 1: gana el nombre de tipo menor (JORNAL < REMUNERATIVO),
+    # aunque REMUNERATIVO se haya cargado primero.
+    _concepto(db, 900, TipoConcepto.REMUNERATIVO, tarea="TAREA R")
+    _concepto(db, 900, TipoConcepto.JORNAL, tarea="TAREA J")
+
+    r = cliente.get(URL_BUSCAR)
+    assert r.status_code == 200, r.text
+    assert r.json() == [{"codigo": 900, "tipo": "JORNAL"}]
