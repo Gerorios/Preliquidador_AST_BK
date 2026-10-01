@@ -1745,3 +1745,30 @@ técnico está en `docs/DEPLOY.md` (local, fuera de git).
   antes" ya no puede pasar por PATCH, así que queda sólo "si se borra la regla, se borra el
   extra". El 404 por "regla sin precio" queda sólo para reglas viejas. Esa tarea rebasea
   sobre este merge. Detalle en §9 del plan.
+
+## 2026-10-01 — Deploy a producción de la regla del maestro siempre completa (ADR-0016)
+
+Entrada de deploy: no anota un merge sino el deploy de BK #66 y FT #52, ya anotados arriba.
+Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
+`docs/DEPLOY.md` (local, fuera de git).
+
+**Qué se deployó**
+- Backend: de `37f068a` a `acf85a4` (BK #66 más bitácora).
+- Frontend: de `eb180dc` a `3c6158c` (FT #52).
+- Autorizado por el usuario.
+
+**Estado**
+- Antes del deploy, conteo de sólo lectura en producción de reglas sin código, sin precio o
+  con precio <= 0: ninguna, en todas las quincenas. La copia entre quincenas no omite nada
+  por ahora.
+- Deploy: sí, backend y frontend. Frontend con swap de carpeta; la versión anterior queda
+  como rollback.
+- Migraciones: ninguna.
+- Verificación: un solo arranque del backend, conectado a la base de producción, con tablas
+  verificadas; `/health` ok; log sin errores. Bundle del front con el mismo md5 en local y
+  en el servidor; sitio responde 200.
+
+**Pendiente**
+- Smoke del usuario en el sitio real: guardar una regla con precio vacío o 0 debe avisar.
+- Siguen abiertas la deuda de precio <= 0 contado como completo (tarea aparte; con 0 reglas
+  así en producción, sin urgencia) y la nota para "Concepto extra".
