@@ -1772,3 +1772,78 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
 - Smoke del usuario en el sitio real: guardar una regla con precio vacío o 0 debe avisar.
 - Siguen abiertas la deuda de precio <= 0 contado como completo (tarea aparte; con 0 reglas
   así en producción, sin urgencia) y la nota para "Concepto extra".
+
+## 2026-10-01 — Concepto extra: el liquidador elige la opción y el extra sigue al maestro (ADR-0015)
+
+**Mergeado**
+- PR #67 (Preliquidador_AST_BK, merge `5c0ee74`): "Agregar concepto por código" deja de
+  tomar la primera regla del código con `.first()`. Ahora ofrece opciones (precio, unidad
+  base, tipo) y el extra sigue a su regla cuando se edita el maestro.
+- PR #53 (Preliquidador_AST_FT, merge `db3a3fd`): diálogos para elegir la opción, para el
+  código repetido y para el aviso de que se van a borrar extras, en Revisión y Conceptos.
+
+**Por frontera**
+- Preliquidación (back): "agregar por código", en una línea y masivo, responde 409
+  `elegir_opcion` cuando el código tiene varias opciones, 409 `codigo_repetido` cuando la
+  línea ya lo tiene (el masivo acepta `si_repetido` = `agregar` | `saltear`) y 404 claro
+  cuando no tiene precio; antes era un 500 (`IndexError`) y sale su xfail. El masivo no
+  escribe en ninguna línea si algo falla. El combo `GET /conceptos/buscar` deja afuera las
+  reglas con categoría. PATCH, DELETE y precio masivo de una regla reatan o borran sus
+  extras (409 `borra_extras` con confirmación por `?confirmar_borrado_extras=true`). El
+  precio masivo nunca borra: con extras viejos que no puede reatar responde 409
+  `extras_a_revisar`.
+- Preliquidación (front): `DialogoOpcionExtra` en `PanelLinea` y `Revision`, y
+  `DialogoBorraExtras` en `Conceptos`. El alta de `PanelLinea` pasa a `useMutation`.
+- Docs: ADR-0015 nuevo, término **Concepto extra** en `CONTEXT-preliquidacion.md` y plan
+  `docs/superpowers/plans/2026-09-30-concepto-extra.md`.
+
+**Decisiones**
+- **El liquidador elige el código y la opción, no la tarea.** Porqué: piensa en código,
+  precio y unidad. Descartado: usar la regla que matchea la línea (el uso real es un plus de
+  otra tarea y no matchea nada), que escriba el precio a mano (queda sin vínculo al
+  maestro), que el sistema elija con un criterio fijo (sigue siendo adivinar) y que elija la
+  tarea exacta (lo rechazó Gero).
+- **La opción incluye la unidad.** Porqué: el importe es cantidad × precio y la cantidad
+  depende de la unidad. El 449 tiene un solo precio, pero en una regla se paga fijo y en
+  otra por jornal.
+- **La opción viaja por valor y no por id de regla.** Porqué: el liquidador no elige la
+  regla. Si la regla deja de existir entre el 409 y el reintento, el backend da un 404
+  claro.
+- **El extra se ata a la regla de la opción cuya tarea va primero alfabéticamente, y
+  conserva la opción mientras otra regla la ofrezca.** Porqué: atarlo a esa regla es
+  arbitrario, así que un cambio en ella no debe moverle el precio. Descartado: dejarlo
+  congelado (lo rechazó Gero porque no sigue el impacto reactivo de ADR-0002).
+- **Se reata o se borra antes del `db.delete`.** Porqué: la FK es `ON DELETE SET NULL`.
+- **El flag de confirmación va por query.** Porqué: así no se toca
+  `ConceptoUnifUpdateRequest`, que valida ADR-0016.
+- **La descripción se corta a 150 caracteres, sin ampliar la columna.** Porqué: ampliarla
+  era DDL para un caso que hoy no existe.
+- **En el front, el foco por defecto va a "Cancelar"** en el diálogo de una línea y en el de
+  borrado, y a "Saltear" en el masivo. Porqué: que un Enter accidental no pague ni borre.
+
+**Estado**
+- Deploy: no. Backend y front se deployan juntos, y las etapas A y B también: con A sin B,
+  un PATCH de categoría puede dejar un extra atado a una regla que ya no lo admite. Con el
+  back nuevo y el front viejo, un código con varias opciones o repetido no se agrega y el
+  toast muestra el mensaje del 409. Rollback: revertir los dos merges; no hay cambios de
+  esquema.
+- Migraciones: ninguna (`concepto_adicional` ya tenía las columnas, ADR-0006).
+  `pip install`: no hace falta.
+- Verificación: suite backend `949 passed, 1 xfailed`; el xfailed es el de Verificación,
+  ajeno a este PR. Front: lint sin errores nuevos y `npm run build` OK. Smoke con backend y
+  front locales contra `testing` (quincena 2026-08-16), y al terminar `testing` quedó sin
+  extras de prueba. No se probaron en la UI el masivo de Revisión ni el botón de confirmar
+  el borrado; sí se probaron por API. Revisión: back 0 urgent y 2 high arreglados; front
+  0 urgent y 1 high arreglado. Los minor que no se tocaron están en los cuerpos de los PRs.
+
+**Pendiente**
+- Cierra el pendiente "el precio que se aplica al agregar un código a mano" de las entradas
+  anteriores, y también la nota para "Concepto extra" de las dos entradas de ADR-0016.
+- Antes del deploy, con OK de Gero: la consulta de sólo lectura en producción de la sección
+  "Pre-deploy" del plan. Cuenta, por quincena, los extras viejos, los que quedaron sin regla
+  (van a quedar como manuales para siempre) y los atados a una regla que ya no los admite.
+  Si aparece alguno, Gero decide antes de deployar.
+- Una regla vieja con precio 0 aparecería como opción "$0". La consulta de pre-deploy lo
+  deja ver. Sigue abierta la deuda de que un precio <= 0 cuenta como completo.
+- Deuda previa: si un id se repite en `linea_ids`, el concepto se agrega dos veces en esa
+  línea.
