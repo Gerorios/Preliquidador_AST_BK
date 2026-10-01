@@ -11,7 +11,11 @@ repasar las decisiones con el usuario.
 - Tests del backend: SQLite en memoria, pero `Settings` exige las variables al importar
   `app.main`. El worktree tiene un `.env` **ficticio** (hosts `.invalid`, ignorado por git)
   sólo para pytest. Para levantar la app: sólo las variables de `testing`, nunca `DB_PROD_*`.
-- Estado de ejecución (2026-10-01): **etapa A completa y revisada** (A1 a A10, A4b y R1;
+- Estado de ejecución (2026-10-01, actualizado): etapa A commiteada (`7856e40`, `5c78b37`)
+  y `origin/main` mergeado (ADR-0016). **Etapa B completa** (B1 a B6; suite completa 949
+  passed, 1 xfailed). **Etapa B revisada**: 0 urgent, 1 high arreglado (R2), 9 minor sin
+  tocar, 3 descartados. Sigue la ronda 2 sobre R2 y después la etapa C (front).
+- Estado anterior: **etapa A completa y revisada** (A1 a A10, A4b y R1;
   revisión: 0 urgent, 1 high arreglado, 5 minor sin tocar, 7 descartados; ronda 2 sin
   hallazgos; suite completa 854 passed, 1 xfailed: el de Verificación, ajeno). Falta
   commitear y traer `origin/main` (ADR-0016, BK #66), que cambia la etapa B: una regla ya
@@ -106,8 +110,10 @@ query (no se toca `ConceptoUnifUpdateRequest`). Sin el flag, si la acción borra
 un extra (caso c): no se cambia nada y 409
 `{ "tipo": "borra_extras", "mensaje", "extras", "lineas" }`. Reatar y seguir no avisan.
 
-**PATCH `/conceptos/precio-masivo`**: sin cambio de contrato, nunca 409; internamente reata
-o hace seguir.
+**PATCH `/conceptos/precio-masivo`**: sin cambio en el request; internamente reata o hace
+seguir. Nunca borra: si un extra viejo está atado a una regla que ya no lo admite, no
+aplica ningún precio y responde 409
+`{ "tipo": "extras_a_revisar", "mensaje", "extras", "lineas" }` (R2, no se confirma).
 
 **GET `/conceptos/buscar`**: suma el filtro `categoria IS NULL`.
 
@@ -129,8 +135,8 @@ sobre el estado ya flusheado. Para cada extra (`ingresado_por NOT NULL`,
   aplicar → commit → `recalcular_por_concepto`.
 - DELETE: plan con `excluir_ids={id}` → 409 si corresponde → aplicar → `db.delete` →
   commit → recálculo.
-- Precio masivo: precios → flush → plan → aplicar (`borrar` no vacío es un bug) → commit →
-  recálculo actual.
+- Precio masivo: precios → flush → plan → si hay `borrar`: rollback + 409
+  `extras_a_revisar` (R2) → aplicar → commit → recálculo actual.
 
 Crear una regla o cambiar otra hacia la opción de un extra no toca extras existentes.
 
@@ -222,9 +228,15 @@ REMU; C (TAREA C) 902, 5000, fijo; línea Y (TAREA Z, 8 hs, 100 previos) con ext
   1200 → `9600.00`, Y `9700.00`; unidad fijo → `1000.00`; código 903; tipo; borrar → Y
   `100.00`; dos extras en la misma línea.
 - **B3. PATCH** con `confirmar_borrado_extras: Annotated[bool, Query()] = False`: 1200 con
-  B → reata, Y `8100.00`, X `9600.00`; sin B → Y `9700.00`; sin B `precio=None` sin flag →
-  409 y rollback; con flag → borrado, Y `100.00`; `codigo=None` igual; con B
-  `precio=None` → reata sin 409.
+  B → reata, Y `8100.00`, X `9600.00`; sin B → Y `9700.00`; código 903 sin B → sigue.
+  **Ajuste por ADR-0016** (mergeado en `main` y traído a la rama el 2026-10-01): el schema
+  del PATCH ya rechaza con 422 `precio`/`codigo` null o `precio <= 0`, así que el caso (c)
+  por PATCH sólo puede venir de **ponerle categoría** a la regla: `categoria=3` sin B y
+  sin flag → 409 `borra_extras` y rollback (la regla sigue sin categoría y el extra
+  existe); con flag → extra borrado, Y `100.00`; con B → reata sin 409. Test de
+  regresión: PATCH `precio=None` sigue dando 422 y no toca el extra. `planificar_extras`
+  conserva la rama "sin precio o sin código → borrar" para reglas viejas incompletas.
+- **B5 (ajuste por ADR-0016):** el precio masivo exige precio > 0, así que nunca borra.
 - **B4. DELETE**: sin B sin flag → 409 sin mutar; con flag → borrados, Y `100.00`, X `0`;
   con B → reata antes del delete (id de B, no NULL).
 - **B5. Precio masivo**: `[A]` a 40 → reata; `[A, B]` a 40 → sigue, `320.00`, Y `420.00`;
@@ -234,6 +246,26 @@ REMU; C (TAREA C) 902, 5000, fijo; línea Y (TAREA Z, 8 hs, 100 previos) con ext
   precio vuelve y el extra no; manual libre intacto.
 - `PATCH categoria=3` sobre A (pregunta 1): con B → reata; sin B → 409 `borra_extras`, y
   con el flag el extra se borra. Va en B1 (plan) y B3 (endpoint).
+
+### Revisión de la etapa B (2026-10-01)
+
+Ronda 1: 0 urgent, 1 high, 9 minor, 3 descartados.
+
+- **R2 (high). Extras viejos atados a reglas que ya no los admiten.** El alta anterior
+  elegía con `.first()` sin filtrar categoría, y antes de ADR-0016 una regla podía quedar
+  sin código o sin precio. Con un extra así, el precio masivo que incluye la regla frenaba
+  el lote entero con un 500 genérico (`RuntimeError`, contra GUIA-MODULOS regla 15), y
+  cualquier PATCH de su regla pide confirmar un borrado que la acción no causó. Arreglo:
+  (1) la consulta de pre-deploy suma `regla_no_admite` (ver "Pre-deploy"); (2) par HECHO:
+  el precio masivo responde 409 `extras_a_revisar` en español, sin escribir nada.
+- Minor (al cuerpo del PR, no se tocan): el test del DELETE con B no protege el orden
+  reatar → delete (SQLite sin `PRAGMA foreign_keys`); la secuencia plan → 409 → aplicar
+  está repetida en los tres endpoints; `_error_borra_extras` arma el detalle en el
+  endpoint; la condición de regla elegible está en Python y en SQL; `PlanExtras` sin tipos;
+  `aplicar_plan_extras` devuelve conteos que sólo leen los tests; docstrings que citan el
+  plan; una línea en blanco de menos; etiquetas B1-B6 en el test.
+- Para el PR: los extras con `concepto_liquidacion_id` NULL (regla borrada antes de este
+  cambio) quedan como manuales para siempre.
 
 ### Etapa C: PR front (después de A y B)
 
@@ -257,15 +289,24 @@ en `testing`.
 
 ```sql
 SELECT p.quincena, COUNT(*) AS extras, COUNT(DISTINCT ca.linea_id) AS lineas,
-       SUM(ca.concepto_liquidacion_id IS NULL) AS sin_regla
+       SUM(ca.concepto_liquidacion_id IS NULL) AS sin_regla,
+       SUM(cl.id IS NOT NULL AND (cl.categoria IS NOT NULL OR cl.codigo IS NULL
+                                  OR cl.precio IS NULL OR cl.precio <= 0)) AS regla_no_admite
 FROM concepto_adicional ca
 JOIN preliquidacion_linea pl ON pl.id = ca.linea_id
 JOIN preliquidacion p ON p.id = pl.preliquidacion_id
+LEFT JOIN concepto_liquidacion cl ON cl.id = ca.concepto_liquidacion_id
 WHERE ca.ingresado_por IS NOT NULL AND ca.codigo_concepto IS NOT NULL
 GROUP BY p.quincena ORDER BY p.quincena DESC;
 ```
 
-En `testing` da 0. Orden de deploy: back A, back B, front. Con back nuevo y front viejo,
+En `testing` da 0. Cómo leerlo (R2, revisión de la etapa B):
+- `sin_regla`: extras cuya regla ya se borró (FK SET NULL). Quedan como manuales para
+  siempre: el algoritmo nunca los ve. Va en el cuerpo del PR.
+- `regla_no_admite`: extras viejos atados a una regla con categoría, sin código o sin
+  precio (el alta anterior elegía con `.first()` sin filtrar). Con esos, cualquier PATCH a
+  su regla pide confirmar un borrado que la acción no causó, y el precio masivo que la
+  incluya frena entero. Si aparece alguno, se le muestra a Gero antes del deploy. Orden de deploy: back A, back B, front. Con back nuevo y front viejo,
 un código con varias opciones muestra el mensaje del 409 y no se agrega.
 
 ## 6. Riesgos
