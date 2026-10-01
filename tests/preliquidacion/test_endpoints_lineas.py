@@ -115,10 +115,10 @@ def _linea(db, preliq, cuit, nombre_empleado):
 
 
 def _concepto(db, codigo, tipo=TipoConcepto.OTRO, quincena=Q1, tarea="TAREA X",
-              precio=Decimal("100")):
+              precio=Decimal("100"), categoria=None):
     c = ConceptoLiquidacion(
         quincena=quincena, tarea_nombre=tarea, codigo=codigo,
-        precio=precio, tipo=tipo,
+        precio=precio, tipo=tipo, categoria=categoria,
     )
     db.add(c)
     db.commit()
@@ -343,3 +343,31 @@ def test_buscar_empate_de_tipos_desempata_por_nombre_de_tipo(cliente, db):
     r = cliente.get(URL_BUSCAR)
     assert r.status_code == 200, r.text
     assert r.json() == [{"codigo": 900, "tipo": "JORNAL"}]
+
+
+def test_buscar_excluye_codigos_que_solo_tienen_reglas_con_categoria(cliente, db):
+    # Las reglas por categoría no se ofrecen como Concepto extra (ADR-0015):
+    # un código que sólo las tiene no aparece, aunque tengan precio.
+    _concepto(db, 950, TipoConcepto.JORNAL, tarea="TAREA C1", categoria=3)
+    _concepto(db, 950, TipoConcepto.JORNAL, tarea="TAREA C2", categoria=5)
+    _concepto(db, 951, TipoConcepto.OTRO)  # sin categoría, con precio
+
+    r = cliente.get(URL_BUSCAR)
+    assert r.status_code == 200, r.text
+    assert r.json() == [{"codigo": 951, "tipo": "OTRO"}]
+
+    r = cliente.get(URL_BUSCAR, params={"q": "950"})
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
+def test_buscar_tipo_sale_solo_de_las_reglas_sin_categoria(cliente, db):
+    # Si contaran las reglas con categoría, JORNAL (2) le ganaría a
+    # REMUNERATIVO (1); como no cuentan, el tipo es REMUNERATIVO.
+    _concepto(db, 960, TipoConcepto.JORNAL, tarea="TAREA C1", categoria=3)
+    _concepto(db, 960, TipoConcepto.JORNAL, tarea="TAREA C2", categoria=5)
+    _concepto(db, 960, TipoConcepto.REMUNERATIVO, tarea="TAREA S")
+
+    r = cliente.get(URL_BUSCAR)
+    assert r.status_code == 200, r.text
+    assert r.json() == [{"codigo": 960, "tipo": "REMUNERATIVO"}]

@@ -175,8 +175,19 @@ class ConceptoUnifUpdateRequest(BaseModel):
     reemplaza_comun: Optional[bool] = None
 
 
+class OpcionExtra(BaseModel):
+    """Opción de un Concepto extra (ADR-0015), por valor: el front devuelve la
+    que eligió del 409 `elegir_opcion`. El precio, acotado como la columna
+    Numeric(12, 4) de ConceptoLiquidacion: fuera de eso es un 422."""
+    precio: Decimal = Field(max_digits=12, decimal_places=4)
+    unidad_base: UnidadBaseConcepto
+    tipo: TipoConcepto
+
+
 class ConceptoPorCodigoRequest(BaseModel):
     codigo: int
+    opcion: Optional[OpcionExtra] = None
+    confirmar_repetido: bool = False
 
 
 class ConceptoPanelResponse(BaseModel):

@@ -90,6 +90,27 @@ def _clave_linea(fila: dict) -> tuple:
     )
 
 
+# Concepto extra (ADR-0015). No heredan de ValueError a propósito: el endpoint
+# convierte ValueError en 404 y estas van a otro status (409).
+class ExtraRequiereOpcion(Exception):
+    """El código tiene más de una opción elegible y no se eligió ninguna.
+    No se escribió nada."""
+
+    def __init__(self, codigo: int, opciones: list[dict]):
+        self.codigo = codigo
+        self.opciones = opciones
+        super().__init__(f"El código {codigo} tiene más de una opción: elegí una")
+
+
+class ExtraCodigoRepetido(Exception):
+    """La línea (o líneas) ya tiene el código. `detalle` lleva lo que el
+    endpoint devuelve en el 409. No se escribió nada."""
+
+    def __init__(self, detalle: dict):
+        self.detalle = detalle
+        super().__init__(detalle.get("mensaje", "El código ya está en la línea"))
+
+
 class PreliquidacionService:
 
     def __init__(self, db_propia: Session, db_externa: Session = None, db_sueldos: Session = None):
@@ -1426,7 +1447,146 @@ class PreliquidacionService:
         self._recalcular_importe(linea)
         self.db.commit()
 
-    def agregar_concepto_por_codigo(self, linea_id: int, codigo: int, usuario_id: int) -> ConceptoAdicional:
+    # ─── Concepto extra (ADR-0015) ────────────────────────────────────────────
+
+    def _reglas_elegibles_extra(self, quincena: date, codigo: int) -> list:
+        """Reglas del código en la quincena que pueden ofrecerse como extra:
+        con precio y sin categoría (las reglas por categoría, ADR-0008, no se
+        ofrecen)."""
+        return self.db.query(ConceptoLiquidacion).filter(
+            ConceptoLiquidacion.quincena == quincena,
+            ConceptoLiquidacion.codigo == codigo,
+            ConceptoLiquidacion.precio.isnot(None),
+            ConceptoLiquidacion.categoria.is_(None),
+        ).all()
+
+    @staticmethod
+    def _clave_opcion(precio, unidad_base, tipo) -> tuple:
+        """Clave comparable de una opción (precio, unidad_base, tipo). Acepta
+        enums o str, y el precio como Decimal o str ("1000" == "1000.0000"):
+        la opción viaja por valor desde el front."""
+        precio = Decimal(str(precio)).quantize(Decimal("0.0001"))
+        unidad = unidad_base.value if hasattr(unidad_base, "value") else str(unidad_base)
+        tipo = tipo.value if hasattr(tipo, "value") else str(tipo)
+        return (precio, unidad, tipo)
+
+    @classmethod
+    def _clave_de_regla(cls, regla) -> tuple:
+        return cls._clave_opcion(regla.precio, regla.unidad_base, regla.tipo)
+
+    @classmethod
+    def _opciones_extra(cls, reglas: list) -> list[dict]:
+        """Una opción por (precio, unidad_base, tipo) distinto, ordenadas por esa
+        tupla. `mostrar_tipo` es True sólo si otra opción comparte precio y
+        unidad: el tipo se muestra cuando hace falta para distinguirlas."""
+        claves = sorted({cls._clave_de_regla(r) for r in reglas})
+        por_precio_unidad = {}
+        for precio, unidad, _ in claves:
+            por_precio_unidad[(precio, unidad)] = por_precio_unidad.get((precio, unidad), 0) + 1
+        return [
+            {
+                "precio": str(precio),
+                "unidad_base": unidad,
+                "tipo": tipo,
+                "mostrar_tipo": por_precio_unidad[(precio, unidad)] > 1,
+            }
+            for precio, unidad, tipo in claves
+        ]
+
+    @classmethod
+    def _reglas_de_opcion(cls, reglas: list, precio, unidad_base, tipo) -> list:
+        """Las reglas de `reglas` que ofrecen la opción dada (lista vacía si
+        ninguna la ofrece)."""
+        clave = cls._clave_opcion(precio, unidad_base, tipo)
+        return [r for r in reglas if cls._clave_de_regla(r) == clave]
+
+    @staticmethod
+    def _representante(reglas: list):
+        """La regla a la que se ata el extra: la primera por tarea en orden
+        alfabético, y después cliente, finca, supervisor (vacío primero) e id.
+        Se resuelve en Python (orden por codepoint, no por collation)."""
+        def norm(valor):
+            return (valor or "").strip().upper()
+
+        return min(reglas, key=lambda r: (
+            norm(r.tarea_nombre), norm(r.cliente_nombre), norm(r.finca_nombre),
+            norm(r.supervisor_nombre), r.id,
+        ))
+
+    @staticmethod
+    def _descripcion_extra(regla) -> str:
+        """Descripción del extra: "Concepto 215 (extra, de COSECHA)", con la
+        tarea de la regla a la que está atado, completa y sin espacios de borde
+        (ADR-0015)."""
+        texto = f"Concepto {regla.codigo} (extra, de {(regla.tarea_nombre or '').strip()})"
+        # tarea_nombre admite 200 y descripcion 150: se corta sólo si se pasa,
+        # para que el alta nunca falle. Sin DDL por un caso que hoy no ocurre
+        # (en testing la tarea más larga tiene 73).
+        largo = ConceptoAdicional.__table__.c.descripcion.type.length
+        return texto[:largo]
+
+    def _resolver_opcion_extra(self, quincena: date, codigo: int, opcion=None):
+        """La regla representante de la opción del extra. `opcion` es un dict
+        u objeto con precio, unidad_base y tipo (por valor), o None. Sin opción
+        y con una sola elegible, se usa esa; con varias, ExtraRequiereOpcion.
+        No escribe nada."""
+        existe = self.db.query(ConceptoLiquidacion.id).filter(
+            ConceptoLiquidacion.quincena == quincena,
+            ConceptoLiquidacion.codigo == codigo,
+        ).first()
+        if not existe:
+            raise ValueError(f"No existe el código {codigo} en el maestro de esta quincena")
+
+        reglas = self._reglas_elegibles_extra(quincena, codigo)
+        if not reglas:
+            raise ValueError(f"El código {codigo} no tiene precio cargado en esta quincena")
+
+        if opcion is None:
+            opciones = self._opciones_extra(reglas)
+            if len(opciones) > 1:
+                raise ExtraRequiereOpcion(codigo, opciones)
+            return self._representante(reglas)
+
+        def campo(nombre):
+            return opcion[nombre] if isinstance(opcion, dict) else getattr(opcion, nombre)
+
+        de_opcion = self._reglas_de_opcion(
+            reglas, campo("precio"), campo("unidad_base"), campo("tipo"),
+        )
+        if not de_opcion:
+            raise ValueError(
+                f"La opción elegida ya no está disponible para el código {codigo} en esta quincena"
+            )
+        return self._representante(de_opcion)
+
+    @staticmethod
+    def _detalle_codigo_repetido(
+        codigo: int, lineas_con_codigo: int, total_lineas: int, mensaje: str,
+    ) -> dict:
+        """Lo que viaja en el 409 `codigo_repetido` (contrato del plan, §3).
+        Lo usan el agregado por línea y el masivo, cada uno con su mensaje."""
+        return {
+            "tipo": "codigo_repetido",
+            "mensaje": mensaje,
+            "codigo": codigo,
+            "lineas_con_codigo": lineas_con_codigo,
+            "total_lineas": total_lineas,
+        }
+
+    def _lineas_con_codigo(self, linea_ids: list[int], codigo: int) -> set[int]:
+        """Ids de las líneas que ya tienen un concepto con ese código
+        (automático o extra). El manual libre no tiene código y no cuenta.
+        Consulta la base, no la colección cargada de la línea."""
+        filas = self.db.query(ConceptoAdicional.linea_id).filter(
+            ConceptoAdicional.linea_id.in_(linea_ids),
+            ConceptoAdicional.codigo_concepto == codigo,
+        ).distinct().all()
+        return {f[0] for f in filas}
+
+    def agregar_concepto_por_codigo(
+        self, linea_id: int, codigo: int, usuario_id: int,
+        opcion=None, confirmar_repetido: bool = False,
+    ) -> ConceptoAdicional:
         linea = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.id == linea_id
         ).options(joinedload(PreliquidacionLinea.conceptos)).first()
@@ -1434,17 +1594,18 @@ class PreliquidacionService:
             raise ValueError(f"Línea {linea_id} no encontrada")
 
         quincena = linea.preliquidacion.quincena
-        regla = self.db.query(ConceptoLiquidacion).filter(
-            ConceptoLiquidacion.codigo == codigo,
-            ConceptoLiquidacion.quincena == quincena,
-        ).first()
-        if not regla:
-            raise ValueError(f"No existe el código {codigo} en el maestro de esta quincena")
+        # Orden del contrato: primero la opción, después el repetido.
+        regla = self._resolver_opcion_extra(quincena, codigo, opcion)
+
+        if not confirmar_repetido and self._lineas_con_codigo([linea.id], codigo):
+            raise ExtraCodigoRepetido(self._detalle_codigo_repetido(
+                codigo, 1, 1, f"La línea ya tiene el código {codigo}.",
+            ))
 
         nuevos = self._generar_conceptos_automaticos(linea, [regla])
         concepto = nuevos[0]
         concepto.ingresado_por = usuario_id
-        concepto.descripcion = f"Concepto {regla.codigo} (agregado manual)"
+        concepto.descripcion = self._descripcion_extra(regla)
         self.db.add(concepto)
         self.db.flush()
         # Igual que en agregar_concepto: el concepto nuevo no está en la
@@ -1566,37 +1727,62 @@ class PreliquidacionService:
 
     # ─── Operaciones masivas ──────────────────────────────────────────────────
 
-    def agregar_concepto_masivo(self, linea_ids: list[int], codigo: int, usuario_id: int) -> dict:
-        primera = self.db.query(PreliquidacionLinea).filter(
-            PreliquidacionLinea.id == linea_ids[0]
-        ).first()
-        quincena = primera.preliquidacion.quincena if primera else None
+    def agregar_concepto_masivo(
+        self, linea_ids: list[int], codigo: int, usuario_id: int,
+        opcion=None, si_repetido: str = "frenar",
+    ) -> dict:
+        if not linea_ids:
+            raise ValueError("Se requieren linea_ids")
+        if si_repetido not in ("frenar", "agregar", "saltear"):
+            raise ValueError(
+                f"si_repetido inválido: {si_repetido!r} (frenar, agregar o saltear)"
+            )
 
-        regla = self.db.query(ConceptoLiquidacion).filter(
-            ConceptoLiquidacion.codigo == codigo,
-            ConceptoLiquidacion.quincena == quincena,
-        ).first()
-        if not regla:
-            raise ValueError(f"No existe el código {codigo} en el maestro de esta quincena")
-
-        # Antes: una query + flush + recálculo POR linea_id (N+1). Ahora: una
-        # sola query trae todas las líneas (con sus conceptos ya cargados vía
-        # joinedload), se procesan en memoria y se persisten en un solo lote.
+        # Una sola query trae todas las líneas (con sus conceptos ya cargados
+        # vía joinedload), se procesan en memoria y se persisten en un solo
+        # lote. La quincena sale de las líneas que existen, no de linea_ids[0]:
+        # los ids inexistentes se saltean.
         lineas = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.id.in_(linea_ids)
         ).options(joinedload(PreliquidacionLinea.conceptos)).all()
+        if not lineas:
+            raise ValueError("Ninguna de las líneas indicadas existe")
+        # Preliquidacion.quincena es única: una preliquidación = una quincena.
+        if len({l.preliquidacion_id for l in lineas}) > 1:
+            raise ValueError("Las líneas indicadas pertenecen a más de una quincena")
         lineas_por_id = {l.id: l for l in lineas}
+        quincena = lineas[0].preliquidacion.quincena
+
+        # Una sola regla para todas las líneas, resuelta antes del loop: si
+        # falla (sin código, sin precio, falta elegir opción) no se escribe nada.
+        regla = self._resolver_opcion_extra(quincena, codigo, opcion)
+
+        # Orden del contrato: primero la opción, después el repetido. Los
+        # conteos son sobre las líneas que existen.
+        con_codigo = self._lineas_con_codigo(list(lineas_por_id), codigo)
+        if con_codigo and si_repetido == "frenar":
+            n, total = len(con_codigo), len(lineas_por_id)
+            if total == 1:
+                mensaje = f"La línea ya tiene el código {codigo}."
+            elif n == 1:
+                mensaje = f"1 de las {total} líneas ya tiene el código {codigo}."
+            else:
+                mensaje = f"{n} de las {total} líneas ya tienen el código {codigo}."
+            raise ExtraCodigoRepetido(
+                self._detalle_codigo_repetido(codigo, n, total, mensaje)
+            )
+        saltear = con_codigo if si_repetido == "saltear" else set()
 
         aplicadas = 0
         conceptos_nuevos = []
         for linea_id in linea_ids:
             linea = lineas_por_id.get(linea_id)
-            if not linea:
+            if not linea or linea_id in saltear:
                 continue
             nuevos = self._generar_conceptos_automaticos(linea, [regla])
             concepto = nuevos[0]
             concepto.ingresado_por = usuario_id
-            concepto.descripcion = f"Concepto {regla.codigo} (masivo)"
+            concepto.descripcion = self._descripcion_extra(regla)
             conceptos_nuevos.append(concepto)
             # _recalcular_importe suma linea.conceptos (ya cargados) + el
             # concepto nuevo, que todavía no está en la sesión ni en la
@@ -1609,7 +1795,7 @@ class PreliquidacionService:
         if conceptos_nuevos:
             self.db.bulk_save_objects(conceptos_nuevos)
         self.db.commit()
-        return {"aplicadas": aplicadas}
+        return {"aplicadas": aplicadas, "salteadas": len(saltear)}
 
     def eliminar_concepto_masivo(self, linea_ids: list[int], codigo: int) -> dict:
         if not linea_ids:

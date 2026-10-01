@@ -556,7 +556,8 @@ def buscar_conceptos_para_combo(
 ):
     """Búsqueda de códigos para el combo del PanelLinea.
 
-    Un renglón por código, sólo códigos con al menos una fila con precio.
+    Un renglón por código, sólo códigos con al menos una fila con precio y
+    sin categoría; las filas con categoría no cuentan para nada.
     Se agrupa en SQL por (código, tipo) contando filas con precio; el tipo
     que se muestra es el más frecuente, con desempate por nombre de tipo
     ascendente. Ese "más frecuente por grupo" se resuelve en Python: en SQL
@@ -572,6 +573,9 @@ def buscar_conceptos_para_combo(
     ).filter(
         ConceptoLiquidacion.codigo.isnot(None),
         ConceptoLiquidacion.precio.isnot(None),
+        # Las reglas por categoría no se ofrecen como Concepto extra
+        # (ADR-0015): el combo muestra sólo lo que se puede agregar.
+        ConceptoLiquidacion.categoria.is_(None),
     )
     if quincena:
         query = query.filter(ConceptoLiquidacion.quincena == quincena)
