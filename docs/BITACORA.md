@@ -1625,3 +1625,41 @@ merge, y la bitácora es append-only.
 - Los dos xfail que quedan: la agrupación por legajo (deuda documentada, arreglo por CUIL
   si aparece el caso) y el error 500 con precio vacío en `agregar_concepto_por_codigo`
   (tarea aparte, en pausa junto con el precio que se aplica al agregar un código a mano).
+
+## 2026-10-01 — Deploy a producción del combo de conceptos y del borrado masivo
+
+Entrada correctiva, a pedido del usuario: no anota un merge sino el deploy de trabajo ya
+mergeado y anotado. Corrige el "Deploy: no" de las dos entradas anteriores de hoy (BK #64 /
+FT #51 y BK #65), que era cierto al escribirse y dejó de serlo ese mismo día. El detalle
+técnico está en `docs/DEPLOY.md` (local, fuera de git).
+
+**Qué se deployó**
+- Backend: de `0dc474f` a `37f068a`. Entran el BK #63 (`verificar_agents_comun` desde
+  worktrees; es un script y no corre en producción), el BK #64 (el combo de conceptos
+  agrupa en SQL y sólo con precio) y el BK #65 (borrado masivo con `bindparam` expanding),
+  más commits de bitácora y planes.
+- Frontend: de `ddbee72` a `eb180dc`. Entran el FT #50 (script) y el FT #51 (el combo pide
+  la quincena abierta).
+- Autorizado por el usuario.
+
+**Por frontera**
+- Preliquidación: en producción queda el combo de `/conceptos/buscar` del BK #64 y FT #51,
+  y el borrado masivo del BK #65.
+- Prod y Datos: sin migraciones ni dependencias nuevas.
+
+**Estado**
+- Deploy: sí, backend y frontend en producción. Frontend con swap de carpeta; la versión
+  anterior queda como rollback.
+- Migraciones: ninguna.
+- Verificación: un solo arranque del backend, conectado a la base de producción, con
+  tablas verificadas; `/health` ok; log sin errores tras el deploy. Bundle del front con el
+  mismo md5 en local y en el servidor; sitio responde 200.
+- Nota operativa: el arranque del backend tardó unos 7 s y el comando de deploy espera 5 s
+  antes de consultar `/health`. El detalle quedó en `docs/DEPLOY.md`.
+
+**Pendiente**
+- Smoke del usuario en el sitio real: el combo en una quincena con precios.
+- Quedan cerrados los pendientes de deploy de las dos entradas anteriores de hoy (BK #64,
+  FT #51 y BK #65).
+- Sigue abierta, en pausa, la tarea aparte del precio que se aplica al agregar un código a
+  mano y del error 500 con precio vacío.
