@@ -1513,3 +1513,63 @@ técnico.
   la revisión de código de dos ejes del BK #59 (entrada del BK #59); los 5 warnings de hooks
   de Terceros (entrada del FT #48); las tareas aparte de conceptos, Verificación y el combo
   de `/conceptos/buscar`, y de conceptos duplicados (entrada del PR 6).
+
+## 2026-10-01 — El combo "Agregar concepto por código" deja de perder códigos y pide la quincena abierta
+
+**Mergeado**
+- PR #64 (backend) — `GET /api/precios/conceptos/buscar` agrupa por `(codigo, tipo)` en SQL,
+  muestra sólo códigos con precio y aplica el tope de 200 después de agrupar. Trae el plan
+  `docs/superpowers/plans/2026-09-30-combo-y-verificacion.md`.
+- PR #51 (frontend) — el combo de `PanelLinea.jsx` y de `LiquidacionPersona` (en
+  `Revision.jsx`) pide los códigos de la quincena de la planilla abierta, con la clave
+  compartida `conceptosCombo(quincena)` en `services/claves.js`. Hermano del BK #64.
+
+**Por frontera**
+- Preliquidación: antes el endpoint aplicaba `order_by(codigo).limit(200)` sobre las filas
+  de `concepto_liquidacion` y deduplicaba en Python después del límite; como hay muchas
+  filas por código y quincena, el límite se comía los códigos más altos (en `testing`, 36
+  códigos y el combo mostraba 30). Ahora el contrato sigue igual (`[{codigo, tipo}]` por
+  código, mismos filtros `q`) y sin `quincena` agrupa todas. En el front, antes el combo
+  mostraba códigos de todas las quincenas y elegir uno ausente en la quincena abierta hacía
+  fallar el alta con "No existe el código X en el maestro de esta quincena".
+- Docs: plan del combo y de la verificación por empresa, en dos PR.
+
+**Decisiones**
+- **Sólo aparecen códigos con al menos un precio en la quincena.** Porqué: decisión del
+  usuario, lo que aparece se puede agregar.
+- **Si un código tiene más de un tipo, sale el más frecuente; empate, por nombre de tipo
+  ascendente, resuelto en Python sobre la tabla ya agrupada.** Porqué: en SQL pediría
+  window functions o subconsultas correlacionadas, no portables entre MySQL (producción,
+  versión no verificada) y SQLite (tests); el desempate en Python además no depende de la
+  collation. Descartado: `ANY_VALUE` y window functions.
+- **Con `q` texto el filtro de tipo se aplica antes de agrupar**: un código buscado por
+  "jornal" sale con tipo JORNAL aunque tenga más filas de otro tipo. Porqué: es lo que se
+  buscó.
+- **La quincena va en la clave de caché del front, y la consulta sólo corre con quincena.**
+  Porqué: cada planilla tiene su propia lista en caché, y nunca se muestra la lista de todas
+  las quincenas mientras carga la planilla. La clave vive en `claves.js` porque la comparten
+  dos componentes.
+- **Una quincena sin maestro de precios deja el combo vacío.** Porqué: decisión del usuario
+  de dejarlo así por ahora.
+
+**Estado**
+- Deploy: no. Backend y front se pueden deployar en cualquier orden (el endpoint ya
+  aceptaba `quincena`). Rollback: revertir el merge y redeployar; sin cambios de esquema.
+- Migraciones: ninguna.
+- Verificación: 4 tests nuevos en `tests/preliquidacion/test_endpoints_lineas.py`, suite
+  `787 passed, 4 xfailed`; prueba de sólo lectura contra `testing` que coincide con
+  `COUNT(DISTINCT codigo)` con precio en las 4 quincenas con maestro; front con lint y build
+  ok; prueba del usuario en el navegador con las dos ramas, contra `testing`.
+
+**Pendiente**
+- Deploy de BK #64 y FT #51, con OK explícito del usuario.
+- Sigue el PR 2 del plan, hermanos backend y front: Verificación agrupa por empresa y
+  legajo, `eliminar_concepto_masivo` con `bindparam` expanding, y `LiquidacionPersona`
+  distingue a la persona por empresa y legajo.
+- Tareas aparte, fuera de este plan: el precio que se aplica al agregar un código a mano
+  (`.first()` toma una regla cualquiera del código) y el error 500 con precio vacío; esa
+  sesión está en pausa.
+- Deuda del FT #51: el bloque `useQuery` del combo está repetido en `PanelLinea.jsx` y
+  `Revision.jsx`, candidato a un hook propio en un PR aparte.
+- La tarea aparte del combo de `/conceptos/buscar` (listada como abierta en el deploy del
+  2026-09-30) queda resuelta en código; falta el deploy.
