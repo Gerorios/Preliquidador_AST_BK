@@ -9,6 +9,8 @@ Worktrees (trabajar SÓLO ahí):
 
 Línea base backend: `783 passed, 4 xfailed` (suite completa, ~8 min).
 
+**Etapa 2 (desde 2026-10-01):** mismos worktrees, ramas nuevas desde `main`: backend `feature/verificacion-empresa-legajo` (base `616af42`), front `fix/verificacion-empresa-legajo` (base `eb180dc`).
+
 ## Decisiones cerradas con el usuario (entrevista 2026-09-30)
 
 1. Combo: agrupar por código en SQL (sin limitar antes de agrupar) y que el front pase la quincena.
@@ -162,6 +164,22 @@ Sin Vitest: build + lint + smoke en el navegador, y script desechable de Node (`
 **Ejecución Etapa 1 (2026-10-01):** par 1 hecho (4 tests rojos → verdes); pasos 1.4-1.6 hechos (hizo falta `npm install` en el checkout principal del front: ESLint no estaba instalado). Suite `787 passed, 4 xfailed`; lint sin nuevos (5 warnings previos de `terceros`); build ok. Smoke de sólo lectura contra `testing`: combo = `COUNT(DISTINCT codigo)` con precio en las 4 quincenas con maestro (31/28/29/33), 36 sin quincena, 57 ms. Smoke en navegador hecho por el usuario: funciona (la quincena 1/9 de `testing` no tiene maestro, por eso el combo sale vacío). Revisión: 0 urgent, 0 high, 4 minor (STD-2 nombres `n`/`f`, STD-3 patrón `.value` repetido, STD-4 helper sin guion bajo, STD-5 encabezado de `claves.js`), 4 descartados; deuda: `useQuery` del combo duplicado en `PanelLinea.jsx` y `Revision.jsx`.
 
 **Paso 2.7 (PR 2 front, commit aparte) — `LiquidacionPersona`.** En `Revision.jsx:99-107`, agrupar `empleados` por `${empresa}__${legajo}` (`empresa = l.empresa_asignada || ''`), guardar `clave` en cada grupo y usarla donde hoy se usa el legajo como identificador de la persona seleccionada (`personaSeleccionada`, ~115/184) y como `key`. La tarjeta ya muestra la empresa. Verificación: lint, build, smoke en Revisión → Liquidación masiva (elegir persona, tildar, agregar y quitar un código). Commit `fix(preliquidacion): liquidación masiva distingue persona por empresa y legajo`.
+
+## Ejecución Etapa 2 (2026-10-01)
+
+- Par 2 (Verificación back): 3 rojos → verdes. Par 3 (eliminar masivo): 2 rojos `OperationalError` → verdes. Pasos 2.6 y 2.7 (front): lint sin nuevos, build ok; script desechable `node --test` sobre `calculosVerificacion.js` 5/5 (4/5 fallan contra el código viejo).
+- Suite backend: `792 passed, 1 xfailed`.
+- Smoke de sólo lectura contra `testing`: `resumen_empleados` = pares (empresa, legajo) distintos en 6 planillas; 4 a 10 legajos en más de una empresa por planilla. En vez del `POST /concepto-masivo/eliminar` sobre líneas de prueba (paso 2.5), se probó el mismo `IN :ids` expanding con un SELECT en MySQL, sin borrar: renderiza bien.
+- Revisión: 0 urgent, 0 high, 7 minor (comentario del service apunta a `Verificacion.jsx` en vez de `calculosVerificacion.js`; clave armada en 3 lugares del front; dict de exceso repetido; `e.get` en un test; nombre de test dice "horas" y cubre los tres; orden de import; commits a separar), 3 descartados.
+- Deuda preexistente agravada: en `LiquidacionPersona`, reasignar la empresa de todas las líneas de la persona abierta deja el área en blanco (`if (!persona) return null`); el botón "Volver a tabla" de arriba sigue andando.
+
+## Cambio de alcance de la Etapa 2 (2026-10-01, decisión del usuario)
+
+Al armar el ejemplo para el smoke apareció que en `testing` **todos** los legajos repetidos entre empresas son **la misma persona** (mismo nombre; las líneas de la segunda empresa tienen `alerta_legajo`), y que en ninguna planilla hay dos personas distintas con el mismo legajo. Agrupar por (empresa, legajo) no arreglaba nada visible y partía en dos a personas reales: escondía un exceso repartido entre empresas y separaba, en la liquidación masiva, la línea que se quiere reasignar de empresa.
+
+Decidido (opción A): **se descarta la agrupación por (empresa, legajo)** en Verificación (back y front) y en `LiquidacionPersona`. El PR 2 queda en: `eliminar_concepto_masivo` con `bindparam` expanding (par 3), borrar la línea muerta de `dashboard_verificacion`, y sacar los dos xfail de `IN :ids`. Sin PR de front. El xfail `test_mismo_legajo_en_empresas_distintas_no_se_mezcla` se queda como documentación de la deuda. Si alguna vez aparece el caso de dos personas distintas, el arreglo es agrupar por CUIL (persona real), no por (empresa, legajo).
+
+El trabajo descartado quedó en ramas locales sin pushear, `respaldo/verificacion-empresa-legajo`, en los dos repos (backend `9d1f85a`, front `89ad6b4`). La rama del backend pasa a llamarse `feature/eliminar-masivo-bindparam`.
 
 ## 7. Fuera de alcance
 

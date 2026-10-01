@@ -988,7 +988,6 @@ class PreliquidacionService:
                 "unidades": float(linea.unidades or 0),
             })
 
-        exceso_horas = exceso_tancadas = exceso_plantas = []
         exceso_horas    = [{"legajo": g["legajo"], "nombre_empleado": g["nombre_empleado"], "fecha": g["fecha"], "lineas": g["lineas"], "valor": float(g["hsjornal"])} for g in por_empleado_fecha.values() if g["hsjornal"] > 13]
         exceso_tancadas = [{"legajo": g["legajo"], "nombre_empleado": g["nombre_empleado"], "fecha": g["fecha"], "lineas": g["lineas"], "valor": float(g["tancadas"])} for g in por_empleado_fecha.values() if g["tancadas"] > 35]
         exceso_plantas  = [{"legajo": g["legajo"], "nombre_empleado": g["nombre_empleado"], "fecha": g["fecha"], "lineas": g["lineas"], "valor": float(g["plantas"])}  for g in por_empleado_fecha.values() if g["plantas"] > 6000]
@@ -1615,10 +1614,11 @@ class PreliquidacionService:
     def eliminar_concepto_masivo(self, linea_ids: list[int], codigo: int) -> dict:
         if not linea_ids:
             return {"eliminados": 0, "lineas": 0}
-        result = self.db.execute(sql_text("""
-            DELETE FROM concepto_adicional
-            WHERE linea_id IN :ids AND codigo_concepto = :codigo
-        """), {"ids": tuple(linea_ids), "codigo": codigo})
+        result = self.db.execute(
+            sql_text("DELETE FROM concepto_adicional WHERE linea_id IN :ids AND codigo_concepto = :codigo")
+            .bindparams(bindparam("ids", expanding=True)),
+            {"ids": list(linea_ids), "codigo": codigo},
+        )
         eliminados = result.rowcount
         self.db.commit()
         lineas = self.db.query(PreliquidacionLinea).filter(
