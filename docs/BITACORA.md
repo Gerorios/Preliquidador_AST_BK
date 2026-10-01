@@ -1847,3 +1847,33 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
   deja ver. Sigue abierta la deuda de que un precio <= 0 cuenta como completo.
 - Deuda previa: si un id se repite en `linea_ids`, el concepto se agrega dos veces en esa
   línea.
+
+## 2026-10-01 — Deploy a producción del Concepto extra (ADR-0015)
+
+Entrada de deploy: no anota un merge sino el deploy de BK #67 y FT #53, ya anotados arriba.
+Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
+`docs/DEPLOY.md` (local, fuera de git).
+
+**Qué se deployó**
+- Backend: de `acf85a4` a `aab0af7` (BK #67 más bitácora). Sin dependencias nuevas.
+- Frontend: de `3c6158c` a `db3a3fd` (FT #53), con build desde una copia idéntica a `main`.
+- Backend y frontend juntos, con las etapas A y B, como pedía la entrada del merge.
+- Autorizado por el usuario.
+
+**Estado**
+- Antes del deploy, la consulta de sólo lectura en producción de la sección "Pre-deploy" del
+  plan: 0 conceptos agregados por código. No hay extras viejos, ni sin regla, ni atados a una
+  regla que no los admita, así que no hubo nada que decidir.
+- Deploy: sí, backend y frontend. Frontend con swap de carpeta; la versión anterior queda
+  como rollback.
+- Migraciones: ninguna.
+- Verificación: un solo arranque del backend, conectado a la base de producción, con tablas
+  verificadas; `/health` ok; log sin errores internos en los 10 minutos siguientes. Bundle
+  del front con el mismo md5 en local y en el servidor; sitio responde 200.
+- Rollback: revertir backend y frontend juntos (backend a `acf85a4`).
+
+**Pendiente**
+- Smoke del usuario en el sitio real: agregar a una línea un código con varias opciones (por
+  ejemplo, el 902) y ver el diálogo para elegir la opción y el "(extra, de …)" en la línea.
+- Queda cerrado el pendiente de pre-deploy de la entrada del merge. Siguen abiertas la deuda
+  de precio <= 0 contado como completo y la de un id repetido en `linea_ids`.
