@@ -106,6 +106,10 @@ _Avoid_: importe base (siempre 0; el total nace de los conceptos adicionales), "
 **Concepto manual**:
 Un Concepto adicional que el liquidador escribió a mano (descripción + importe), sin pasar por ningún código del maestro. No tiene vínculo a una regla, ni precio, ni cantidad: no le faltan, es que genuinamente no salió de ninguna regla.
 
+**Concepto extra**:
+Un Concepto adicional que el liquidador agrega a una o varias líneas eligiendo un código y, si ese código tiene más de una, una de sus opciones (precio y unidad base) en el maestro de esa quincena, aunque venga de otra tarea: es un plus que la tarea de la línea no genera sola. Conserva la opción elegida mientras alguna regla del maestro la siga ofreciendo; cuando ya ninguna la ofrece, sigue a la regla de la que salió, o desaparece si esa regla ya no existe o quedó sin precio o sin código.
+_Avoid_: Concepto manual (ese no tiene regla); "agregado por código" (describe la pantalla, no el término); confundirlo con un Concepto automático (lo genera la tarea de la línea, no una persona).
+
 **Categoría de operario**:
 Nivel (**1 a 12**) que el liquidador le asigna **por quincena** a un operario de taller, y del que depende cuánto cobra la tarea de mantenimiento mecánico. No viene del sistema de campo, que carga todo como una sola tarea "MANTENIMIENTO MECANICO (TALLERES)" sin diferenciar categoría, ni de la categoría de convenio del sistema de sueldos: es un dato **propio** del preliquidador, editable por quincena. Se cruza con la persona por su **CUIL** (no por legajo), y se hereda de la quincena anterior al abrir una nueva.
 _Avoid_: confundir con la categoría de convenio del maestro de sueldos (otra cosa, de solo lectura, no manipulable).
