@@ -1441,3 +1441,75 @@ Lo que sigue no está en los PR: lo trae quien despachó esta anotación.
 - Minor sin tocar (los lista el PR): nombres mejorables en el script (`otro`, `comun`,
   `BK`/`FT`); fuera de un repo, `git rev-parse` deja su propio `fatal:` además del
   mensaje del script.
+
+## 2026-09-30 — Deploy a producción del plan de seguridad y calidad y de Liquidación Terceros
+
+Entrada correctiva, a pedido del usuario: no anota un merge sino el deploy de trabajo ya
+mergeado y anotado. Corrige el "Ninguno está deployado" de la entrada del PR 6 (FT #49 y
+BK #62), que era cierto al escribirse y dejó de serlo ese mismo día. Fuente: la sección
+"Deploy del 2026-09-30" de `docs/DEPLOY.md` (local, fuera de git), donde está el detalle
+técnico.
+
+**Qué se deployó**
+- Backend: de `dad6649` (merge del BK #54) a `0dc474f`. Entran el BK #55 (ADR-0014), los BK
+  #56, #57, #58, #60, #61 y #62 (plan de seguridad y calidad) y el BK #59 (Liquidación
+  Terceros). El BK #63, mergeado después, no entra.
+- Frontend: al `main` en `ddbee72`, el merge del FT #49. Incluye los FT #46 (Terceros),
+  #47, #48 y #49 (plan de seguridad y calidad); el FT #50, mergeado después, no entra. Desde
+  qué versión del front se partió no está registrado.
+- Autorizado por el usuario paso por paso.
+
+**Por frontera**
+- Prod y Datos: dependencias nuevas instaladas (PyJWT 2.15.1 y xlrd 2.0.1); migraciones
+  `terceros/001` a `007` aplicadas en producción; dos variables nuevas en el `.env` del
+  servidor, `EMPLEADOS_MENSUALIZADOS_CUIL` con valor y `TALLER_SHEET_URL` vacía.
+- Liquidación Terceros: el módulo queda activo en producción. Por ahora lo ve sólo el admin.
+- Preliquidación: los mensualizados salen de la variable del servidor; el front deployado
+  filtra por el campo `mensualizado` (FT #47) y comparte el caché entre pantallas (FT #49).
+- Núcleo: en producción quedan los cambios de los BK #56 y #57 (500 genérico, PyJWT, límite
+  de login, chequeo de tablas y columnas al arrancar).
+
+**Orden en que se hizo**
+1. Código del backend actualizado e instalación de dependencias, sin reiniciar.
+2. Migraciones `terceros/001` a `007` en producción, con un script de una sola vez que sigue
+   `migrations/ORDEN.txt`, frena en el primer error y al final compara el esquema con los
+   modelos: 31 sentencias, sin errores, nada faltante. Antes no existía ninguna tabla
+   `terceros_`.
+3. Las dos variables nuevas en el `.env`, con respaldo previo. Los CUIL de
+   `EMPLEADOS_MENSUALIZADOS_CUIL` se sacaron de la base sin imprimirse.
+4. Reinicio del backend.
+5. Frontend con swap de carpeta; la versión anterior queda como rollback.
+
+**Decisiones**
+- **`TALLER_SHEET_URL` se deja vacía y la URL se carga después**, decisión del usuario.
+  Porqué no registrado en `docs/DEPLOY.md`.
+- **`python-jose` y `alembic` quedan instalados en el servidor, sin uso.** Porqué no
+  registrado en `docs/DEPLOY.md`.
+
+**Estado**
+- Deploy: sí, backend y frontend en producción.
+- Migraciones: `terceros/001` a `007` en producción. Ninguna otra.
+- Verificación (de `docs/DEPLOY.md`): un solo arranque, con el banner de la base propia OK
+  apuntando a producción y `Tablas y columnas BD propia: verificadas`; `/health` ok; el
+  bundle del front, con el mismo md5 en local y en el servidor; smoke del usuario en el
+  sitio real, "anda bien". Log sin errores internos, salvo dos 502 de
+  `/api/terceros/alertas`, esperados mientras `TALLER_SHEET_URL` esté vacía: el endpoint
+  no devuelve alertas a medias sin la app del taller.
+- Rollback registrado: para las migraciones, borrar las tablas `terceros_*` (son nuevas);
+  para el front, volver a la carpeta anterior.
+
+**Pendiente**
+- Para el usuario, dueño del proyecto:
+  - Cargar `TALLER_SHEET_URL` en el `.env` del servidor y reiniciar el backend. Hasta
+    entonces `/api/terceros/alertas` responde 502.
+  - Asignar el módulo Terceros desde Administración a los usuarios que corresponda.
+- Quedan cerrados los pendientes de deploy de las entradas anteriores: el de los BK #56 y
+  #57, el del PR 4 (BK #60 + FT #47, con su variable), el del BK #59 + FT #46 (migraciones,
+  xlrd, backend y después frontend), el del FT #48 y la lista de cinco pasos de la entrada
+  del PR 6. También el de actualizar `docs/DEPLOY.md` con lo que devuelve `/health` y el
+  orden de `ORDEN.txt` (entrada del BK #57): la sección "Actualizar" de ese archivo ya lo
+  dice.
+- Siguen abiertos, sin cambios por este deploy: la aceptación de la etapa 7 de Terceros y
+  la revisión de código de dos ejes del BK #59 (entrada del BK #59); los 5 warnings de hooks
+  de Terceros (entrada del FT #48); las tareas aparte de conceptos, Verificación y el combo
+  de `/conceptos/buscar`, y de conceptos duplicados (entrada del PR 6).
