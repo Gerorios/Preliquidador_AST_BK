@@ -44,7 +44,7 @@ _Avoid_: pagarle distinto que a la canónica (si un día hay recargo, es una fea
 ## Conceptos y matching
 
 **Concepto**:
-Regla del maestro que el liquidador carga por quincena para una tarea (± cliente/finca). Define código de liquidación, Unidad base, precio y tipo. Es un catálogo **vigente y editable**: su precio puede cambiar en cualquier momento, y cuando cambia, el modelo reactivo recalcula lo que ya aplicaba.
+Regla del maestro que el liquidador carga por quincena para una tarea (± cliente/finca). Define código de liquidación, Unidad base, precio y tipo. Siempre tiene **código y precio > 0** (ADR-0016): no existe un concepto vacío a completar después. Es un catálogo **vigente y editable**: su precio puede cambiar en cualquier momento, y cuando cambia, el modelo reactivo recalcula lo que ya aplicaba.
 _Avoid_: precio maestro, precio común (nombres del modelo viejo, eliminado)
 
 **Concepto común**:
