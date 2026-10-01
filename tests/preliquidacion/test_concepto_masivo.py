@@ -12,7 +12,6 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -30,18 +29,6 @@ Q2 = date(2026, 5, 16)
 USUARIO = 7
 URL_AGREGAR = "/api/preliquidacion/lineas/concepto-masivo"
 URL_ELIMINAR = "/api/preliquidacion/lineas/concepto-masivo/eliminar"
-
-# eliminar_concepto_masivo arma `text("... WHERE linea_id IN :ids ...")` con
-# {"ids": tuple(...)}. Con pymysql (producción) el driver interpola en el
-# cliente y la tupla sale como `IN (1,2)`: anda. SQLite no acepta `IN ?` y
-# explota con OperationalError (near "?": syntax error). Es una limitación del
-# entorno de test, no un bug de producción; el fix (bindparam expanding) va en
-# una tarea aparte y obliga a sacar esta marca (strict=True).
-XFAIL_IN_IDS = pytest.mark.xfail(
-    strict=True, raises=OperationalError,
-    reason="entorno, no bug de producción: text() con IN :ids y tupla; pymysql "
-           "interpola, sqlite no bindea; el fix (bindparam expanding) va en una tarea aparte",
-)
 
 
 @pytest.fixture()
@@ -214,7 +201,6 @@ def test_masivo_codigo_sin_regla_en_la_quincena(db):
 
 # ─── eliminar_concepto_masivo ─────────────────────────────────────────────────
 
-@XFAIL_IN_IDS
 def test_eliminar_masivo_borra_solo_ese_codigo_en_esas_lineas(db):
     preliq = _preliq(db)
     l1, l2, l3 = _tres_lineas(db, preliq)
@@ -292,7 +278,6 @@ def test_endpoint_eliminar_sin_linea_ids_da_400(cliente, db):
     assert r.json()["detail"] == "Se requieren linea_ids y codigo"
 
 
-@XFAIL_IN_IDS
 def test_endpoint_eliminar_valido_da_200(cliente, db):
     preliq = _preliq(db)
     l1, l2, _ = _tres_lineas(db, preliq)
