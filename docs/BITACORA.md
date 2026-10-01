@@ -1573,3 +1573,55 @@ técnico.
   `Revision.jsx`, candidato a un hook propio en un PR aparte.
 - La tarea aparte del combo de `/conceptos/buscar` (listada como abierta en el deploy del
   2026-09-30) queda resuelta en código; falta el deploy.
+
+## 2026-10-01 — Borrado masivo de conceptos con `bindparam` expanding; se descarta agrupar Verificación por empresa y legajo
+
+Segunda entrada del día: la de arriba (BK #64 / FT #51) ya estaba escrita cuando entró este
+merge, y la bitácora es append-only.
+
+**Mergeado**
+- PR #65 (backend, merge `78401bf`) — `eliminar_concepto_masivo` pasa a
+  `bindparam("ids", expanding=True)`, se borra una línea muerta de `dashboard_verificacion`,
+  se sacan 2 `xfail` y se anotan en el plan la ejecución y el cambio de alcance de la etapa 2.
+  Sin PR hermano de front.
+
+**Por frontera**
+- Preliquidación: `POST /api/preliquidacion/lineas/concepto-masivo/eliminar` arma el
+  `DELETE ... WHERE linea_id IN :ids` con `bindparam` expanding y lista, igual que el resto
+  del service. En MySQL ya andaba (pymysql interpola la tupla); en SQLite no compilaba. Se
+  borra `exceso_horas = exceso_tancadas = exceso_plantas = []` de `dashboard_verificacion`.
+  En `tests/preliquidacion/test_concepto_masivo.py` salen los dos `xfail(strict=True)` del
+  `IN :ids`.
+- Docs: `docs/superpowers/plans/2026-09-30-combo-y-verificacion.md` suma notas de ejecución
+  y el cambio de alcance de la etapa 2.
+
+**Decisiones**
+- **Se descarta agrupar Verificación y `LiquidacionPersona` por (empresa, legajo).** Porqué:
+  en `testing`, todos los legajos repetidos entre empresas son la misma persona (mismo
+  nombre; las líneas de la segunda empresa tienen alerta de legajo) y en ninguna planilla
+  hay dos personas distintas con el mismo legajo. El cambio no arreglaba nada visible y
+  partía en dos a personas reales: escondía un exceso repartido entre empresas y separaba
+  la línea que se quiere reasignar de empresa en la liquidación masiva. Decisión del
+  usuario.
+- **Si aparece el caso real, el arreglo es agrupar por CUIL (persona real), no por
+  (empresa, legajo).** El xfail `test_mismo_legajo_en_empresas_distintas_no_se_mezcla` queda
+  como documentación de esa deuda. El trabajo descartado quedó en ramas locales
+  `respaldo/verificacion-empresa-legajo`, sin pushear, por si se retoma.
+- Esto corrige el "Pendiente" de la entrada anterior de hoy: el PR 2 del plan no incluye
+  la agrupación por empresa y legajo en Verificación ni en `LiquidacionPersona`, y no tuvo
+  PR de front. De ese PR 2 entró sólo el `bindparam` expanding.
+
+**Estado**
+- Deploy: no. Va junto con BK #64 y FT #51, que también esperan deploy. Rollback: revertir
+  el merge y redeployar el backend; sin cambios de esquema.
+- Migraciones: ninguna.
+- Verificación: los 2 tests de borrado masivo, sin el xfail, fallaban con
+  `OperationalError ... near "?"` en SQLite y pasan con el cambio. Suite
+  `789 passed, 2 xfailed` (antes 787 / 4). Prueba de sólo lectura contra `testing` (MySQL):
+  el mismo `IN :ids` con expanding arma bien la consulta, con un SELECT equivalente.
+
+**Pendiente**
+- Deploy de BK #64, FT #51 y BK #65, con OK explícito del usuario.
+- Los dos xfail que quedan: la agrupación por legajo (deuda documentada, arreglo por CUIL
+  si aparece el caso) y el error 500 con precio vacío en `agregar_concepto_por_codigo`
+  (tarea aparte, en pausa junto con el precio que se aplica al agregar un código a mano).
