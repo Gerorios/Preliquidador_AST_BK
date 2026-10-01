@@ -1,5 +1,5 @@
 import threading
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -7,13 +7,15 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
 from app.core.auth import get_usuario_actual
 from app.modulos.preliquidacion.permisos import requiere_operativo
-from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
+from app.modulos.preliquidacion.services.preliquidacion_service import (
+    ExtraCodigoRepetido, ExtraRequiereOpcion, PreliquidacionService,
+)
 from app.modulos.preliquidacion.services.consulta_externa import ExternaNoDisponible
 from app.modulos.preliquidacion.schemas import (
     PreliquidacionGenerarRequest, PreliquidacionResponse,
     LineaResponse, LineaUpdateRequest,
     ConceptoAdicionalRequest, ConceptoAdicionalResponse,
-    ConceptoPorCodigoRequest,
+    ConceptoPorCodigoRequest, OpcionExtra,
     MensajeResponse, ValorHoraPulvRequest, ValorHoraTractoristaRequest,
     CategoriaOperarioRequest, OperarioMantenimientoResponse,
 )
@@ -286,7 +288,22 @@ def agregar_concepto_por_codigo(
     service: PreliquidacionService = Depends(get_service),
 ):
     try:
-        return service.agregar_concepto_por_codigo(linea_id, datos.codigo, usuario.id)
+        return service.agregar_concepto_por_codigo(
+            linea_id, datos.codigo, usuario.id,
+            opcion=datos.opcion, confirmar_repetido=datos.confirmar_repetido,
+        )
+    except ExtraRequiereOpcion as e:
+        # Las opciones ya vienen con el precio como str: un Decimal suelto en
+        # el detail rompe la serialización (500).
+        raise HTTPException(status_code=409, detail={
+            "tipo": "elegir_opcion",
+            "mensaje": f"El código {e.codigo} tiene {len(e.opciones)} opciones "
+                       f"en esta quincena: elegí una.",
+            "codigo": e.codigo,
+            "opciones": e.opciones,
+        })
+    except ExtraCodigoRepetido as e:
+        raise HTTPException(status_code=409, detail=e.detalle)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -305,15 +322,40 @@ class ConceptoMasivoRequest(BaseModel):
     codigo: int
 
 
+class ConceptoExtraMasivoRequest(ConceptoMasivoRequest):
+    """Concepto extra masivo (ADR-0015). Hereda en vez de tocar
+    ConceptoMasivoRequest, que también usa /concepto-masivo/eliminar. El body
+    viejo {"linea_ids", "codigo"} sigue valiendo."""
+    opcion: Optional[OpcionExtra] = None
+    si_repetido: Literal["frenar", "agregar", "saltear"] = "frenar"
+
+
 @router.post("/lineas/concepto-masivo", response_model=MensajeResponse)
-def agregar_concepto_masivo(datos: ConceptoMasivoRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def agregar_concepto_masivo(datos: ConceptoExtraMasivoRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
     if not datos.linea_ids or not datos.codigo:
         raise HTTPException(status_code=400, detail="Se requieren linea_ids y codigo")
     try:
-        resultado = service.agregar_concepto_masivo(datos.linea_ids, datos.codigo, usuario.id)
-        return MensajeResponse(mensaje="Concepto agregado", detalle=f"{resultado['aplicadas']} líneas actualizadas")
+        resultado = service.agregar_concepto_masivo(
+            datos.linea_ids, datos.codigo, usuario.id,
+            opcion=datos.opcion, si_repetido=datos.si_repetido,
+        )
+    except ExtraRequiereOpcion as e:
+        raise HTTPException(status_code=409, detail={
+            "tipo": "elegir_opcion",
+            "mensaje": f"El código {e.codigo} tiene {len(e.opciones)} opciones "
+                       f"en esta quincena: elegí una.",
+            "codigo": e.codigo,
+            "opciones": e.opciones,
+        })
+    except ExtraCodigoRepetido as e:
+        raise HTTPException(status_code=409, detail=e.detalle)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    detalle = f"{resultado['aplicadas']} líneas actualizadas"
+    salteadas = resultado["salteadas"]
+    if salteadas:
+        detalle += f" · {salteadas} salteada" + ("" if salteadas == 1 else "s")
+    return MensajeResponse(mensaje="Concepto agregado", detalle=detalle)
 
 
 @router.post("/lineas/concepto-masivo/eliminar", response_model=MensajeResponse)

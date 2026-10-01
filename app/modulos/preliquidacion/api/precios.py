@@ -54,6 +54,23 @@ def _validar_tarea_no_alias(tarea_nombre: str):
                    f"Cargá el concepto en esa tarea.",
         )
 
+def _contar_extras(extras) -> tuple[int, int]:
+    """Cuántos extras y en cuántas líneas distintas."""
+    return len(extras), len({extra.linea_id for extra in extras})
+
+
+def _error_borra_extras(plan) -> HTTPException:
+    """ADR-0015: 409 que avisa que la acción borra extras (caso c del plan)."""
+    extras, lineas = _contar_extras(plan.borrar)
+    return HTTPException(status_code=409, detail={
+        "tipo": "borra_extras",
+        "mensaje": f"Esta acción borra {extras} concepto(s) extra en "
+                   f"{lineas} línea(s) de Revisión.",
+        "extras": extras,
+        "lineas": lineas,
+    })
+
+
 # dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
 # Los GET quedan accesibles a todo rol (todos ven el maestro); las mutaciones
 # agregan requiere_conceptos endpoint por endpoint — admin/operador/gerente,
@@ -254,9 +271,33 @@ def precio_masivo(
     for c in conceptos:
         c.precio = datos.precio
         c.heredado = False
+
+    # ADR-0015: los extras atados a estas reglas se reatan o las siguen, antes
+    # del commit y del recálculo reactivo (como en actualizar_concepto).
+    db.flush()
+    service = PreliquidacionService(db)
+    plan = service.planificar_extras([c.id for c in conceptos])
+    if plan.borrar:
+        # El precio masivo exige precio > 0 (ADR-0016) y no toca código ni
+        # categoría, así que esta acción no deja ninguna regla inelegible. Pero
+        # puede haber extras viejos de producción atados a una regla que ya era
+        # inelegible (el alta anterior a ADR-0015 no filtraba la categoría):
+        # en vez de borrar ese trabajo a mano sin confirmación, se frena sin
+        # escribir nada y se pide revisarlos en Revisión.
+        db.rollback()
+        extras, lineas = _contar_extras(plan.borrar)
+        raise HTTPException(status_code=409, detail={
+            "tipo": "extras_a_revisar",
+            "mensaje": f"No se aplicó ningún precio: {extras} concepto(s) extra "
+                       f"en {lineas} línea(s) de Revisión están atados a reglas "
+                       f"que ya no se ofrecen como extra. Revisalos antes de "
+                       f"cambiar el precio.",
+            "extras": extras,
+            "lineas": lineas,
+        })
+    service.aplicar_plan_extras(plan)
     db.commit()
 
-    service = PreliquidacionService(db)
     por_quincena: dict = {}
     for c in conceptos:
         por_quincena.setdefault(c.quincena, []).append(c)
@@ -353,6 +394,9 @@ def actualizar_concepto(
     concepto_id: int,
     datos: ConceptoUnifUpdateRequest,
     db: Session = Depends(get_db_propia),
+    # Annotated y no `= Query(False)`: los tests llaman la función directo y
+    # con la segunda forma reciben el objeto Query, que es truthy.
+    confirmar_borrado_extras: Annotated[bool, Query()] = False,
 ):
     concepto = db.query(ConceptoLiquidacion).filter(
         ConceptoLiquidacion.id == concepto_id
@@ -372,10 +416,22 @@ def actualizar_concepto(
         raise
     if "precio" in campos:
         concepto.heredado = False  # confirmar el precio limpia la marca (ADR-0004)
+
+    # ADR-0015: los extras atados a esta regla la siguen, se reatan o se borran.
+    # Se aplica antes del commit y del recálculo reactivo, que toma el importe
+    # manual de cada línea (extras incluidos) ya actualizado.
+    db.flush()
+    svc = PreliquidacionService(db)
+    plan = svc.planificar_extras([concepto.id])
+    if plan.borrar and not confirmar_borrado_extras:
+        error = _error_borra_extras(plan)
+        db.rollback()
+        raise error
+    svc.aplicar_plan_extras(plan)
     db.commit()
     db.refresh(concepto)
 
-    PreliquidacionService(db).recalcular_por_concepto(
+    svc.recalcular_por_concepto(
         concepto.quincena, actual=_match(concepto), anterior=anterior
     )
     return concepto
@@ -383,18 +439,32 @@ def actualizar_concepto(
 
 @router.delete("/conceptos/{concepto_id}", response_model=MensajeResponse,
                dependencies=[Depends(requiere_conceptos)])
-def eliminar_concepto(concepto_id: int, db: Session = Depends(get_db_propia)):
+def eliminar_concepto(
+    concepto_id: int,
+    db: Session = Depends(get_db_propia),
+    # Annotated por la misma razón que en actualizar_concepto.
+    confirmar_borrado_extras: Annotated[bool, Query()] = False,
+):
     concepto = db.query(ConceptoLiquidacion).filter(
         ConceptoLiquidacion.id == concepto_id
     ).first()
     if not concepto:
         raise HTTPException(status_code=404, detail="Concepto no encontrado")
 
+    # ADR-0015: los extras atados a esta regla se reatan o se borran ANTES del
+    # delete; la FK es ON DELETE SET NULL y los dejaría sin regla. El plan no
+    # muta nada, así que el 409 no necesita rollback.
+    svc = PreliquidacionService(db)
+    plan = svc.planificar_extras([concepto.id], excluir_ids={concepto.id})
+    if plan.borrar and not confirmar_borrado_extras:
+        raise _error_borra_extras(plan)
+    svc.aplicar_plan_extras(plan)
+
     quincena, match = concepto.quincena, _match(concepto)
     db.delete(concepto)
     db.commit()
 
-    PreliquidacionService(db).recalcular_por_concepto(quincena, actual=match)
+    svc.recalcular_por_concepto(quincena, actual=match)
     return MensajeResponse(mensaje="Concepto eliminado")
 
 
@@ -564,7 +634,8 @@ def buscar_conceptos_para_combo(
 ):
     """Búsqueda de códigos para el combo del PanelLinea.
 
-    Un renglón por código, sólo códigos con al menos una fila con precio.
+    Un renglón por código, sólo códigos con al menos una fila con precio y
+    sin categoría; las filas con categoría no cuentan para nada.
     Se agrupa en SQL por (código, tipo) contando filas con precio; el tipo
     que se muestra es el más frecuente, con desempate por nombre de tipo
     ascendente. Ese "más frecuente por grupo" se resuelve en Python: en SQL
@@ -580,6 +651,9 @@ def buscar_conceptos_para_combo(
     ).filter(
         ConceptoLiquidacion.codigo.isnot(None),
         ConceptoLiquidacion.precio.isnot(None),
+        # Las reglas por categoría no se ofrecen como Concepto extra
+        # (ADR-0015): el combo muestra sólo lo que se puede agregar.
+        ConceptoLiquidacion.categoria.is_(None),
     )
     if quincena:
         query = query.filter(ConceptoLiquidacion.quincena == quincena)

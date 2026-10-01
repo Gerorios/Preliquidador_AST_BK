@@ -173,7 +173,7 @@ def test_por_codigo_calcula_desde_la_regla_del_maestro(db):
     assert concepto.codigo_concepto == 461
     assert concepto.unidad_base == "hsjornal"
     assert concepto.tipo == TipoConcepto.REMUNERATIVO
-    assert concepto.descripcion == "Concepto 461 (agregado manual)"
+    assert concepto.descripcion == "Concepto 461 (extra, de TAREA X)"
     assert concepto.concepto_liquidacion_id == regla.id
     # Queda como manual: ingresado_por con el usuario (lo preserva el recálculo).
     assert concepto.ingresado_por == USUARIO
@@ -196,21 +196,17 @@ def test_por_codigo_inexistente_en_esa_quincena(db):
     assert db.query(ConceptoAdicional).count() == 0
 
 
-@pytest.mark.xfail(
-    strict=True, raises=IndexError,
-    reason="bug conocido: regla sin precio en la quincena hace fallar nuevos[0]; el fix va en una tarea aparte",
-)
 def test_por_codigo_regla_sin_precio(db):
-    """Regla del código en la quincena pero con precio NULL:
-    _generar_conceptos_automaticos devuelve [] y hoy nuevos[0] explota
-    (el endpoint lo convierte en 500)."""
+    """Regla del código en la quincena pero con precio NULL: no hay opción
+    elegible (ADR-0015), se avisa y no se escribe nada."""
     preliq = _preliq(db)
     linea = _linea(db, preliq)
     _regla(db, codigo=461, precio=None)
     svc = PreliquidacionService(db)
 
-    concepto = svc.agregar_concepto_por_codigo(linea.id, 461, USUARIO)
-    assert concepto is not None
+    with pytest.raises(ValueError, match="El código 461 no tiene precio cargado en esta quincena"):
+        svc.agregar_concepto_por_codigo(linea.id, 461, USUARIO)
+    assert db.query(ConceptoAdicional).count() == 0
 
 
 def test_por_codigo_linea_inexistente(db):
