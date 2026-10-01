@@ -16,7 +16,9 @@ from app.modulos.preliquidacion.schemas import (
 
 @pytest.mark.parametrize("schema_cls, kwargs", [
     (CategoriaOperarioRequest, {"cuil": "20111111119"}),
-    (ConceptoUnifRequest, {"quincena": date(2026, 5, 1), "tarea_nombre": "PODA"}),
+    # ADR-0016: el alta exige código y precio > 0.
+    (ConceptoUnifRequest, {"quincena": date(2026, 5, 1), "tarea_nombre": "PODA",
+                           "codigo": 1, "precio": "100"}),
     (ConceptoUnifUpdateRequest, {}),
 ])
 class TestCategoriaRango:

@@ -407,7 +407,8 @@ def copiar_quincena(
     quincena_destino: Annotated[Quincena, Query()],
     db: Session = Depends(get_db_propia),
 ):
-    """Copia todos los conceptos de una quincena a otra. Omite los que ya existen."""
+    """Copia todos los conceptos de una quincena a otra.
+    Omite los que ya existen y los incompletos."""
     origen = db.query(ConceptoLiquidacion).filter(
         ConceptoLiquidacion.quincena == quincena_origen
     ).all()
@@ -430,9 +431,13 @@ def copiar_quincena(
 
     claves_existentes = {_clave(c) for c in existentes_destino}
 
-    copiados = omitidos = 0
+    copiados = omitidos = incompletas = 0
     nuevos = []
     for c in origen:
+        # ADR-0016: única excepción a "copiar todo" (ADR-0004); va antes del chequeo de clave.
+        if c.codigo is None or c.precio is None or c.precio <= 0:
+            incompletas += 1
+            continue
         if _clave(c) in claves_existentes:
             omitidos += 1
             continue
@@ -457,6 +462,9 @@ def copiar_quincena(
     db.commit()
 
     detalle = f"{copiados} copiados · {omitidos} ya existían"
+    if incompletas:
+        plural = "s" if incompletas != 1 else ""
+        detalle += f" · {incompletas} omitida{plural} por incompleta{plural}"
 
     # Auto-aplica al destino (ADR-0004): si ya hay una preliquidación generada
     # para esa quincena, recalculamos toda la quincena con el maestro actualizado.
