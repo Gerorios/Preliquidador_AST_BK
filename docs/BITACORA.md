@@ -1663,3 +1663,85 @@ técnico está en `docs/DEPLOY.md` (local, fuera de git).
   FT #51 y BK #65).
 - Sigue abierta, en pausa, la tarea aparte del precio que se aplica al agregar un código a
   mano y del error 500 con precio vacío.
+
+## 2026-10-01 — Una regla del maestro siempre tiene código y precio > 0 (ADR-0016)
+
+**Mergeado**
+- PR #66 (backend, merge `7b1084a`, rama `fix/regla-completa`): el backend rechaza con 422,
+  y un texto en español, las reglas de `concepto_liquidacion` sin código, sin precio o con
+  precio <= 0. Aplica en el alta, la edición, el precio masivo y la copia entre quincenas.
+  También entran ADR-0016 y el plan `docs/superpowers/plans/2026-10-01-regla-completa.md`.
+- PR #52 (frontend, merge `3c6158c`), hermano del anterior: Conceptos y el panel por
+  concepto avisan antes de mandar ("Ingresá un código", "Ingresá un precio mayor que 0").
+
+**Por frontera**
+- Preliquidación (back): las validaciones están en `schemas.py`, con `AfterValidator` y un
+  `ValueError` en español, la misma convención que `Quincena`.
+  - Alta (`POST /precios/conceptos`): `codigo` y `precio` son obligatorios. Usa
+    `validate_default=True`, así que un campo que no vino y uno que vino null dan el mismo
+    mensaje.
+  - Edición (`PATCH /precios/conceptos/{id}`): sigue siendo parcial. Se rechaza mandar
+    `codigo: null`, `precio: null` o un precio <= 0. `categoria` y `supervisor_nombre` en
+    null siguen limpiando el valor.
+  - Precio masivo: exige precio > 0. Antes aceptaba 0.
+  - Copia entre quincenas (`precios.py`): no copia las reglas incompletas y las cuenta en
+    el detalle ("N omitidas por incompletas"). Si todas son incompletas, responde 200 igual.
+    Una incompleta que ya existe en el destino cuenta como incompleta, no como "ya existía".
+  - Tests: 26 nuevos en `tests/preliquidacion/test_regla_completa.py`, y 3 tests ajustados
+    porque creaban reglas vacías.
+- Preliquidación (front): la validación se agrega en `ReglaRow`, en las tres formas de alta,
+  en el precio por fila y en el masivo del panel de precios, y en el precio en celda y el
+  alta por código de `PanelPorConcepto`. Hay un helper nuevo `precioPositivo` y una
+  constante `MSG_PRECIO` en `conceptosConstantes.js`. "Sin código" y "sin precio" se siguen
+  mostrando, porque quedan reglas viejas así.
+- Docs: ADR-0016 nuevo, el plan, y la definición de **Concepto** en
+  `CONTEXT-preliquidacion.md`, que ahora dice que siempre tiene código y precio > 0.
+
+**Decisiones**
+- **Una regla vacía deja de ser un estado válido del maestro.** Porqué: hasta ahora una
+  regla vacía era un olvido que se notaba recién en la línea, como "línea incompleta", y la
+  copia lo pasaba a la quincena siguiente. Lo pidió Gero el 2026-10-01. Descartado: dejarlo
+  como estaba.
+- **Se exige precio > 0, no sólo que haya precio.** Porqué: una regla con precio 0 tampoco
+  completa la línea (ADR-0003). Descartado: aceptar precio 0.
+- **Se valida en el backend además del front.** Porqué: un front viejo en caché, o cualquier
+  otro llamado a la API, podía seguir grabando reglas vacías. Descartado: validar sólo en el
+  front.
+- **Sin DDL `NOT NULL` ni `CHECK precio > 0`.** Porqué: obligaba a limpiar producción y a
+  aplicar DDL, y aportaba poco frente a la validación en la API. ADR-0016 lo rechaza "por
+  ahora": se revisa si aparece otro camino de escritura que no pase por la API.
+- **La copia omite las reglas incompletas y avisa.** Porqué: el ADR dice que el liquidador
+  las carga completas en la quincena nueva. Es la única excepción a "copiar todo" de
+  ADR-0004. Descartado: copiar la regla igual, o frenar toda la copia.
+- **La copia responde 200 aunque todas sean incompletas, y no se agrega un campo
+  `omitidas_incompletas` a `MensajeResponse`.** Porqué: Gero cerró las preguntas del plan
+  (§8) con la recomendación. Porqué de fondo no registrado en el PR. Descartado: responder
+  404, y agregar un toast aparte.
+- **Las reglas viejas incompletas quedan como están.** Con el front nuevo, para guardar una
+  hay que completarla. Cambia qué quiere decir "línea incompleta": que a la línea no le
+  aplica ninguna regla, o que no hay regla para la categoría de la persona.
+
+**Estado**
+- Deploy: no, todavía. Gero pidió deployar a continuación; si se hace, va en una entrada
+  aparte. El orden es primero el backend: con el front viejo, una regla vacía recibe el 422
+  y el toast muestra el texto en español. Con el backend viejo, el front nuevo sólo valida
+  de más. Rollback: revertir los PRs, porque no hay DDL ni datos tocados.
+- Migraciones: ninguna.
+- Verificación: suite backend `815 passed, 2 xfailed`; los 2 xfailed ya estaban. `npm run
+  build` pasa y el lint no tiene errores nuevos. Smoke manual con backend y front locales
+  contra `testing`; los datos de prueba se borraron. Revisión en dos ejes: 0 urgent, 0 high,
+  9 minor sin tocar (listados en los cuerpos de los PRs).
+
+**Pendiente**
+- Antes del deploy: contar en producción, en sólo lectura, las reglas sin código, sin
+  precio o con precio <= 0 por quincena. La próxima copia las va a omitir. En `testing`, al
+  2026-10-01, no había ninguna.
+- Deuda que ya existía, en una tarea aparte después de ese conteo:
+  `preliquidacion_service.py` y el SQL de faltantes (`precios.py`) cuentan como completa una
+  regla con precio <= 0. Una regla vieja con precio 0 paga 0 sin ninguna marca, contra
+  ADR-0003.
+- Nota para la tarea "Concepto extra" (en pausa, ADR-0015 reservado): con ADR-0016 se
+  cierran sus preguntas abiertas 3 y 4. El caso "vaciar el precio borra el extra, con un 409
+  antes" ya no puede pasar por PATCH, así que queda sólo "si se borra la regla, se borra el
+  extra". El 404 por "regla sin precio" queda sólo para reglas viejas. Esa tarea rebasea
+  sobre este merge. Detalle en §9 del plan.
