@@ -285,6 +285,45 @@ en `testing`.
 - **Smoke**: 902 (opciones, cálculo a mano, tarea de la descripción), 449 (dos unidades),
   masivo con "Saltear", Conceptos (reatar, vaciar la última, borrar).
 
+### Smoke y revisión de la etapa C (2026-10-01)
+
+- C1 a C5 hechos (lint: 0 errores y los 5 warnings preexistentes de terceros; build OK).
+- Smoke en navegador contra `testing` (backend y front desde los worktrees, preliquidación
+  24, quincena 2026-08-16): 902 en una línea → 16 opciones, tipo sólo en las colisiones;
+  "$110 Hs. Jornal" en 10 hs → $1.100 "de HERBICIDA LANZA/MANGUERA HORAS", total
+  $67.954,98; repetido → aviso, cancelado sin escribir; 449 → 2 opciones de $40.625 sin
+  tipo; regla HERBICIDA a $111 → el extra se reata a TRASLADO CON MAQUINARIA sin aviso, sin
+  cambio de importe; categoría en la única regla de una opción → aviso "Esta acción borra 1
+  concepto(s) extra en 1 línea(s)", cancelado sin cambios en la base; masivo por API → 409
+  elegir_opcion (16), 409 codigo_repetido "1 de las 2", saltear → "1 líneas actualizadas · 1
+  salteada", $880,16. Limpieza: 3 extras borrados, líneas y reglas con sus valores
+  originales. No probado en UI: masivo de Revisión, "Agregar igual" en una línea, confirmar
+  el aviso de borrado.
+- Revisión ronda 1: 0 urgent, 1 high, 5 minor, 5 descartados.
+  - **R3 (high).** `PanelLinea.handleAgregarPorCodigo` es `async` + `useState` y no
+    `useMutation` (GUIA-MODULOS regla 19), así que el `CargandoOverlay` global (que depende
+    de `useIsMutating`) no aparece ni en el alta ni en los reintentos del diálogo (regla
+    21). Arreglo: pasarlo a `useMutation`, como Revisión. Cierra también la deuda de
+    respuestas tardías al cambiar de línea (el overlay tapa la lista).
+  - Minor (al PR, no se tocan): rama de 409 y handlers casi iguales en PanelLinea y
+    Revisión, `useEffect` de Escape tres veces y CSS del diálogo copiado; tipos del contrato
+    como literales en cinco archivos; `onConfirmarRepetido('agregar')` con argumento que en
+    modo línea se ignora; `components/` importa de `pages/conceptosConstantes`; "Saltear
+    todas" da un toast de éxito con "0 líneas actualizadas · N salteadas".
+  - Deuda preexistente: `ReglaRow` sale de edición antes de la respuesta y conserva lo no
+    guardado (ahora también al cancelar el aviso de borrado); `eliminarConcepto2`.
+- R3 HECHO (lint 0 errores / 5 warnings preexistentes; build OK, corridos por la sesión
+  principal). Smoke de nuevo después de R3, misma línea: "$110,02" (única regla, RASTRA
+  HORAS) → $1.100,20 y total $67.955,18; repetido → "Agregar igual" → total $69.055,38 =
+  suma de conceptos en la base. Confirmar el borrado por API (mismo endpoint y flag que el
+  botón; no por UI porque `ReglaRow` siempre manda el precio y apaga `heredado`): sin flag
+  409 "borra 2 concepto(s) extra en 1 línea(s)"; con flag se borran y la línea vuelve a
+  $66.854,98; la regla vuelve a sin categoría y `heredado` 1. Control final en `testing`:
+  0 extras, 0 líneas de la preliquidación 24 con total distinto de la suma de conceptos.
+  Revisión del front: una ronda (no toca el cálculo).
+- Observación (no es de este cambio): con la ventana de Claude detrás de otra, Revisión se
+  queda en "Cargando líneas…" aunque la API respondió; al traerla al frente carga.
+
 ### Pre-deploy (sólo lectura en producción, con OK)
 
 ```sql
