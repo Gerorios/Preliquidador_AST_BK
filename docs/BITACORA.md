@@ -1877,3 +1877,85 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
   ejemplo, el 902) y ver el diálogo para elegir la opción y el "(extra, de …)" en la línea.
 - Queda cerrado el pendiente de pre-deploy de la entrada del merge. Siguen abiertas la deuda
   de precio <= 0 contado como completo y la de un id repetido en `linea_ids`.
+
+## 2026-10-02 — Revisión ordena por columna y suma las líneas visibles en una fila TOTAL
+
+**Mergeado**
+- PR #54 (Preliquidador_AST_FT, merge `adb4d30`): en la tabla principal de Revisión, orden
+  por clic en el encabezado y fila TOTAL fija abajo.
+- PR #68 (Preliquidador_AST_BK, merge `e318d6b`), hermano del anterior: sólo el plan
+  `docs/superpowers/plans/2026-10-02-revision-orden-totales.md`. Sin cambios de backend ni
+  de API.
+
+**Por frontera**
+- Preliquidación (front): clic en un encabezado ordena ascendente (▲), descendente (▼) y
+  vuelve al orden del server (empresa, empleado, fecha). Una columna a la vez. La alerta
+  ordena por gravedad (DUPLICADO, INCOMPLETA, LEGAJO, EMPRESA), el legajo es numérico,
+  cliente desempata por finca, conceptos por cantidad de extras y los textos sin mayúsculas
+  ni acentos. Los vacíos ("—", incluido el 0) van siempre al final. La fila TOTAL suma
+  horas jornal, horas máquina, tancadas, unidades e importe de las líneas visibles, y se
+  oculta sin resultados. La lógica está en `pages/ordenarLineas.js` y
+  `pages/totalesLineas.js`, sin React. La precedencia de alertas sale de `alertaDe`, que
+  usan el badge y el orden. `package.json` suma el script `npm test` (`node --test`).
+- Docs: el plan, en el backend.
+
+**Decisiones**
+- **Orden y fila TOTAL en la tabla principal de Revisión.** Porqué: lo pidieron el
+  liquidador y el gerente para no contar a mano las unidades al filtrar. Descartado (fuera
+  de alcance en el plan): `LiquidacionPersona`, Verificación y otras tablas, persistir el
+  orden, ordenar por varias columnas y la cantidad de líneas en el TOTAL.
+- **Las duplicadas suman en el TOTAL.** Porqué: el total coincide con la suma de lo que
+  está en pantalla. Decisión de Gero.
+- **El orden dura mientras se está en la pantalla** (estado de React) y al cambiarlo el
+  scroll vuelve arriba. Gero aprobó las recomendaciones del plan. Porqué no registrado en el
+  PR.
+- **El 0 cuenta como vacío para ordenar.** Porqué: la pantalla ya lo muestra "—".
+- **Primeros tests del front, con `node --test` y sin dependencias nuevas.** Porqué: la
+  lógica pura se testea sin React. Descartado: Vitest, por ser dependencia nueva, como en los
+  antecedentes de la bitácora.
+- **Todo decimal pasa por `Number()` y cada total se redondea a 2 decimales.** Porqué: los
+  decimales llegan del server como string ("95" quedaba después de "120"), y el redondeo
+  sólo saca el error de punto flotante; las columnas son `Numeric(_, 2)`.
+- **Sticky en los `td` del `tfoot`**, igual que el `thead th` existente.
+
+**Estado**
+- Deploy: no, todavía. Gero pidió el deploy del front; si se hace, va en una entrada
+  aparte. Sólo front: el backend no cambia. Rollback: revertir el FT #54 y swap de carpeta
+  del front.
+- Migraciones: ninguna.
+- Verificación: `npm test` 20/20, `npm run lint` 0 errores (las 5 warnings previas de
+  Terceros), `npm run build` OK. Smoke en el navegador sobre la 2Q de agosto en `testing`
+  (1.818 líneas): el TOTAL coincide con la suma de la API en las cinco columnas. No se probó
+  editar una línea con un orden activo, para no escribir en `testing`. Revisión: 0 urgent,
+  0 high, 6 minor sin tocar (listados en el cuerpo del FT #54).
+
+**Pendiente**
+- Smoke del usuario en el sitio real después del deploy, incluido editar una línea con un
+  orden activo: se espera que la fila se mueva a su lugar nuevo y el orden siga.
+- Deuda previa: el `border-bottom` del `thead th` sticky desaparece al scrollear
+  (`index.css`), igual que el `border-top` del TOTAL. Arreglo propuesto en el FT #54:
+  `box-shadow` inset.
+
+## 2026-10-02 — Deploy a producción del orden por columna y la fila TOTAL en Revisión
+
+Entrada de deploy: no anota un merge sino el deploy del FT #54, ya anotado arriba. Corrige
+su "Deploy: no", que era cierto al escribirse. El detalle técnico va en `docs/DEPLOY.md`
+(local, fuera de git).
+
+**Qué se deployó**
+- Frontend: de `db3a3fd` a `adb4d30` (FT #54), con build desde el checkout del front en
+  `main`, idéntico a `origin/main`.
+- Backend: sin cambios. El BK #68 es sólo docs y no se llevó al servidor.
+- Autorizado por el usuario.
+
+**Estado**
+- Deploy: sí, sólo frontend, con swap de carpeta; la versión anterior queda como rollback.
+- Migraciones: ninguna.
+- Verificación: build con 44 assets; bundle `index-DmFS4wWh.js` con el mismo md5 en local y
+  en el servidor; el sitio responde 200 y sirve el bundle nuevo; `/health` del backend ok.
+- Rollback: volver a la carpeta anterior del front con el swap inverso.
+
+**Pendiente**
+- Smoke del usuario en el sitio real: ordenar por columna, ver la fila TOTAL al filtrar, y
+  editar una línea con un orden activo (no probado antes del merge).
+- Queda cerrado el pendiente de deploy de la entrada del merge.
