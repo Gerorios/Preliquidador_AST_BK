@@ -13,7 +13,7 @@ El maestro de conceptos tenía dos caminos: el **común** (tarea sola, aplica a 
 - **Comportamiento existente intacto.** Comunes y específicos matchean igual que antes; el cambio es aditivo y la migración (columna nueva nullable + índice único ampliado) no reinterpreta filas existentes.
 - El default de `reemplaza_comun` al crear pasa de "True si es específico" a "True si **no es común**" (cualquier camino nuevo también nace con la marca prendida, coherente con ADR-0009).
 - La exclusión cliente-XOR-supervisor se valida en el API (422): evita reglas con doble condición cuyo alcance nadie podría razonar.
-- El índice único `uq_concepto_unif` incorpora `supervisor_nombre`: dos supervisores distintos pueden tener cada uno su regla para la misma tarea/código sin pisarse.
+- El índice único `uq_concepto_unif` incorpora `supervisor_nombre`: dos supervisores distintos pueden tener cada uno su regla para la misma tarea/código sin pisarse. (Corregido por ADR-0018: ese índice no frenaba ningún repetido, porque cliente o supervisor siempre es NULL y la base no compara NULL.)
 - Es un cambio **sensible al pago**: cubierto con tests (por cliente en varias fincas, por supervisor solo en su cuadrilla, los cuatro niveles sumando, el tilde apagando solo comunes, copia entre quincenas, validación XOR, filtro por categoría en el nivel supervisor).
 - La migración `ws15_conceptos_cliente_supervisor.sql` **no es diferible**: el ORM declara la columna nueva.
 

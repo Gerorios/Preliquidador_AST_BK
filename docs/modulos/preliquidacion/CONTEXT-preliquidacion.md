@@ -74,6 +74,10 @@ _Avoid_: "concepto" a secas para este agrupado (Concepto es una regla individual
 Situación en la que, para la misma tarea y quincena, conviven un Concepto por cliente y uno o más Conceptos específicos de **ese mismo cliente**: ambos matchean las líneas de esas fincas y, por ADR-0011, **suman**. No es un error del modelo sino un riesgo de pago doble que el liquidador debe controlar; el sistema lo hace visible al crear (fincas y líneas afectadas) y pide confirmación explícita, sin bloquear. Se agrava cuando las dos reglas comparten el código de liquidación. Dos reglas con Categoría de operario explícita y distinta **no** solapan (pagan a personas distintas); si alguna no tiene categoría o coinciden, sí. No es solapamiento el cruce con el eje supervisor ni el de común vs no-común (gobernado por Reemplaza al común).
 _Avoid_: conflicto, duplicado (el duplicado es otra cosa, que el sistema impide; esto es un solapamiento legítimo pero riesgoso)
 
+**Concepto duplicado**:
+Un segundo Concepto con la misma quincena, tarea, código, alcance y categoría que otro ya cargado, aunque tenga otro precio. No es un estado válido del maestro: el sistema no lo deja guardar (ADR-0018). Una tarea que paga más lleva un solo Concepto con el precio total.
+_Avoid_: confundirlo con el Solapamiento por cliente (dos reglas de alcances distintos, legítimo) o con dos códigos distintos de la misma tarea (también legítimo)
+
 **Precio heredado**:
 Precio de un concepto que vino copiado de otra quincena y todavía no fue confirmado por el liquidador. Paga normal (no deja la línea incompleta), pero queda resaltado hasta que se confirme, para no arrastrar un precio viejo en silencio si hubo un aumento.
 _Avoid_: precio copiado, precio viejo
