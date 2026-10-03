@@ -44,3 +44,7 @@ terceros/004_calculo.sql
 terceros/005_observacion_combustible.sql
 terceros/006_estaciones.sql
 terceros/007_cuotas_repuesto.sql
+
+# Preliquidación posterior al esquema base exportado. Se marca `historica`
+# cuando 000_esquema_base.sql se regenere después del deploy.
+preliquidacion/ws17_concepto_unico_normalizado.sql

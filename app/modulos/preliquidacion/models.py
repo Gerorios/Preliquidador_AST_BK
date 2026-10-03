@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
-    Date, Numeric, Text, Enum, ForeignKey, UniqueConstraint, Index
+    Date, Numeric, Text, Enum, ForeignKey, UniqueConstraint, Index, func
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -83,11 +83,18 @@ class ConceptoLiquidacion(Base):
     reemplaza_comun = Column(Boolean, default=False, nullable=False)
     creado_en      = Column(DateTime, default=ahora_utc)
 
+    # ADR-0018: clave normalizada (TRIM, sin mayúsculas, vacío = NULL); el precio no participa.
     __table_args__ = (
-        UniqueConstraint(
-            "quincena", "tarea_nombre", "cliente_nombre", "finca_nombre", "codigo", "categoria",
-            "supervisor_nombre",
-            name="uq_concepto_unif",
+        Index(
+            "uq_concepto_unif",
+            quincena,
+            func.upper(func.trim(tarea_nombre)),
+            func.coalesce(func.upper(func.trim(cliente_nombre)), ""),
+            func.coalesce(func.upper(func.trim(finca_nombre)), ""),
+            func.coalesce(func.upper(func.trim(supervisor_nombre)), ""),
+            func.coalesce(codigo, -1),
+            func.coalesce(categoria, 0),
+            unique=True,
         ),
     )
 

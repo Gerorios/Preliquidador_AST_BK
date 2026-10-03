@@ -125,10 +125,9 @@ def test_endpoint_backfill_conceptos_ya_no_existe(cliente):
 
 def test_crear_concepto_con_error_de_base_da_500_generico_sin_sql(cliente):
     # Antes: `except Exception` alrededor del commit → 400 "No se pudo
-    # guardar: <SQL y parámetros>". El único error esperable ahí era el
-    # `uq_concepto_unif`, que por la API nunca se dispara (uno de
-    # cliente/supervisor siempre es NULL, y cada NULL es distinto en un índice
-    # único), así que se sacó el try: un error de base es un 500 genérico.
+    # guardar: <SQL y parámetros>". Ahora sólo el rechazo de
+    # `uq_concepto_unif` (ADR-0018) se traduce a un 409; cualquier otro error
+    # de base, como este, es un 500 genérico.
     from sqlalchemy import create_engine
     from sqlalchemy.exc import IntegrityError
     from sqlalchemy.orm import sessionmaker
@@ -163,3 +162,49 @@ def test_crear_concepto_con_error_de_base_da_500_generico_sin_sql(cliente):
     assert "INSERT" not in r.text
     assert "sql-secreto" not in r.text
     assert "concepto_liquidacion" not in r.text
+
+
+def test_crear_concepto_con_duplicado_de_mysql_da_409_sin_sql(cliente):
+    # ADR-0018: el rechazo de uq_concepto_unif es esperable (doble clic) y se
+    # traduce a un 409 con texto fijo. El mensaje de pymysql trae los valores
+    # de la fila: nada de eso llega al front.
+    from sqlalchemy import create_engine
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.core.database import Base
+
+    engine = create_engine("sqlite:///:memory:",
+                           connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+
+    def _commit_que_falla():
+        raise IntegrityError(
+            "INSERT INTO concepto_liquidacion (quincena, tarea_nombre) VALUES (%s, %s)",
+            ("2026-05-01", "sql-secreto"),
+            Exception(1062, "Duplicate entry '2026-05-01-COSECHA-valor-secreto' "
+                            "for key 'concepto_liquidacion.uq_concepto_unif'"),
+        )
+
+    db.commit = _commit_que_falla
+    app.dependency_overrides[get_db_propia] = lambda: db
+    try:
+        r = cliente.post("/api/precios/conceptos", json={
+            "quincena": "2026-05-01", "tarea_nombre": "COSECHA", "codigo": 461,
+            "precio": "10", "confirmar_solapamiento": True,
+        })
+    finally:
+        db.close()
+
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == (
+        "Ya existe una regla para esta tarea con el código 461. "
+        "Si querés cambiar el precio, editá la existente."
+    )
+    assert "INSERT" not in r.text
+    assert "sql-secreto" not in r.text
+    assert "valor-secreto" not in r.text
+    assert "Duplicate" not in r.text
+    assert "uq_concepto_unif" not in r.text
