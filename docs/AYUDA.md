@@ -297,7 +297,8 @@ Se navegan con los botones de sección; cada uno muestra un número si hay casos
 3. **🌱 Plantas excedidas** — más de **6.000 plantas** en un día.
 4. **👤 Resumen por empleado** — importe, días trabajados y $/día por empleado.
 5. **📊 Plantas vs Jornal** — compara el rendimiento pagado por planta contra el jornal.
-6. **📊 Tancadas vs Jornal** — compara lo pagado por tancada contra el jornal.
+6. **📊 Tancadas vs Jornal** — compara el valor hora que salió la pulverización pagada por
+   tancada contra el valor hora de pulverización + 30 %.
 
 En los controles de excesos, cada caso es una tarjeta que se **clickea para expandir** y ver el
 detalle de las líneas. Hay buscador (**"Buscar empleado o legajo..."**) y filtros.
@@ -316,9 +317,26 @@ precios distintos, el promedio ponderado).
 ### Valor hora pulverización
 
 En la sección **"Tancadas vs Jornal"** está el otro campo editable de Verificación: el
-**"Valor hora pulverización"**. Escribí el número y confirmá con **Enter** o el botón **"Guardar"**.
-Sin ese valor cargado, la comparación de esa sección no se puede mostrar (*"Cargá el valor hora
-para ver la comparación a jornal."*).
+**"Valor hora pulverización"**. Escribí el **valor hora base** (el del tractorista), **sin
+recargo**: el sistema le suma el 30 % solo. Confirmá con **Enter** o el botón **"Guardar"**.
+
+La tabla tiene una fila por cliente, finca y tarea pagada por tancada, con estas columnas:
+**Tancadas**, **Hs jornal**, **Hs máquina**, **Precio tancada** (el realmente pagado; si hubo
+precios distintos, el promedio ponderado), **Importe pagado** (lo que se pagó por esas
+tancadas), **Valor hs/máquina pulv** (importe pagado ÷ horas de máquina), **Valor hs pulv × 1,3**
+(el valor hora cargado + 30 %) y **Variación**: cuánto más caro (+, resaltado) o más barato (−)
+salió la hora de máquina pagada por tancada que esa referencia. Las tancadas se toman tal como
+vienen, sin dividir por 2, y las horas de jornal se muestran como dato pero no entran en la
+cuenta.
+
+- Una fila **sin horas de máquina** se muestra igual, con la marca **"sin hs máquina"**, pero no
+  tiene valor hora ni variación, y no entra en la variación del total (una nota al pie dice
+  cuántas filas quedaron afuera).
+- La fila **Total** suma tancadas, horas e importe de todas las filas; su valor hora y su
+  variación se calculan con las sumas de las filas que tienen horas de máquina (no es un
+  promedio de las variaciones).
+- Sin el valor hora cargado (*"Cargá el valor hora para ver la comparación a jornal."*), las
+  columnas **Valor hs pulv × 1,3** y **Variación** quedan vacías.
 
 ---
 

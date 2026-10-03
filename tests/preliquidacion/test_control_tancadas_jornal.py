@@ -47,7 +47,9 @@ def _linea(db, preliq, tarea, cliente, finca, tancadas, hsjornal, hsmaquina, nom
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id,
         nombre_tarea=tarea, nombre_cliente=cliente, nombre_finca=finca,
-        tancadas=Decimal(tancadas), hsjornal=Decimal(hsjornal), hsmaquina=Decimal(hsmaquina),
+        tancadas=Decimal(tancadas), hsjornal=Decimal(hsjornal),
+        # hsmaquina es nullable en el modelo: None se guarda como null.
+        hsmaquina=Decimal(hsmaquina) if hsmaquina is not None else None,
         unidades=Decimal("0"), importe_total=Decimal("0"), linea_incompleta=False,
         nombre_empleado=nombre_empleado, cuit=cuit,
     )
@@ -82,6 +84,43 @@ def _concepto_maestro_tancada(db, quincena, tarea, cliente=None, finca=None,
     return c
 
 
+CAMPOS_VIEJOS = ("valor_jornal", "valor_tancada", "diff")
+
+
+def test_ejemplo_planilla_valor_hora_maquina_vs_referencia(db):
+    """El ejemplo de la planilla del liquidador (ADR-0017): 4 líneas del mismo
+    (cliente, finca, tarea), Σ hs jornal 54, Σ hs máquina 34, Σ tancadas 60 a
+    4463. Importe pagado 267.780; valor hora pagado por hs máquina
+    267.780 / 34 = 7.875,88; referencia 7352 × 1,3 = 9.557,60; variación
+    (7.875,88 − 9.557,60) / 9.557,60 ≈ −17,6 %. Ningún ÷2."""
+    preliq = _preliq(db, valor_hora_pulv=Decimal("7352"))
+    for hsjornal, hsmaquina in (("14", "9"), ("14", "9"), ("13", "8"), ("13", "8")):
+        linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                       tancadas="15", hsjornal=hsjornal, hsmaquina=hsmaquina)
+        _aplicar_tancada(db, linea, precio=Decimal("4463"), cantidad=Decimal("15"))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert res["valor_hora_pulv"] == 7352.0
+    assert len(res["filas"]) == 1
+    fila = res["filas"][0]
+    tot = res["totales"]
+    for d in (fila, tot):
+        assert d["tancadas"] == 60.0
+        assert d["hsjornal"] == 54.0
+        assert d["hsmaquina"] == 34.0
+        assert d["precio"] == 4463.0
+        assert d["importe_pagado"] == 267780.0
+        assert d["valor_hora_maquina"] == 7875.88
+        assert d["valor_hora_referencia"] == 9557.6
+        assert d["variacion"] == pytest.approx(-0.176, abs=1e-4)
+        for campo in CAMPOS_VIEJOS:
+            assert campo not in d
+    assert fila["sin_hs_maquina"] is False
+    assert tot["filas_sin_hs_maquina"] == 0
+
+
 def test_control_tancadas_calcula_valores_y_diff(db):
     preliq = _preliq(db, valor_hora_pulv=Decimal("5458.34"))
     linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
@@ -101,18 +140,27 @@ def test_control_tancadas_calcula_valores_y_diff(db):
     assert fila["hsmaquina"] == 5.0
     # precio del pago real: Σimporte/Σcantidad = 40000/40 = 1000
     assert fila["precio"] == 1000.0
-    # VALOR S/JORNAL = hsjornal/2 * (valor_hora * 1.3) = 5 * 7095.842 = 35479.21
-    assert fila["valor_jornal"] == 35479.21
-    # VALOR S/TANCADA = tancadas/2 * precio = 20 * 1000 = 20000
-    assert fila["valor_tancada"] == 20000.0
-    # DIFF = (20000 - 35479.21) / 35479.21 ≈ -0.4363 (tancada salió más barato)
-    assert fila["diff"] == pytest.approx(-0.4363, abs=1e-3)
+    # importe pagado real, sin ÷2
+    assert fila["importe_pagado"] == 40000.0
+    # valor hora pagado por hs máquina = 40000 / 5 = 8000
+    assert fila["valor_hora_maquina"] == 8000.0
+    # referencia = 5458.34 × 1,3 = 7095.842
+    assert fila["valor_hora_referencia"] == 7095.84
+    # variación = (8000 − 7095.842) / 7095.842 ≈ +0.1274 (la tancada salió
+    # más cara que la referencia: positiva)
+    assert fila["variacion"] == pytest.approx(0.1274, abs=1e-4)
+    assert fila["sin_hs_maquina"] is False
 
-    # totales: DIFF recalculado sobre los totales (misma cuenta, una sola fila)
+    # totales recalculados sobre las sumas (misma cuenta, una sola fila)
     tot = res["totales"]
-    assert tot["valor_jornal"] == 35479.21
-    assert tot["valor_tancada"] == 20000.0
-    assert tot["diff"] == pytest.approx(-0.4363, abs=1e-3)
+    assert tot["importe_pagado"] == 40000.0
+    assert tot["valor_hora_maquina"] == 8000.0
+    assert tot["valor_hora_referencia"] == 7095.84
+    assert tot["variacion"] == pytest.approx(0.1274, abs=1e-4)
+    assert tot["filas_sin_hs_maquina"] == 0
+    for campo in CAMPOS_VIEJOS:
+        assert campo not in fila
+        assert campo not in tot
 
 
 def test_sin_valor_hora_pulv_devuelve_null_no_error(db):
@@ -126,16 +174,44 @@ def test_sin_valor_hora_pulv_devuelve_null_no_error(db):
 
     assert res["valor_hora_pulv"] is None
     fila = res["filas"][0]
-    # sin valor hora no se puede valorizar a jornal → null (no 0, no error)
-    assert fila["valor_jornal"] is None
-    assert fila["diff"] is None
-    # lo que sí se puede calcular sigue estando
-    assert fila["valor_tancada"] == 20000.0
-    assert res["totales"]["valor_jornal"] is None
-    assert res["totales"]["diff"] is None
+    # sin valor hora no hay referencia contra qué comparar → null (no 0, no error)
+    assert fila["valor_hora_referencia"] is None
+    assert fila["variacion"] is None
+    # lo que sí se puede calcular sigue estando: importe y valor hora pagado
+    # (40000 / 5 = 8000), en la fila y en totales
+    tot = res["totales"]
+    for d in (fila, tot):
+        assert d["importe_pagado"] == 40000.0
+        assert d["valor_hora_maquina"] == 8000.0
+    assert tot["valor_hora_referencia"] is None
+    assert tot["variacion"] is None
 
 
-def test_hsjornal_cero_deja_diff_en_null(db):
+def test_valor_hora_pulv_cero_deja_variacion_en_null(db):
+    """Valor hora cargado en 0: la referencia es 0.0 (es un dato cargado, no
+    falta), pero no hay contra qué dividir → variación null, sin
+    ZeroDivisionError (ADR-0017)."""
+    preliq = _preliq(db, valor_hora_pulv=Decimal("0"))
+    linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                   tancadas="40", hsjornal="10", hsmaquina="5")
+    _aplicar_tancada(db, linea, precio=Decimal("1000"), cantidad=Decimal("40"))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert res["valor_hora_pulv"] == 0.0
+    fila = res["filas"][0]
+    tot = res["totales"]
+    for d in (fila, tot):
+        assert d["valor_hora_referencia"] == 0.0
+        assert d["variacion"] is None
+        # el valor hora pagado sí se calcula: 40000 / 5
+        assert d["valor_hora_maquina"] == 8000.0
+
+
+def test_hsjornal_cero_no_anula_la_variacion(db):
+    """Las hs de jornal se muestran como dato pero no entran en la cuenta
+    (ADR-0017): en 0 no dejan la variación en null."""
     preliq = _preliq(db, valor_hora_pulv=Decimal("5458.34"))
     linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
                    tancadas="40", hsjornal="0", hsmaquina="5")
@@ -145,9 +221,58 @@ def test_hsjornal_cero_deja_diff_en_null(db):
     res = svc.control_tancadas_jornal(preliq.id)
 
     fila = res["filas"][0]
-    assert fila["valor_jornal"] == 0.0
-    # jornal = 0 → no hay contra qué comparar
-    assert fila["diff"] is None
+    assert fila["hsjornal"] == 0.0
+    assert fila["variacion"] == pytest.approx(0.1274, abs=1e-4)
+
+
+@pytest.mark.parametrize("hsmaquina_b", ["0", None], ids=["hsmaquina_cero", "hsmaquina_null"])
+def test_fila_sin_hs_maquina_no_entra_en_la_variacion(db, hsmaquina_b):
+    """Una fila sin hs máquina (0 o null) se muestra con sus datos crudos, sin
+    valor hora pagado ni variación, marcada `sin_hs_maquina`. El total suma
+    tancadas, horas e importe de todas las filas, pero el valor hora y la
+    variación sólo usan las filas con hs máquina > 0 (ADR-0017)."""
+    preliq = _preliq(db, valor_hora_pulv=Decimal("5000"))   # referencia 6500
+    # Fila A: hs máquina 10, importe 100000 → valor hora 10000
+    la = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                tancadas="50", hsjornal="12", hsmaquina="10")
+    _aplicar_tancada(db, la, precio=Decimal("2000"), cantidad=Decimal("50"))
+    # Fila B: sin hs máquina, importe 20000
+    lb = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 2",
+                tancadas="20", hsjornal="6", hsmaquina=hsmaquina_b)
+    _aplicar_tancada(db, lb, precio=Decimal("1000"), cantidad=Decimal("20"))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert len(res["filas"]) == 2
+    fila_a = next(f for f in res["filas"] if f["nombre_finca"] == "FINCA 1")
+    fila_b = next(f for f in res["filas"] if f["nombre_finca"] == "FINCA 2")
+
+    assert fila_a["sin_hs_maquina"] is False
+    assert fila_a["valor_hora_maquina"] == 10000.0
+
+    # B: datos crudos presentes
+    assert fila_b["tancadas"] == 20.0
+    assert fila_b["hsjornal"] == 6.0
+    assert fila_b["hsmaquina"] == 0.0
+    assert fila_b["precio"] == 1000.0
+    assert fila_b["importe_pagado"] == 20000.0
+    # ...pero sin valor hora pagado ni variación
+    assert fila_b["valor_hora_maquina"] is None
+    assert fila_b["variacion"] is None
+    assert fila_b["sin_hs_maquina"] is True
+    # la referencia se repite igual en todas las filas
+    assert fila_b["valor_hora_referencia"] == 6500.0
+
+    tot = res["totales"]
+    # importe sobre todas las filas
+    assert tot["importe_pagado"] == 120000.0
+    assert tot["hsmaquina"] == 10.0
+    # valor hora y variación sólo con las filas con hs máquina: 100000 / 10
+    assert tot["valor_hora_maquina"] == 10000.0
+    assert tot["valor_hora_referencia"] == 6500.0
+    assert tot["variacion"] == pytest.approx((10000 - 6500) / 6500, abs=1e-4)
+    assert tot["filas_sin_hs_maquina"] == 1
 
 
 def test_solo_incluye_lineas_pagadas_por_tancada(db):
@@ -180,6 +305,8 @@ def test_excluye_lineas_de_empleados_mensualizados(db, mensualizado):
     res = svc.control_tancadas_jornal(preliq.id)
 
     assert res["filas"] == []
+    # su pago tampoco entra en el total
+    assert res["totales"]["importe_pagado"] == 0.0
 
 
 def test_linea_sin_cuit_no_se_excluye(db, mensualizado):
