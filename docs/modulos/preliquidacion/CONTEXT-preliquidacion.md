@@ -100,8 +100,8 @@ Unidad base idéntica a Jornal tope 1 hasta las 10 horas, pero que **por encima 
 _Avoid_: confundir con Jornal tope 1 (que ignora todo excedente) o con fijo (que ni mira las horas)
 
 **Tancada**:
-Unidad de trabajo de pulverización que se registra en la línea. Se cuenta **ida y vuelta**, por lo que el dato cargado viene doblado: los controles que la valorizan lo dividen por 2 para contar la pasada real. Puede ser Unidad base de un concepto (la tarea se paga por tancada).
-_Avoid_: confundir la tancada (el hecho medible) con el grupo de pago TANCADA (atributo informativo del catálogo; ver Grupo de pago).
+Unidad de trabajo de pulverización que se registra en la línea. Se registra **ida y vuelta**, así que el dato viene doblado; el pago y los controles la usan tal como viene (no se divide por 2). Puede ser Unidad base de un concepto (la tarea se paga por tancada).
+_Avoid_: confundir la tancada (el hecho medible) con el grupo de pago TANCADA (atributo informativo del catálogo; ver Grupo de pago); dividirla por 2 en algún cálculo.
 
 **Concepto adicional**:
 El **hecho de pago**, no la regla: una foto congelada de cuando un Concepto se aplicó a una línea. Guarda su propio precio y cantidad de ese momento, el importe resultante (cantidad × precio) y, si vino del maestro, un vínculo a la regla que lo originó. Existe para que, aunque el Concepto del maestro cambie de precio después, el pago ya calculado no mienta. El importe total de una línea es la suma de sus conceptos adicionales.
@@ -128,7 +128,8 @@ Costo de **una hora** de trabajo del tractorista que el liquidador carga **por q
 _Avoid_: valor jornal (se carga la hora; el jornal es ×8); confundir con Valor hora pulverización (otro control, otro parámetro)
 
 **Valor hora pulverización**:
-Costo de una hora de jornal de pulverización que el liquidador carga **por quincena**. Sirve para valorizar "a jornal" el trabajo de pulverización y compararlo contra lo que costó pagarlo "a tancada" (control Tancadas vs Jornal). Sobre este valor se aplica un recargo fijo de pulverización (×1,3) antes de comparar.
+Valor hora base (el del tractorista) que el liquidador carga **por quincena**. Es la referencia del control Tancadas vs Jornal: se le suma un 30 % (×1,3, fijo) y contra eso se compara el valor hora efectivamente pagado por hora de máquina en las tareas pagadas por tancada.
+_Avoid_: cargarlo ya recargado (el ×1,3 lo pone el sistema)
 
 **Personas mensualizadas**:
 Personas que cobran un sueldo mensual fijo, no por jornal. Sus líneas quedan excluidas de **toda** Verificación (excesos, resumen por empleado, Plantas/Tancadas vs Jornal) y de **todos** los cálculos de Mano de obra gastada de la Vista gerencial: esos controles miden razonabilidad del pago jornalizado y no aplican a un sueldo fijo. Se identifican por CUIL y la lista es configuración del servidor, no editable desde la app.

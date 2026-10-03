@@ -13,3 +13,5 @@ El control **Tancadas vs Jornal** valoriza el trabajo de pulverización "a jorna
 - Si algún día el recargo deja de ser fijo (p. ej. distinto por cliente o por tarea), esta decisión se revierte promoviendo `RECARGO_PULV` a dato — pero hoy no hay evidencia de que varíe, así que no se paga ese costo por adelantado.
 - Si `valor_hora_pulv` está sin cargar (NULL) en una quincena, el control no puede valorizar "a jornal": las columnas VALOR S/JORNAL y DIFF se devuelven en `null` (no en 0), para no mostrar una comparación falsa contra un jornal de costo cero.
 - Se guarda como columna en `preliquidacion` (no en una tabla de parámetros aparte) porque hoy es el único parámetro configurable por quincena y esa tabla ya tiene exactamente una fila por quincena; una tabla clave/valor recién pagaría con varios parámetros.
+
+> Nota (2026-10-02): la fórmula hsjornal/2 × (valor_hora_pulv × 1,3) del primer párrafo y la consecuencia sobre VALOR S/JORNAL y DIFF quedaron reemplazadas por el ADR-0017. El resto de la decisión (valor hora por quincena, recargo fijo en código) sigue vigente.

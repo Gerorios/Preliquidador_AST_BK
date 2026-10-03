@@ -1231,14 +1231,22 @@ class PreliquidacionService:
         self.db.refresh(preliq)
         return preliq
 
-    # Recargo fijo de pulverización sobre el valor hora de jornal (ADR-0007).
+    # Recargo fijo de pulverización sobre el valor hora base que carga el
+    # liquidador (ADR-0007; cómo se usa en el control, ADR-0017).
     RECARGO_PULV = Decimal("1.3")
 
     def control_tancadas_jornal(self, preliq_id: int) -> dict:
-        """Compara, por (cliente, finca, tarea), lo que costó pagar el trabajo
-        "a tancada" contra lo que habría costado "a jornal" de pulverización.
-        La tancada se cuenta ida y vuelta, así que el dato viene doblado y se
-        divide /2 al valorizar (ver glosario: Tancada)."""
+        """Compara, por (cliente, finca, tarea), el valor hora efectivamente
+        pagado por hora de máquina en las tareas pagadas por tancada
+        (Σ importe de los conceptos de tancada ÷ Σ hs máquina) contra la
+        referencia: el valor hora de pulverización de la quincena × 1,3.
+        Variación = (valor hora pagado − referencia) ÷ referencia (ADR-0017).
+
+        La tancada se registra ida y vuelta (el dato viene doblado), pero el
+        pago la toma tal como viene y el control hace lo mismo: no hay ningún
+        ÷2 (ver glosario: Tancada). Las hs de jornal se muestran como dato y no
+        entran en la cuenta. Una fila sin hs máquina (0 o null) se muestra,
+        marcada `sin_hs_maquina`, sin valor hora pagado ni variación."""
         preliq = self.db.query(Preliquidacion).filter(
             Preliquidacion.id == preliq_id
         ).first()
@@ -1277,66 +1285,83 @@ class PreliquidacionService:
         ):
             pagos[(cliente, finca, tarea)] = [float(imp or 0), float(cant or 0)]
 
-        # Valor hora de jornal de pulverización (con recargo fijo). Si el
-        # liquidador no lo cargó, no se puede valorizar "a jornal": VALOR S/JORNAL
-        # y DIFF quedan en null en toda la tabla (no en 0, para no mentir).
+        # Referencia: el valor hora base que carga el liquidador (el del
+        # tractorista) × 1,3 fijo (ADR-0017). Se repite en cada fila y en
+        # totales, como el jornal tractorista en Plantas vs Jornal. Sin cargar
+        # no hay contra qué comparar: referencia y variación en null en toda la
+        # tabla (no en 0, para no mentir).
         valor_hora_pulv = preliq.valor_hora_pulv
-        valor_hs_pulv = (valor_hora_pulv * self.RECARGO_PULV) if valor_hora_pulv is not None else None
+        referencia = float(valor_hora_pulv * self.RECARGO_PULV) if valor_hora_pulv is not None else None
+
+        def _variacion(valor_hora):
+            # null sin valor hora pagado (fila sin hs máquina) o sin referencia
+            # (sin cargar o en 0): sin contra qué comparar no hay variación.
+            # Se calcula sobre valores sin redondear.
+            if valor_hora is None or not referencia:
+                return None
+            return round((valor_hora - referencia) / referencia, 4)
 
         filas = []
+        # Acumuladores de totales SIN redondear: los ratios del total se
+        # calculan sobre las sumas, no sobre los valores ya redondeados.
+        tt = thj = thm = timporte = tcant = 0.0
+        # Sólo filas con hs máquina > 0: son las únicas que tienen valor hora
+        # pagado; meter el importe de las otras inflaría el total (ADR-0017).
+        timporte_con_hsm = thm_con_hsm = 0.0
+        filas_sin_hsm = 0
         for cliente, finca, tarea, suma_tancadas, suma_hsjornal, suma_hsmaquina in agregados:
             importe_pagado, cantidad_pagada = pagos.get((cliente, finca, tarea), [0.0, 0.0])
-            precio = Decimal(str(importe_pagado / cantidad_pagada)) if cantidad_pagada else Decimal("0")
-            tancadas  = suma_tancadas or Decimal("0")
-            hsjornal  = suma_hsjornal or Decimal("0")
-            hsmaquina = suma_hsmaquina or Decimal("0")
-            # /2: la tancada es ida y vuelta (dato doblado).
-            valor_jornal  = (hsjornal / 2 * valor_hs_pulv) if valor_hs_pulv is not None else None
-            valor_tancada = tancadas / 2 * precio
-            # DIFF = (tancada - jornal) / jornal. null si no hay jornal contra
-            # qué comparar (valor hora sin cargar, o jornal = 0 por hsjornal 0).
-            diff = None
-            if valor_jornal is not None and valor_jornal != 0:
-                diff = round(float((valor_tancada - valor_jornal) / valor_jornal), 4)
+            precio = (importe_pagado / cantidad_pagada) if cantidad_pagada else 0.0
+            tancadas = float(suma_tancadas or 0)
+            hsjornal = float(suma_hsjornal or 0)
+            # hsmaquina es nullable en la línea: null cuenta como 0.
+            hsmaquina = float(suma_hsmaquina or 0)
+            # Sin hs máquina no hay valor hora pagado que comparar: la fila se
+            # muestra con sus datos crudos pero sin valor hora ni variación.
+            sin_hs_maquina = not hsmaquina > 0
+            # Importe pagado tal como lo pagó el motor, sin ÷2 (ADR-0017).
+            valor_hora_maquina = None if sin_hs_maquina else importe_pagado / hsmaquina
+
+            tt += tancadas; thj += hsjornal; thm += hsmaquina
+            timporte += importe_pagado; tcant += cantidad_pagada
+            if sin_hs_maquina:
+                filas_sin_hsm += 1
+            else:
+                timporte_con_hsm += importe_pagado; thm_con_hsm += hsmaquina
+
             filas.append({
                 "nombre_cliente": cliente, "nombre_finca": finca,
                 "nombre_tarea": tarea,
-                "tancadas": round(float(tancadas), 2),
-                "hsjornal": round(float(hsjornal), 2),
-                "hsmaquina": round(float(hsmaquina), 2),
-                "valor_jornal": round(float(valor_jornal), 2) if valor_jornal is not None else None,
-                "precio": round(float(precio), 2),
-                "valor_tancada": round(float(valor_tancada), 2),
-                "diff": diff,
+                "tancadas": round(tancadas, 2),
+                "hsjornal": round(hsjornal, 2),
+                "hsmaquina": round(hsmaquina, 2),
+                "precio": round(precio, 2),
+                "importe_pagado": round(importe_pagado, 2),
+                "valor_hora_maquina": round(valor_hora_maquina, 2) if valor_hora_maquina is not None else None,
+                "valor_hora_referencia": round(referencia, 2) if referencia is not None else None,
+                "variacion": _variacion(valor_hora_maquina),
+                "sin_hs_maquina": sin_hs_maquina,
             })
         filas.sort(key=lambda f: (f["nombre_cliente"] or "", f["nombre_finca"] or "", f["nombre_tarea"] or ""))
 
-        # Totales: sumas donde corresponde, precio recalculado sobre el pago
-        # real total (NO promedio de los precios por fila), DIFF recalculado
-        # sobre los totales (NO promedio de los DIFF por fila, que mentiría).
-        tt  = sum(f["tancadas"]  for f in filas)
-        thj = sum(f["hsjornal"]  for f in filas)
-        thm = sum(f["hsmaquina"] for f in filas)
-        tvt = sum(f["valor_tancada"] for f in filas)
-        timporte = sum(pagos[k][0] for k in pagos)
-        tcant = sum(pagos[k][1] for k in pagos)
-        tp = (timporte / tcant) if tcant else 0
-        if valor_hs_pulv is not None:
-            tvj = sum(f["valor_jornal"] for f in filas)
-            total_diff = round(float((tvt - tvj) / tvj), 4) if tvj else None
-        else:
-            tvj = None
-            total_diff = None
+        # Totales: tancadas, horas, precio e importe sobre todas las filas;
+        # precio recalculado sobre el pago real total (NO promedio de precios).
+        # Valor hora y variación recalculados sobre las sumas de las filas con
+        # hs máquina (NO promedio de las variaciones, que mentiría).
+        tp = (timporte / tcant) if tcant else 0.0
+        tvhm = (timporte_con_hsm / thm_con_hsm) if thm_con_hsm > 0 else None
 
         return {
             "valor_hora_pulv": float(valor_hora_pulv) if valor_hora_pulv is not None else None,
             "filas": filas,
             "totales": {
                 "tancadas": round(tt, 2), "hsjornal": round(thj, 2), "hsmaquina": round(thm, 2),
-                "valor_jornal": round(tvj, 2) if tvj is not None else None,
                 "precio": round(tp, 2),
-                "valor_tancada": round(tvt, 2),
-                "diff": total_diff,
+                "importe_pagado": round(timporte, 2),
+                "valor_hora_maquina": round(tvhm, 2) if tvhm is not None else None,
+                "valor_hora_referencia": round(referencia, 2) if referencia is not None else None,
+                "variacion": _variacion(tvhm),
+                "filas_sin_hs_maquina": filas_sin_hsm,
             },
         }
 

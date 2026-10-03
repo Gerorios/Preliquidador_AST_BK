@@ -1959,3 +1959,107 @@ su "Deploy: no", que era cierto al escribirse. El detalle técnico va en `docs/D
 - Smoke del usuario en el sitio real: ordenar por columna, ver la fila TOTAL al filtrar, y
   editar una línea con un orden activo (no probado antes del merge).
 - Queda cerrado el pendiente de deploy de la entrada del merge.
+
+## 2026-10-02 — Tancadas vs Jornal compara valor hora por hora de máquina
+
+**Mergeado**
+- PR #69 (Preliquidador_AST_BK, merge `fd76263`): el control Tancadas vs Jornal pasa a
+  comparar el valor hora pagado por hora de máquina contra el valor hora de pulverización
+  × 1,3, sin ningún ÷2. Incluye ADR-0017, glosario, `docs/AYUDA.md` y el plan
+  `docs/superpowers/plans/2026-10-02-tancadas-vs-jornal.md`.
+- PR #55 (Preliquidador_AST_FT, merge `adc284c`), hermano del anterior: la tabla
+  `TancadasJornal` (Verificación y Vista gerencial) con las columnas del cálculo nuevo.
+
+**Por frontera**
+- Preliquidación (back): `control_tancadas_jornal` en `preliquidacion_service.py`. Por
+  (cliente, finca, tarea): importe pagado = Σ importe real de los conceptos de tancada;
+  valor hs/máquina pulv = importe pagado ÷ hs máquina; referencia = `valor_hora_pulv` de la
+  quincena × 1,3; variación = (valor hora pagado − referencia) ÷ referencia, positiva = se
+  pagó más caro. El total se recalcula sobre las sumas y sólo con las filas que tienen hs
+  máquina; una fila sin hs máquina sale con `sin_hs_maquina` y sin valor hora ni variación. Sin
+  valor hora cargado, referencia y variación en null, como antes. Contrato JSON roto a
+  propósito: salen `valor_jornal`, `valor_tancada` y `diff`; entran `importe_pagado`,
+  `valor_hora_maquina`, `valor_hora_referencia`, `variacion`, `sin_hs_maquina` y
+  `totales.filas_sin_hs_maquina`. Los endpoints de Verificación y Gerencial no cambian.
+  Comentario de `valor_hora_pulv` en `models.py` actualizado.
+- Preliquidación (front): columnas Cliente · Finca · Tarea · Tancadas · Hs jornal · Hs
+  máquina · Precio tancada · Importe pagado · Valor hs/máquina pulv · Valor hs pulv × 1,3 ·
+  Variación. Variación positiva en rojo, en filas y total. Fila sin hs máquina con badge
+  "sin hs máquina" y nota al pie con la cantidad de filas que no entran en la variación.
+  Salen "Valor s/jornal", "Valor s/tancada" y "Diff". Formatters null-safe: con un backend
+  viejo las columnas nuevas quedan en "—".
+- Docs: ADR-0017 nuevo; el ADR-0007 lleva una nota de que su fórmula quedó reemplazada (lo
+  demás sigue vigente); glosario de Preliquidación (Tancada, Valor hora pulverización);
+  `docs/AYUDA.md`; el plan.
+
+**Decisiones**
+- **Valor hora pagado por hora de máquina contra valor hora pulv × 1,3, sin ÷2** (ADR-0017).
+  Porqué: la fórmula anterior (`hsjornal/2 × valor_hora_pulv × 1,3` contra `tancadas/2 ×
+  precio`) dividía por 2 un dato que el motor no divide al pagar, así que los montos salían
+  a la mitad, y comparaba contra horas de jornal. Gero mostró la planilla con el cálculo que
+  usan; un test la reproduce (267.780 / 34 = 7.875,88 contra 7.352 × 1,3 = 9.557,60 →
+  −17,6 %). Descartado: la fórmula vieja; comparar contra hs jornal (la referencia es un
+  valor hora de máquina, no de presencia).
+- **El total sale de las sumas, no del promedio de las variaciones.** Porqué: un promedio de
+  porcentajes miente; igual que en Plantas vs Jornal.
+- **La referencia es `valor_hora_pulv`, no `valor_hora_tractorista`.** Porqué: son dos
+  controles con dos parámetros; el liquidador carga en Valor hora pulverización el valor
+  base y el sistema suma el 30 %.
+- **El ADR-0017 reemplaza sólo la fórmula del ADR-0007**: el valor hora por quincena como
+  dato y el recargo 1,3 fijo en código siguen vigentes.
+- **El nombre del control y la barra "Valor hora pulverización" no cambian.** Decisión de
+  Gero. Porqué no registrado en el PR.
+- **Se aplica a todas las quincenas al leer**: cambian los números del control en las
+  quincenas pasadas; lo pagado no cambia.
+
+**Estado**
+- Deploy: no, todavía. Gero lo pidió; si se hace, va en una entrada aparte. Orden: backend
+  primero, front después, en la misma ventana (con el front viejo tres columnas quedan en
+  "—", no rompe). Rollback: revertir los dos PRs y swap de carpeta del front; sin datos ni
+  DDL.
+- Migraciones: ninguna.
+- Verificación: `test_control_tancadas_jornal.py` 13/13, suite del back 953 passed y 1
+  xfailed, `test_asistente_docs.py` 6/6; front `npm run lint` 0 errores (5 warnings previas
+  de Terceros), `npm run build` OK, `npm test` 20/20. Smoke contra `testing` con los dos
+  PRs: importe igual a la suma de los conceptos de tancada; sin valor hora, "—" y aviso; con
+  valor hora, referencia y variación correctas en fila y total; endpoint de Gerencial igual.
+  No se vio en pantalla una fila sin hs máquina (no hay en `testing`); lo cubre un test.
+  Revisión: 0 urgent, 0 high.
+
+**Pendiente**
+- Después del deploy, revisar que el valor cargado en la barra de la última quincena sea el
+  valor base, sin recargo.
+- Minor sin tocar (BK #69): aclarar en el glosario que "Valor hora pulverización" y "Valor
+  hora tractorista" son el mismo número cargado aparte; el test
+  `test_control_tancadas_calcula_valores_y_diff` todavía dice "diff" en el nombre.
+
+## 2026-10-02 — Deploy a producción del control Tancadas vs Jornal por valor hora de máquina (ADR-0017)
+
+Entrada de deploy: no anota un merge sino el deploy de BK #69 y FT #55, ya anotados arriba.
+Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
+`docs/DEPLOY.md` (local, fuera de git).
+
+**Qué se deployó**
+- Backend: de `aab0af7` a `fd76263` (BK #69).
+- Frontend: de `adb4d30` a `adc284c` (FT #55), con build desde el checkout del front en
+  `main`, idéntico a `origin/main`.
+- Backend primero y frontend después, en la misma ventana, como pedía la entrada del merge.
+- Autorizado por el usuario.
+
+**Estado**
+- Deploy: sí, backend y frontend. Frontend con swap de carpeta; la versión anterior queda
+  como rollback.
+- Migraciones: ninguna.
+- Verificación: un solo arranque del backend, conectado a la base de producción, con tablas
+  verificadas; `/health` ok. Build del front con 44 assets y el mismo bundle en local y en el
+  servidor; el sitio responde 200 y sirve el bundle nuevo.
+- Verificación en producción, en sólo lectura: el control nuevo responde sin error en las
+  últimas 4 quincenas. En la 1Q de septiembre muestra 9 filas, todas con hs máquina, y una
+  variación total de +11,5 %.
+- Rollback: revertir los dos PRs y swap inverso de la carpeta del front; sin datos ni DDL.
+
+**Pendiente**
+- Gero confirma que el valor hora pulverización cargado en la 1Q de septiembre (7.433,52)
+  es el valor base y no uno ya recargado.
+- Mirar el control en el sitio real.
+- Queda cerrado el pendiente de deploy de la entrada del merge.
