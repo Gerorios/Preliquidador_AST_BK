@@ -16,14 +16,7 @@ Sin tarea en curso.
 
 - Cargar `TALLER_SHEET_URL` en el `.env` del servidor y reiniciar el backend: hasta entonces las alertas de Terceros responden 502 a propósito (deploy del 2026-09-30).
 - Asignar el módulo Terceros desde Administración a los usuarios que corresponda (deploy del 2026-09-30).
-- Smoke en el sitio real del combo de conceptos en una quincena con precios (BK #64 / FT #51, deploy del 2026-10-01).
-- Smoke en el sitio real de la regla del maestro completa: guardar una regla con precio vacío o en 0 tiene que avisar (BK #66 / FT #52, deploy del 2026-10-01).
-- Smoke en el sitio real de Concepto extra: agregar un código con varias opciones (BK #67 / FT #53, deploy del 2026-10-01).
-- Smoke en el sitio real del orden por columna y la fila TOTAL en Revisión, incluido editar una línea con un orden activo (FT #54, deploy del 2026-10-02).
-- Mirar en el sitio real el control Tancadas vs Jornal (BK #69 / FT #55, deploy del 2026-10-02).
-- Confirmar que el valor hora pulverización cargado en la 1Q de septiembre es el valor base, sin recargo (deploy del 2026-10-02).
-- Decidir si se borra la regla de tancada de prueba cargada en `testing` (1Q de septiembre).
-- Confirmar si las líneas de campo repetidas por parte en agosto fueron dos pasadas reales (tarea aparte, mencionada en la entrada del 2026-10-04).
+- Confirmar si las líneas de campo repetidas por parte en agosto fueron dos pasadas reales (tarea aparte, mencionada en la entrada del 2026-10-04; la sesión "Investigar líneas repetidas sin marca de duplicado" espera esa respuesta).
 - Actualizar en `docs/DEPLOY.md` (local, fuera de git) la nota de migraciones históricas: `ws17` ya es `historica` (BK #71, 2026-10-05).
 - Probar una sesión nueva: aprobar el hook de arranque y responder "qué se hizo y qué está pendiente" sin leer archivos (BK #72 / FT #56, 2026-10-05).
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
