@@ -34,6 +34,7 @@ preliquidacion/ws13_jornal_tope1_mas_excedente.sql historica
 preliquidacion/ws14_tipo_excento.sql historica
 preliquidacion/ws15_conceptos_cliente_supervisor.sql historica
 preliquidacion/ws16_valor_hora_tractorista.sql historica
+preliquidacion/ws17_concepto_unico_normalizado.sql historica
 
 # Liquidación Terceros. Ninguna se aplicó todavía en producción: se crearon
 # y probaron en `testing`, y llegan con el primer deploy del módulo.
@@ -44,7 +45,3 @@ terceros/004_calculo.sql
 terceros/005_observacion_combustible.sql
 terceros/006_estaciones.sql
 terceros/007_cuotas_repuesto.sql
-
-# Preliquidación posterior al esquema base exportado. Se marca `historica`
-# cuando 000_esquema_base.sql se regenere después del deploy.
-preliquidacion/ws17_concepto_unico_normalizado.sql

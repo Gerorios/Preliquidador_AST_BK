@@ -1,5 +1,5 @@
 -- Esquema base generado con scripts/exportar_esquema.py desde la base real
--- (preliquidacion) el 2026-09-08. Es el punto de partida para una base nueva: correr este
+-- (preliquidacion) el 2026-10-04. Es el punto de partida para una base nueva: correr este
 -- archivo y después las migraciones siguientes de la carpeta en orden.
 -- NO editar a mano: regenerar con el script.
 
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `concepto_liquidacion` (
   `creado_en` datetime DEFAULT NULL,
   `supervisor_nombre` varchar(150) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_concepto_unif` (`quincena`,`tarea_nombre`,`cliente_nombre`,`finca_nombre`,`codigo`,`categoria`,`supervisor_nombre`)
+  UNIQUE KEY `uq_concepto_unif` (`quincena`,(upper(trim(`tarea_nombre`))),(coalesce(upper(trim(`cliente_nombre`)),_utf8mb4'')),(coalesce(upper(trim(`finca_nombre`)),_utf8mb4'')),(coalesce(upper(trim(`supervisor_nombre`)),_utf8mb4'')),(coalesce(`codigo`,-(1))),(coalesce(`categoria`,0)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- preliquidacion_linea
