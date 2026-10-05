@@ -1,5 +1,5 @@
 -- Esquema base generado con scripts/exportar_esquema.py desde la base real
--- (preliquidacion) el 2026-09-08. Es el punto de partida para una base nueva: correr este
+-- (preliquidacion) el 2026-10-04. Es el punto de partida para una base nueva: correr este
 -- archivo y después las migraciones siguientes de la carpeta en orden.
 -- NO editar a mano: regenerar con el script.
 
