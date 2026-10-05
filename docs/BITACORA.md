@@ -2063,3 +2063,83 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
   es el valor base y no uno ya recargado.
 - Mirar el control en el sitio real.
 - Queda cerrado el pendiente de deploy de la entrada del merge.
+
+## 2026-10-04 — Un Concepto no se repite: la base lo impide (ADR-0018)
+
+**Mergeado**
+- PR #70 (Preliquidador_AST_BK, merge `02ebc60`): `concepto_liquidacion` deja de admitir dos
+  reglas con la misma quincena, tarea, código, cliente, finca, supervisor y categoría.
+  Incluye ADR-0018, el término "Concepto duplicado" en el glosario, una nota en ADR-0011,
+  la migración `ws17_concepto_unico_normalizado.sql` y el plan
+  `docs/superpowers/plans/2026-10-02-concepto-duplicado.md`. Sin PR hermano en el front: el
+  toast ya muestra cualquier `detail` de texto.
+
+**Por frontera**
+- Preliquidación: `uq_concepto_unif` pasa a ser un índice único funcional sobre la clave
+  normalizada (TRIM, sin distinguir mayúsculas, vacío = NULL); el precio no participa. Alta
+  y edición en `precios.py` contestan 409 con texto ("Ya existe una regla para esta tarea
+  con el código X..."). Copiar quincena saltea las reglas que ya existen en el destino y
+  las repetidas del origen, comparando sin acentos; un choque por doble clic da 409 y no
+  500. `models.py` declara el índice nuevo.
+- Núcleo: sólo tests; `test_errores_internos.py` fija que el duplicado con el mensaje de
+  MySQL da 409 sin filtrar SQL ni valores, y que cualquier otro error de base sigue en el
+  500 genérico.
+- Prod y Datos: `ws17` (verificación previa, backup en `concepto_liquidacion_bkp_ws17`, un
+  ALTER atómico y rollback comentado), listada en `migrations/ORDEN.txt` como posterior al
+  esquema base exportado.
+- Docs: ADR-0018 nuevo (renumerado: se escribió como 0017 y ese número lo tomó Tancadas vs
+  Jornal mientras se trabajaba). ADR-0011 corregido: su índice único no frenaba ningún
+  repetido. Glosario de Preliquidación con "Concepto duplicado".
+
+**Decisiones**
+- **Una tarea que paga más lleva una sola regla con el precio total.** Porqué: el motor
+  suma cada regla que matchea, así que una regla repetida paga dos veces. El hallazgo vino
+  de una regla real cargada dos veces en una quincena ya pagada; el gerente confirmó que esa
+  tarea paga combinada ("poda + 20%") y el dueño decidió que va una sola regla con el precio
+  total. Descartado: dejar sumar dos reglas iguales a propósito (es pagar doble sin que se
+  note en el maestro).
+- **La garantía es un índice en la base, no un chequeo en la API.** Porqué: un doble clic
+  pasa los dos chequeos, y la edición, la copia o un SQL a mano quedarían sin cubrir.
+  Descartado: chequear sólo en la API.
+- **No se bloquea el código repetido en toda la quincena.** Porqué: hoy el mismo código se
+  usa a propósito en tareas distintas, y la copia entre quincenas fallaría. Descartado:
+  unicidad por código en la quincena.
+- **El índice viejo no servía.** Porqué: cada regla tiene cliente o supervisor en NULL
+  (ADR-0011) y para la base dos NULL nunca son iguales.
+- **UPPER también en MySQL**, aunque la collation ya ignora mayúsculas. Porqué: la
+  expresión queda idéntica en MySQL y en SQLite.
+- **La copia compara sin acentos.** Porqué: así compara la collation `utf8mb4_0900_ai_ci`,
+  y la copia no choca contra el índice. Consecuencia aceptada en el ADR: la base es más
+  estricta que el Matching en acentos.
+
+**Estado**
+- Deploy: no. El código no falla contra el índice viejo; sólo no frena repetidos hasta que
+  se aplique la migración.
+- Migraciones: `ws17` aplicada en `testing` (verificación previa 0, backup
+  `concepto_liquidacion_bkp_ws17`, ALTER; `SHOW INDEX`: 7 partes, `Non_unique` 0). En
+  producción, no.
+- Verificación: suite completa después de integrar `main`, 969 passed y 1 xfailed (la
+  preexistente); `test_concepto_duplicado.py` con 15 tests, cada uno visto fallar antes del
+  cambio. Arranque real contra `testing` con tablas verificadas y sin avisos del índice.
+  Smoke por HTTP: alta repetida, otra grafía y edición que choca dan 409 (la regla no
+  cambia); copia dos veces, "0 copiados · 2 ya existían". No se probó el toast en el
+  navegador. Revisión: 1 high (doble clic en Copiar daba 500) arreglado con su test; 6
+  minor sin tocar; 4 descartados.
+- Rollback: revertir el merge; en la base, el ALTER comentado al final de `ws17`.
+
+**Pendiente**
+- Deploy (para el dueño). Precondición: unificar desde la pantalla de Conceptos las 2
+  reglas repetidas que hay en producción, verificar 0 repetidas con el `SELECT` de `ws17`,
+  y recién ahí aplicar el ALTER y deployar.
+- No correr `scripts/refrescar_testing.py` hasta que producción tenga el índice nuevo:
+  pisaría el de `testing`.
+- Después del deploy, en un PR aparte: regenerar `000_esquema_base.sql` y marcar `ws17`
+  como `historica`.
+- Minor sin tocar (BK #70): el encabezado de `ws17` no dice que no es idempotente; `_norm`
+  de la copia no iguala Ł/Ø/Đ/Æ/Œ como la collation (daría 409); el `try/except
+  IntegrityError` está repetido cuatro veces en `precios.py`; `_norm` duplica casi
+  `_normalizar_nombre` del núcleo y comparte nombre con la de `solapamiento_service`, que se
+  comporta distinto; el comentario de `models.py` dice "sin mayúsculas" en vez de "sin
+  distinguir mayúsculas"; `COALESCE(codigo, -1)` iguala una regla sin código con una de
+  código -1.
+- Fuera de alcance: las líneas de campo repetidas por parte (tarea aparte, en curso).
