@@ -19,3 +19,6 @@ docs/DEPLOY.md
 # nunca al repo público.
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Worktrees de Claude Code: copias de trabajo de cada máquina.
+.claude/worktrees/
