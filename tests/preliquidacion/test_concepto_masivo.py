@@ -260,7 +260,8 @@ def test_masivo_dos_opciones_sin_elegir_no_escribe_nada(db):
     preliq = _preliq(db)
     l1, l2, l3 = _tres_lineas(db, preliq)
     _regla(db, precio=Decimal("1000.00"), unidad=UnidadBaseConcepto.HSJORNAL)
-    _regla(db, precio=Decimal("3000.00"), unidad=UnidadBaseConcepto.JORNAL_TOPE1)
+    _regla(db, precio=Decimal("3000.00"), unidad=UnidadBaseConcepto.JORNAL_TOPE1,
+           tarea="TAREA Y")
     svc = PreliquidacionService(db)
 
     with pytest.raises(ExtraRequiereOpcion):

@@ -1,8 +1,10 @@
+import unicodedata
 from datetime import date
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db_propia, get_db_externa
 from app.core.auth import get_usuario_actual
@@ -69,6 +71,30 @@ def _error_borra_extras(plan) -> HTTPException:
         "extras": extras,
         "lineas": lineas,
     })
+
+
+def _es_duplicado(exc: IntegrityError) -> bool:
+    """ADR-0018: el rechazo viene del índice único del Concepto (SQLite y MySQL
+    nombran el índice en el mensaje)."""
+    return "uq_concepto_unif" in str(exc.orig)
+
+
+def _error_duplicado(codigo) -> HTTPException:
+    """ADR-0018: 409 con texto fijo (string, lo muestra el toast). Nunca el
+    mensaje de la base: el de MySQL trae los valores de la fila."""
+    return HTTPException(
+        status_code=409,
+        detail=f"Ya existe una regla para esta tarea con el código {codigo}. "
+               f"Si querés cambiar el precio, editá la existente.",
+    )
+
+
+def _norm(texto) -> str:
+    """ADR-0018: texto de la clave del Concepto como lo compara la base: sin
+    espacios en los bordes, en mayúsculas, vacío = NULL y sin acentos (la
+    collation de MySQL iguala "Ó" y "O"; SQLite no, por eso se hace acá)."""
+    descompuesto = unicodedata.normalize("NFD", (texto or "").strip().upper())
+    return "".join(ch for ch in descompuesto if unicodedata.category(ch) != "Mn")
 
 
 # dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
@@ -376,12 +402,17 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
         reemplaza_comun=reemplaza_comun,
     )
     db.add(nuevo)
-    # Sin try: un error de base acá cae en el 500 genérico de main.py (el
-    # detalle va al log, no al front). No hay un duplicado "esperable" que
-    # atajar: uq_concepto_unif incluye cliente_nombre y supervisor_nombre, uno
-    # siempre es NULL (ADR-0011) y cada NULL es distinto en un índice único.
-    # La sesión la cierra get_db_propia, que descarta la transacción fallida.
-    db.commit()
+    # ADR-0018: si la regla ya existe (un doble clic, otra grafía), el índice
+    # uq_concepto_unif la rechaza y se contesta un 409 con texto. Cualquier
+    # otro error de base sigue al 500 genérico de main.py (el detalle va al
+    # log, no al front).
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if _es_duplicado(exc):
+            raise _error_duplicado(datos.codigo)
+        raise
     db.refresh(nuevo)
 
     PreliquidacionService(db).recalcular_por_concepto(nuevo.quincena, actual=_match(nuevo))
@@ -408,6 +439,9 @@ def actualizar_concepto(
     campos = datos.model_dump(exclude_unset=True)
     for campo, valor in campos.items():
         setattr(concepto, campo, valor)
+    # ADR-0018: después del rollback, concepto.codigo vuelve al viejo; el 409
+    # tiene que nombrar el que se intentó guardar.
+    codigo_intentado = concepto.codigo
     # ADR-0011: el estado resultante no puede quedar con cliente Y supervisor.
     try:
         _validar_cliente_xor_supervisor(concepto.cliente_nombre, concepto.supervisor_nombre)
@@ -420,7 +454,15 @@ def actualizar_concepto(
     # ADR-0015: los extras atados a esta regla la siguen, se reatan o se borran.
     # Se aplica antes del commit y del recálculo reactivo, que toma el importe
     # manual de cada línea (extras incluidos) ya actualizado.
-    db.flush()
+    # ADR-0018: si la edición choca con otra regla, el índice salta acá (o en
+    # el commit) y se contesta el mismo 409 con texto que en el alta.
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        if _es_duplicado(exc):
+            raise _error_duplicado(codigo_intentado)
+        raise
     svc = PreliquidacionService(db)
     plan = svc.planificar_extras([concepto.id])
     if plan.borrar and not confirmar_borrado_extras:
@@ -428,7 +470,13 @@ def actualizar_concepto(
         db.rollback()
         raise error
     svc.aplicar_plan_extras(plan)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if _es_duplicado(exc):
+            raise _error_duplicado(codigo_intentado)
+        raise
     db.refresh(concepto)
 
     svc.recalcular_por_concepto(
@@ -478,27 +526,29 @@ def copiar_quincena(
     db: Session = Depends(get_db_propia),
 ):
     """Copia todos los conceptos de una quincena a otra.
-    Omite los que ya existen y los incompletos."""
+    Omite los incompletos, los que ya existen en el destino y los repetidos
+    del origen (mismo Concepto, ADR-0018); estos dos últimos cuentan como
+    "ya existían"."""
     origen = db.query(ConceptoLiquidacion).filter(
         ConceptoLiquidacion.quincena == quincena_origen
     ).all()
     if not origen:
         raise HTTPException(status_code=404, detail=f"No hay conceptos para {quincena_origen}")
 
-    # Antes: un SELECT de existencia por cada concepto origen (N+1). Ahora:
-    # traemos todos los conceptos ya existentes en el destino en una sola
-    # query y armamos la misma clave de comparación en memoria (incluye
-    # categoria, igual que el filtro `and_` original).
+    # Una sola query trae los conceptos del destino y la comparación se hace en
+    # memoria con la clave del Concepto (ADR-0018), normalizada como la compara
+    # la base: si no, una grafía distinta pasaría acá y el índice la rechazaría.
     existentes_destino = db.query(ConceptoLiquidacion).filter(
         ConceptoLiquidacion.quincena == quincena_destino
     ).all()
 
     def _clave(c):
         return (
-            c.tarea_nombre, c.cliente_nombre, c.finca_nombre,
-            c.codigo, c.categoria, c.supervisor_nombre,
+            _norm(c.tarea_nombre), _norm(c.cliente_nombre), _norm(c.finca_nombre),
+            _norm(c.supervisor_nombre), c.codigo, c.categoria,
         )
 
+    # Cada clave encolada se suma: un repetido del origen se saltea como existente.
     claves_existentes = {_clave(c) for c in existentes_destino}
 
     copiados = omitidos = incompletas = 0
@@ -508,9 +558,11 @@ def copiar_quincena(
         if c.codigo is None or c.precio is None or c.precio <= 0:
             incompletas += 1
             continue
-        if _clave(c) in claves_existentes:
+        clave = _clave(c)
+        if clave in claves_existentes:
             omitidos += 1
             continue
+        claves_existentes.add(clave)
         nuevos.append(ConceptoLiquidacion(
             quincena=quincena_destino,
             tarea_nombre=c.tarea_nombre,
@@ -529,7 +581,21 @@ def copiar_quincena(
 
     if nuevos:
         db.bulk_save_objects(nuevos)
-    db.commit()
+    # ADR-0018: un doble clic en Copiar hace que los dos pedidos lean el destino
+    # antes de que alguno guarde; el segundo choca con uq_concepto_unif y se
+    # descarta entero (la base no deja nada a medias). Cualquier otro error de
+    # base sigue al 500 genérico de main.py.
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if _es_duplicado(exc):
+            raise HTTPException(
+                status_code=409,
+                detail="Otra copia de esta quincena se hizo al mismo tiempo. "
+                       "Recargá la página para ver el resultado.",
+            )
+        raise
 
     detalle = f"{copiados} copiados · {omitidos} ya existían"
     if incompletas:
