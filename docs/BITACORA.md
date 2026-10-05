@@ -2143,3 +2143,38 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
   distinguir mayúsculas"; `COALESCE(codigo, -1)` iguala una regla sin código con una de
   código -1.
 - Fuera de alcance: las líneas de campo repetidas por parte (tarea aparte, en curso).
+
+## 2026-10-05 — Esquema base con el índice de ws17; ws17 pasa a histórica (cierre del ADR-0018)
+
+**Mergeado**
+- PR #71 (backend) — regenera `000_esquema_base.sql` desde producción con el
+  `uq_concepto_unif` de `ws17` y marca `ws17` como `historica` en `migrations/ORDEN.txt`.
+
+**Por frontera**
+- Prod y Datos: en `000_esquema_base.sql` cambian sólo la fecha y el índice;
+  `core/000_usuarios.sql` sólo la fecha (el script lo reescribe junto con el otro). Sale de
+  `ORDEN.txt` el comentario que dejaba `ws17` pendiente.
+- Docs: plan `docs/superpowers/plans/2026-10-04-esquema-base-ws17.md`.
+
+**Decisiones**
+- **Se regeneró desde producción, no desde `testing`.** Porqué: así lo dice la cabecera del
+  archivo, y `testing` es una copia más vieja. No es riesgoso: ninguna migración posterior al
+  000 sin `historica` (core/001, terceros/001-007) toca las tablas que exporta el script.
+
+**Estado**
+- Deploy: no hace falta (no cambia código ni base).
+- Migraciones: ninguna.
+- Verificación: `test_manifiesto_migraciones.py` 5 passed; suite completa 969 passed y 1
+  xfailed (la preexistente). Sin revisión de código: es un archivo exportado y una línea del
+  manifiesto.
+- Corrige la entrada del 2026-10-04 (BK #70), que decía "Deploy: no" y dejaba pendientes el
+  deploy y la regeneración del esquema: el BK #70 se deployó el 2026-10-04 (VPS `fd76263` →
+  `a45e2c0`), con `ws17` aplicada en producción y en `testing`; el dueño probó el aviso en
+  pantalla, y los backups `concepto_liquidacion_bkp_ws17` se borraron en las dos bases con su
+  OK. La regeneración es este PR. Con el índice nuevo en producción, deja de regir la
+  advertencia de no correr `scripts/refrescar_testing.py`.
+
+**Pendiente**
+- Los 6 minor del BK #70 (listados en la entrada del 2026-10-04).
+- En `ORDEN.txt`, el comentario de Liquidación Terceros dice que sus migraciones no se
+  aplicaron en producción; se aplicaron en el deploy del 2026-09-30.
