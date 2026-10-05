@@ -82,6 +82,7 @@ pytest
 | `docs/DOCUMENTACION.md` | Mapa técnico: código y conexiones a las bases |
 | `docs/AYUDA.md` | Ayuda de uso |
 | `docs/adr/` | Decisiones de arquitectura |
+| `docs/estado.md` | Qué está en curso, el próximo paso y qué espera al usuario |
 | `docs/BITACORA.md` | Qué se mergeó y por qué |
 | `docs/modulos/GUIA-MODULOS.md` | Cómo construir un módulo |
 | `docs/modulos/PUESTA-A-PUNTO.md` | Dejar una máquina nueva con los dos proyectos corriendo |
