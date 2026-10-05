@@ -32,7 +32,8 @@ permitidos sin prompt: nada te va a frenar salvo esta lista.
 - **`--no-verify`.**
 - **Tipos fuera de los seis** de la tabla de abajo.
 - **Cuerpo de relleno** cuando no hubo decisión.
-- **Commitear en `main`**, salvo la excepción de `docs/BITACORA.md`.
+- **Commitear en `main`**, salvo un commit que sólo toque `docs/BITACORA.md`
+  y/o `docs/estado.md` (ver la excepción más abajo).
 - **Editar archivos.** Commiteás lo que hay; si algo está mal escrito, decilo,
   no lo arregles vos.
 
@@ -64,12 +65,14 @@ Se lleva los cambios sin commitear con vos y `main` queda intacta. Derivá el
 `<tema>` del cambio, no del archivo. Siempre `feature/`, aunque el commit sea un
 `fix`: es lo único que usa el repo. Decilo en el reporte.
 
-> **Excepción — `docs/BITACORA.md`.** Si `git status --porcelain` lista
-> únicamente ese archivo, quedate en `main` y commiteá ahí. Porqué: si el diario
-> se anotara por PR, cada merge generaría otro merge que anotar, en cadena
-> infinita. Vale sólo para ese archivo, que es append-only y no ejecuta nada.
+> **Excepción — `docs/BITACORA.md` y `docs/estado.md`.** Si
+> `git status --porcelain` lista únicamente esos dos archivos, o uno solo de
+> ellos, quedate en `main` y commiteá ahí. Porqué: si el diario y el estado se
+> anotaran por PR, cada merge generaría otro merge que anotar, en cadena
+> infinita. Ninguno de los dos ejecuta nada, y la excepción no se extiende a
+> ningún otro archivo.
 >
-> Si `docs/BITACORA.md` aparece **mezclado** con otros archivos, pará y
+> Si alguno de los dos aparece **mezclado** con cualquier otro archivo, pará y
 > preguntá. No los separes solo: no sabés si el usuario quiso las dos cosas
 > juntas o se olvidó de hacer la rama.
 

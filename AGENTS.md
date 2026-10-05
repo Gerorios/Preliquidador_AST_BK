@@ -18,7 +18,8 @@ en el repo del backend (`backend_preliquidacion`). Las rutas `docs/...`, `CONTEX
 ### Reglas de trabajo
 
 - **Rama antes de editar.** Nunca commitear directo a `main`; el hook `pre-commit` lo
-  frena. Única excepción: un commit que sólo toque `docs/BITACORA.md` (ver "Bitácora").
+  frena. Única excepción: un commit que sólo toque `docs/BITACORA.md` y/o
+  `docs/estado.md` (ver "Bitácora y estado").
 - **Nunca deployar al VPS sin OK explícito del usuario.** El sistema está en producción y
   lo usan personas reales. Mergear a `main` no es deployar.
 - **Smoke tests reales**, no "debería andar". Si algo no se probó, decirlo.
@@ -45,7 +46,8 @@ usuario lo pida.
 |---|---|---|
 | Cambio en el VPS o la infraestructura: config del servidor, paquetes, accesos, certificados, cómo se deploya | `docs/DEPLOY.md` (local, fuera de git) | en el momento del cambio |
 | El *por qué* de un cambio de código: qué se eligió y qué se descartó | cuerpo del PR | al abrir el PR |
-| Un merge a `main` | `docs/BITACORA.md` | después de preguntar (ver "Bitácora") |
+| Lo que está en curso con su fase, el próximo paso, lo que espera al usuario y lo pospuesto | `docs/estado.md`, sólo lo vivo | al avanzar; al entregar se borra de ahí |
+| Un merge a `main` | `docs/BITACORA.md`, y la tarea sale de `docs/estado.md` | después de preguntar (ver "Bitácora y estado") |
 | Un término del dominio: qué **es**, no cómo se implementa | el glosario que indica `CONTEXT-MAP.md`: `CONTEXT.md` si es del Sistema, el `CONTEXT-<módulo>.md` si es de un módulo | al cerrar el término |
 | Una decisión de arquitectura, con sus alternativas descartadas | `docs/adr/` | sólo con el usuario |
 | Una regla para construir un módulo | `docs/modulos/GUIA-MODULOS.md` | cuando cambia la regla |
@@ -72,14 +74,44 @@ Un ADR no es un resumen de lo que pasó: es un compromiso. No se escribe sin el 
 - `main` exige una aprobación y no se puede auto-aprobar: el merge va con `--admin`. Los
   cuerpos de PR, siempre desde archivo (`--body-file`), nunca inline.
 
-### Bitácora
+### Estado del trabajo
 
-- Hay **una sola**, `docs/BITACORA.md` en el repo del backend: diario append-only de qué se
-  mergeó y por qué.
-- **Va directo a `main`**, y es la única excepción a "rama antes de editar". Porqué: si la
-  anotación fuera por PR, cada merge generaría otro merge para anotar el primero, en cadena
-  infinita. Y el archivo no ejecuta nada, así que un error ahí es una línea fea en un
-  diario, no un bug. No extender la excepción a ningún otro archivo.
+Dos archivos del repo del backend, cada uno con un solo trabajo:
+
+- **`docs/estado.md` es sólo lo vivo**: lo que está en curso (con su fase y su plan), el
+  próximo paso, los pendientes del usuario (lo de Pitu también se le anota al usuario) y
+  lo que quedó para más adelante, con su porqué. Nada entregado. En Claude Code lo importa
+  `CLAUDE.md`, así que cada sesión arranca con él cargado.
+- **`docs/BITACORA.md` es todo lo hecho**: una sección `## AAAA-MM-DD — Tema` por entrega,
+  la más nueva **abajo**. Un hook de arranque (`.claude/hooks/ultimas-entregas.mjs`) le
+  pasa a cada sesión las 2 últimas entradas.
+
+Cómo se mantienen:
+
+- **Al avanzar** (plan aprobado, paso cerrado, revisión terminada, pausa): la sesión
+  principal actualiza en `estado.md` la fase y el próximo paso. Se edita en el checkout
+  principal del backend, en `main`, como la bitácora; **nunca en el worktree de la tarea**
+  (viajaría en el PR y chocaría con lo que el agente `bitacora` cambia en `main`).
+- **Al entregar** (merge a `main`): el agente `bitacora` escribe la entrada al final de
+  `BITACORA.md` y **saca esa tarea de `estado.md`**. Si dejó algo pendiente (por ejemplo,
+  el smoke del usuario), queda en `estado.md` sólo eso, en una línea. Quien despachó al
+  agente commitea los dos archivos juntos.
+- **Lo que se descarta o se pospone** pasa a "A futuro" de `estado.md`, con una línea de
+  por qué.
+- **El repo es público y `estado.md` se edita seguido, directo a `main`**: nunca lleva
+  IPs, hosts, URLs, credenciales, datos de terceros ni valores.
+
+### Bitácora y estado
+
+- Hay **una sola** bitácora, `docs/BITACORA.md` en el repo del backend: diario append-only
+  de qué se mergeó y por qué. El estado vive al lado, en `docs/estado.md`.
+- **Los dos van directo a `main`**, y son la única excepción a "rama antes de editar".
+  Porqué: si la anotación fuera por PR, cada merge generaría otro merge para anotar el
+  primero, en cadena infinita. Y ninguno de los dos ejecuta nada, así que un error ahí es
+  una línea fea en un diario, no un bug. La excepción nació el 2026-09-11 sólo para la
+  bitácora; el 2026-10-05 se reabrió esa decisión para sumar `estado.md`, que cambia en el
+  mismo commit que cierra cada entrega: por PR caería en la misma cadena. No extender la
+  excepción a ningún otro archivo.
 - **Después de cada merge a `main`, preguntar al usuario** en una línea si se anota. Si dice
   que no, seguir sin insistir: la próxima corrida lo cubre igual. Nunca anotar sin
   preguntar, porque escribe en `main` directo.

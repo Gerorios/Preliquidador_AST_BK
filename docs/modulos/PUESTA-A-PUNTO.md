@@ -99,8 +99,9 @@ cd frontend_preliquidacion && sh scripts/hooks/instalar.sh && cd ..
 ```
 
 Instala dos hooks: `pre-commit`, que frena cualquier commit en `main` (todo va por rama y
-PR), y `post-merge`, que avisa cuando entra un merge sin anotar en la bitácora. Para
-comprobarlo, `ls .git/hooks` en cada repo tiene que mostrar `pre-commit` y `post-merge`.
+PR; en el backend, salvo uno que sólo toque `docs/BITACORA.md` y/o `docs/estado.md`), y
+`post-merge`, que avisa cuando entra un merge sin anotar en la bitácora. Para comprobarlo,
+`ls .git/hooks` en cada repo tiene que mostrar `pre-commit` y `post-merge`.
 
 ---
 
@@ -237,6 +238,7 @@ en el PATH) va en un `CLAUDE.local.md` en la raíz de cada repo. No se commitea.
 
 1. `docs/modulos/GUIA-MODULOS.md`: cómo está armado el sistema y qué tiene que cumplir un módulo. Es la lectura principal.
 2. `AGENTS.md`: las reglas de trabajo, para personas y para agentes de código.
-3. `CONTEXT-MAP.md`: el índice de los glosarios del dominio.
-4. `README.md` del backend y del frontend: estructura y convenciones de cada uno.
-5. Dos o tres tests de `tests/` para ver cómo se prueba la lógica sin base real.
+3. `docs/estado.md` del backend: qué está en curso, el próximo paso y qué espera al usuario. Lo ya entregado está en `docs/BITACORA.md`.
+4. `CONTEXT-MAP.md`: el índice de los glosarios del dominio.
+5. `README.md` del backend y del frontend: estructura y convenciones de cada uno.
+6. Dos o tres tests de `tests/` para ver cómo se prueba la lógica sin base real.
