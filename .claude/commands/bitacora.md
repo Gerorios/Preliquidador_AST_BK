@@ -12,6 +12,8 @@ Pasos:
 2. Listá los merges de `main` posteriores a eso (`git log --merges`).
 3. Si no hay nada nuevo, decilo y terminá. No despaches el agente al vacío.
 4. Si hay, despachá el agente `bitacora` pasándole qué merges cubrir.
+5. Cuando vuelva, commiteá `docs/BITACORA.md` y `docs/estado.md` juntos, en
+   `main`, con `/commit`. Son los dos únicos archivos que van directo a `main`.
 
 Argumentos (opcional): $ARGUMENTS puede traer números de PR específicos a
 anotar, o un rango de fechas. Si viene vacío, cubrí todo lo pendiente.
