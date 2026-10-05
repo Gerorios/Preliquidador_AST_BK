@@ -2178,3 +2178,60 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
 - Los 6 minor del BK #70 (listados en la entrada del 2026-10-04).
 - En `ORDEN.txt`, el comentario de Liquidación Terceros dice que sus migraciones no se
   aplicaron en producción; se aplicaron en el deploy del 2026-09-30.
+
+## 2026-10-05 — Estado del trabajo (`docs/estado.md`), hook de arranque y skill `flujo-preliquidacion`
+
+**Mergeado**
+- PR #72 (backend) — agrega `docs/estado.md` (sólo lo vivo), el hook de arranque que
+  imprime las 2 últimas entradas de la bitácora, la excepción de `main` ampliada a
+  `docs/estado.md`, el agente `bitacora` y `/commit` adaptados, y la skill
+  `flujo-preliquidacion`.
+- PR #56 (front) — hermano: copia idéntica del hook con su `SessionStart`, bloque común de
+  `AGENTS.md` igual al del backend, `CLAUDE.md` que importa el `estado.md` del backend y
+  apunta a la skill, `.gitignore` con `.claude/worktrees/`.
+
+**Por frontera**
+- Docs: `docs/estado.md` nuevo; `AGENTS.md` (bloque común: "Estado del trabajo", "Bitácora
+  y estado", fila nueva en "Dónde se anota cada cosa"), `CLAUDE.md`, `PUESTA-A-PUNTO.md`,
+  `README.md`, `DOCUMENTACION.md`; `.claude/hooks/ultimas-entregas.mjs` y `SessionStart` en
+  `.claude/settings.json` de los dos repos; agente `bitacora`, `/bitacora`, skill `commit`;
+  skill nueva `.claude/skills/flujo-preliquidacion/`; `scripts/hooks/pre-commit` del backend
+  (excepción "sólo `docs/BITACORA.md` y/o `docs/estado.md`", con `--no-renames`);
+  `tests/hooks/` con 17 tests; plan
+  `docs/superpowers/plans/2026-10-05-estado-y-flujo-preliquidacion.md`.
+
+**Decisiones**
+- Lo vivo en `docs/estado.md`, lo hecho en la bitácora. Porqué: lo pendiente vivía
+  repartido entre la memoria de Claude (local, nadie más la ve) y las secciones "Pendiente"
+  de cada entrada; ahora hay una sola lista compartida.
+- **Se reabre la decisión del 2026-09-11** ("no extender la excepción de la bitácora"):
+  `docs/estado.md` también va directo a `main`. Porqué: cambia en el mismo commit que
+  cierra cada entrega, y por PR caería en la misma cadena de merges; tampoco ejecuta nada.
+  Se edita en el checkout principal del backend, nunca en el worktree de una tarea. Repo
+  público: sin IPs, hosts, URLs, credenciales, datos de terceros ni valores. Descartado:
+  `estado.md` por PR (quedaría siempre atrasado) y fuera de git (Pitu no lo vería).
+- La bitácora no cambia de orden (la más nueva abajo). Descartado: darla vuelta como el
+  instructivo de origen.
+- `flujo-preliquidacion` es una copia de la skill global `flujo` con lo de este sistema, y
+  se usa en lugar de la global. Descartado: tocar la global (es genérica a propósito).
+- El `pre-commit` usa `--no-renames`. Porqué: un `git mv` de cualquier archivo encima de
+  `docs/estado.md` o `docs/BITACORA.md` pasaba en `main` y borraba el original sin PR (el
+  hueco existía también con la bitácora; urgent de la revisión).
+
+**Estado**
+- Deploy: no aplica (no corre en el servidor).
+- Migraciones: ninguna.
+- Verificación: suite del backend 984 passed y 1 xfailed; hook probado a mano desde los
+  dos repos, los worktrees y una carpeta vacía. Revisión: 1 urgent y 1 high arreglados, 6
+  minor sin tocar (listados en el cuerpo del BK #72).
+- Después del merge: `pre-commit` reinstalado en el clon de Gero; `verificar_agents_comun.sh`
+  da 0 desde los dos repos; la carpeta de los dos repos tiene su `CLAUDE.md` y el hook
+  (fuera de git); la memoria de Claude quedó sólo con preferencias.
+
+**Pendiente**
+- Probar una sesión nueva: aprobar el hook y responder "qué se hizo y qué está pendiente"
+  sin leer archivos.
+- Pitu: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta
+  entonces su `pre-commit` frena `docs/estado.md` en `main`.
+- Deuda previa: la skill `commit` dice que las ramas son siempre `feature/` y el repo usa
+  también `fix/`, `docs/` y `chore/`.

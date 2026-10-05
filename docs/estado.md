@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- **Estado + bitácora y skill `flujo-preliquidacion`** (plan `docs/superpowers/plans/2026-10-05-estado-y-flujo-preliquidacion.md`): ejecución de la etapa A (PR del backend); faltan las etapas B (PR del front), C (carpeta raíz), D (memoria) y E.
+- Sin tarea en curso.
 
 ## Próximo paso
 
-Mergear el PR del backend y después el del front; reinstalar el `pre-commit` en cada clon del backend (`sh scripts/hooks/instalar.sh`); probar el arranque en una sesión nueva; `/bitacora`.
+Sin tarea en curso.
 
 ## Pendientes del usuario
 
@@ -25,6 +25,8 @@ Mergear el PR del backend y después el del front; reinstalar el `pre-commit` en
 - Decidir si se borra la regla de tancada de prueba cargada en `testing` (1Q de septiembre).
 - Confirmar si las líneas de campo repetidas por parte en agosto fueron dos pasadas reales (tarea aparte, mencionada en la entrada del 2026-10-04).
 - Actualizar en `docs/DEPLOY.md` (local, fuera de git) la nota de migraciones históricas: `ws17` ya es `historica` (BK #71, 2026-10-05).
+- Probar una sesión nueva: aprobar el hook de arranque y responder "qué se hizo y qué está pendiente" sin leer archivos (BK #72 / FT #56, 2026-10-05).
+- De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 
 ## A futuro
