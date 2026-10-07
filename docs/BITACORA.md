@@ -2316,3 +2316,78 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
   5. `(norm(hsjornal), norm(hsmaquina))` repetido en los dos detectores.
   6. La cabecera de `ws18` no nombra que la collation tampoco distingue mayúsculas en el
      legajo (la próxima actualización con altas o bajas lo corrige).
+
+## 2026-10-07 — Alerta "Posible duplicado" en Revisión y Verificación (front)
+
+**Mergeado**
+- PR #57 (front) — pantallas de la alerta "Posible duplicado": badge, filtro, contador y
+  aviso en Revisión; sección "Posibles duplicados" en Verificación. Hermano del BK #73.
+- PR #74 (backend) — sólo docs: suma al plan el ajuste de lint de la etapa del front.
+
+**Por frontera**
+- Preliquidación (front): badge amarillo "POSIBLE DUPLICADO", segundo en la precedencia
+  (DUPLICADO → POSIBLE DUPLICADO → INCOMPLETA → LEGAJO → EMPRESA, `ordenarLineas.js`);
+  opción "Posible duplicado" en el filtro de alertas (`FiltrosBar.jsx`); contador propio en
+  el banner (`AlertasBanner.jsx`); entra en "sólo alertas"; borde amarillo y aviso en el
+  panel de la línea (`Revision.jsx`, `PanelLinea.jsx`). Verificación: sección "Posibles
+  duplicados" con el molde de las otras, una tarjeta por persona, día y grupo con el
+  importe en duda (la suma del grupo menos la línea de mayor importe) y, al abrirla, las
+  líneas con hs jornal, hs máquina, tancadas, unidades, importe y badge. El agrupado vive
+  en `pages/posiblesDuplicados.js`, lógica pura. 15 tests nuevos
+  (`ordenarLineas.test.js` y `posiblesDuplicados.test.js`).
+- Docs: `docs/superpowers/plans/2026-10-07-posible-duplicado.md` anota que el criterio
+  "0 errores" de B3, B4 y B6 se midió con `npx eslint` sobre los archivos de cada paso.
+
+**Decisiones**
+- El agrupado de Verificación se calcula en el cliente, como las otras cinco secciones.
+  Porqué: así le aplican la búsqueda, los filtros y la exclusión de mensualizados.
+  Descartado: el endpoint `dashboard_verificacion`, que ninguna pantalla consume y no
+  excluye mensualizados.
+- Diseño con la línea actual. Porqué: decisión del usuario; viene una refacción completa de
+  UX/UI después de esta tarea.
+- Un grupo que por los filtros queda con una sola línea se oculta. Porqué: sin par no hay
+  duda que mostrar.
+- No cambia la pantalla de Inicio. Porqué: su número de alertas sube solo, porque el
+  backend ya cuenta los posibles en `lineas_con_alerta`.
+- No cambia el Excel de exportación. Porqué no registrado en el PR.
+- "POSIBLE DUPLICADO" va segundo en la precedencia de badges. Porqué no registrado en el PR.
+- El criterio de lint se mide por archivos tocados (BK #74). Porqué: `npm run lint` ya da 6
+  errores en `main`, todos en `.claude/hooks/ultimas-entregas.mjs` (del FT #56); esa deuda
+  quedó en "A futuro" de `docs/estado.md`.
+- El front anda también contra un backend sin el campo (lo trata como falso): no hay orden
+  obligatorio entre los dos deploys; el que importa es `ws18` antes de reiniciar el backend.
+
+**Estado**
+- Deploy: todavía no (se hace a continuación, con entrada de deploy aparte).
+- Migraciones: ninguna en estos PRs (`ws18` es del BK #73, aplicada sólo en `testing`).
+- Verificación: `npm test` 35/35 (cada test nuevo visto fallar antes); `npm run build` OK;
+  `npx eslint` sobre los archivos tocados, 0 errores. Smoke en el navegador contra
+  `testing`, en la quincena del caso que originó la tarea: banner con "· 4 posibles
+  duplicados", el filtro muestra justo esas 4 líneas, el panel trae el aviso; Verificación
+  con contador 2, las dos tarjetas con su importe en duda y, al abrir, las horas máquina
+  distintas; la búsqueda filtra las tarjetas; Inicio muestra el mismo número de alertas que
+  la barra de Revisión. Revisión de dos ejes con verificador: 0 urgent, 0 high, 6 minor, 4
+  descartados.
+
+**Pendiente**
+- Deploy de BK #73 + FT #57, sólo con OK: `ws18` en producción antes de reiniciar el
+  backend; hasta entonces, no correr `scripts/refrescar_testing.py`.
+- Después del deploy, en PR aparte: regenerar `000_esquema_base.sql` y marcar `ws18` como
+  `historica`.
+- Rollback del front: revertir el PR y redeployar el front (swap de carpeta); no toca datos.
+- Los 6 minor sin tocar, del cuerpo del FT #57:
+  1. Los textos nuevos usan ⚠ y ✓, como los existentes, aunque `GUIA-MODULOS.md` (regla 22)
+     dice "sin emojis en la interfaz": queda para la refacción de UX/UI, con los previos.
+  2. En `claseLinea` (`Revision.jsx`) el `if` nuevo es redundante: la línea caería igual en
+     `'alerta'` más abajo.
+  3. La disyunción de flags de alerta está en `PanelLinea.jsx` y `Revision.jsx`, el literal
+     'POSIBLE DUPLICADO' en 4 lugares y `ListaPosiblesDuplicados` rehace el badge: para la
+     refacción.
+  4. `valor` (importe en duda) y `decimal()` que devuelve 'None' (espejo de Python) son
+     nombres explicados sólo por comentario.
+  5. Misma persona y día con dos grupos (dos fincas): las dos tarjetas se ven iguales hasta
+     abrirlas.
+  6. El comentario de `decimal()` dice "como `normalizar_decimal`", pero `toFixed` no
+     redondea igual que ROUND_HALF_UP; no puede fallar porque la API manda dos decimales.
+- Visto en el smoke: el importe se muestra "$53.644,8" en vez de "$53.644,80" (cosmético).
+  Lo de "Cargando líneas…" al cambiar de sección es previo y ya está en "A futuro".

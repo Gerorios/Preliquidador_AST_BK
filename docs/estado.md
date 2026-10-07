@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- **Alerta "Posible duplicado"** (líneas iguales salvo en las horas, con la misma cantidad pagada): carril completo. Etapa A (backend) mergeada (BK #73, sin deploy; `ws18` aplicada sólo en `testing`). Etapa B (front) ejecutada y revisada: 35/35 tests, build OK, smoke en navegador contra `testing` OK, revisión 0 urgent, 0 high, 6 minor. Plan aprobado: `docs/superpowers/plans/2026-10-07-posible-duplicado.md` (en la rama `feature/posible-duplicado` del backend). Worktrees `.claude/worktrees/posible-duplicado` en los dos repos. Dos PRs: backend (con la migración `ws18`) y después front.
+- Sin tarea en curso.
 
 ## Próximo paso
 
-OK del usuario para abrir el PR hermano del front; después, el deploy (sólo con OK, `ws18` antes de reiniciar el backend).
+Sin tarea en curso.
 
 ## Pendientes del usuario
 
@@ -21,6 +21,8 @@ OK del usuario para abrir el PR hermano del front; después, el deploy (sólo co
 - Probar una sesión nueva: aprobar el hook de arranque y responder "qué se hizo y qué está pendiente" sin leer archivos (BK #72 / FT #56, 2026-10-05).
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
+- Deploy de BK #73 + FT #57, sólo con OK: `ws18` aplicada en producción antes de reiniciar el backend; hasta entonces, no correr `scripts/refrescar_testing.py` (borra la columna en `testing`) (2026-10-07).
+- Después de ese deploy, PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 
 ## A futuro
 
