@@ -65,6 +65,7 @@ class LineaResponse(BaseModel):
     importe_total: Optional[Decimal]
     observacion: Optional[str]
     es_duplicado: bool
+    es_posible_duplicado: bool = False
     alerta_legajo: bool
     alerta_empresa: bool = False
     linea_incompleta: bool

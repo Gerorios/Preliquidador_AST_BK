@@ -114,7 +114,8 @@ def test_se_calcula_en_cada_llamada(monkeypatch):
 def _linea_suelta(**kw) -> PreliquidacionLinea:
     # Sin base: la propiedad y el schema sólo leen atributos del objeto.
     datos = dict(
-        id=1, preliquidacion_id=1, es_duplicado=False, alerta_legajo=False,
+        id=1, preliquidacion_id=1, es_duplicado=False, es_posible_duplicado=False,
+        alerta_legajo=False,
         alerta_empresa=False, linea_incompleta=False,
     )
     datos.update(kw)

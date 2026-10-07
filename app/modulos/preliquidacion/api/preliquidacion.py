@@ -77,7 +77,8 @@ def generar(
                 f"{resultado['sin_cambios']} sin cambios — "
                 f"Total: {stats['total_lineas']} líneas · "
                 f"{stats['incompletas']} incompletas · "
-                f"{stats['duplicados']} duplicados"
+                f"{stats['duplicados']} duplicados · "
+                f"{stats['posibles_duplicados']} posibles duplicados"
             ),
         )
     except ExternaNoDisponible as e:

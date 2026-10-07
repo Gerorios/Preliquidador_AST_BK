@@ -148,6 +148,9 @@ class PreliquidacionService:
         if filas:
             cache = self._construir_cache(quincena)
             indices_duplicados = self.motor.detectar_duplicados(filas)
+            indices_posibles = self.motor.detectar_posibles_duplicados(
+                filas, indices_duplicados
+            )
             dias_asturiana = self._contar_dias_asturiana(filas)
 
             lineas_y_reglas = []
@@ -157,6 +160,7 @@ class PreliquidacionService:
                     quincena=quincena,
                     preliquidacion_id=preliq.id,
                     es_duplicado=(i in indices_duplicados),
+                    es_posible_duplicado=(i in indices_posibles),
                     dias_asturiana=dias_asturiana,
                     cache=cache,
                 )
@@ -271,6 +275,9 @@ class PreliquidacionService:
         if filas_nuevas:
             cache = self._construir_cache(quincena)
             indices_duplicados = self.motor.detectar_duplicados(filas_nuevas)
+            indices_posibles = self.motor.detectar_posibles_duplicados(
+                filas_nuevas, indices_duplicados
+            )
             dias_asturiana = self._contar_dias_asturiana(filas_campo)
 
             nuevas_lineas_y_reglas = []
@@ -280,6 +287,7 @@ class PreliquidacionService:
                     quincena=quincena,
                     preliquidacion_id=preliq.id,
                     es_duplicado=(i in indices_duplicados),
+                    es_posible_duplicado=(i in indices_posibles),
                     dias_asturiana=dias_asturiana,
                     cache=cache,
                 )
@@ -304,11 +312,12 @@ class PreliquidacionService:
             if conceptos_auto:
                 self.db.bulk_save_objects(conceptos_auto)
 
-        # es_duplicado es estado derivado: recalcularlo sobre la quincena
-        # entera deja el mismo resultado que una generación fresca. Antes, un
-        # duplicado agregado incrementalmente quedaba sin marcar (no aparecía
-        # en la alerta de Verificación) y al borrar la copia el sobreviviente
-        # quedaba marcado para siempre.
+        # es_duplicado y es_posible_duplicado son estado derivado: recalcularlos
+        # sobre la quincena entera deja el mismo resultado que una generación
+        # fresca. Antes, un duplicado agregado incrementalmente quedaba sin
+        # marcar (no aparecía en la alerta de Verificación) y al borrar la copia
+        # el sobreviviente quedaba marcado para siempre. Sin altas ni bajas no
+        # se recalcula: las marcas quedan como estaban.
         if eliminadas or insertadas:
             self._recalcular_flags_duplicado(preliq.id)
 
@@ -317,25 +326,35 @@ class PreliquidacionService:
         return {"preliquidacion_id": preliq.id, "insertadas": insertadas, "eliminadas": eliminadas, "sin_cambios": sin_cambios}
 
     def _recalcular_flags_duplicado(self, preliq_id: int) -> None:
-        """Reaplica detectar_duplicados a TODAS las líneas de la preliquidación
-        (mismo criterio que la generación fresca) y actualiza solo los flags
-        que cambiaron."""
+        """Reaplica detectar_duplicados y detectar_posibles_duplicados a TODAS
+        las líneas de la preliquidación (mismo criterio que la generación
+        fresca) y actualiza sólo las flags que cambiaron."""
         lineas = self.db.query(PreliquidacionLinea).filter(
             PreliquidacionLinea.preliquidacion_id == preliq_id
         ).all()
-        filas = [{
+        filas = [self._fila_de_linea(l) for l in lineas]
+        duplicados = self.motor.detectar_duplicados(filas)
+        posibles = self.motor.detectar_posibles_duplicados(filas, duplicados)
+        for i, linea in enumerate(lineas):
+            flag = i in duplicados
+            if bool(linea.es_duplicado) != flag:
+                linea.es_duplicado = flag
+            flag_posible = i in posibles
+            if bool(linea.es_posible_duplicado) != flag_posible:
+                linea.es_posible_duplicado = flag_posible
+
+    @staticmethod
+    def _fila_de_linea(l) -> dict:
+        """La línea guardada con las claves de una fila del campo que usa el
+        motor para detectar duplicados y posibles duplicados."""
+        return {
             "planilla": l.planilla, "fecha_tarea": l.fecha_tarea,
             "legajo": l.legajo_campo, "nombre_empleado": l.nombre_empleado,
             "nombre_tarea": l.nombre_tarea, "nombre_cliente": l.nombre_cliente,
             "nombre_finca": l.nombre_finca, "nombre_tractor": l.nombre_tractor,
             "hsjornal": l.hsjornal, "hsmaquina": l.hsmaquina,
             "tancadas": l.tancadas, "unidades": l.unidades,
-        } for l in lineas]
-        duplicados = self.motor.detectar_duplicados(filas)
-        for i, linea in enumerate(lineas):
-            flag = i in duplicados
-            if bool(linea.es_duplicado) != flag:
-                linea.es_duplicado = flag
+        }
 
     def _ids_con_datos_manuales(self, linea_ids: list) -> set:
         """Ids de línea con conceptos manuales o ajustes de auditoría: al
@@ -492,6 +511,7 @@ class PreliquidacionService:
         dias_asturiana: dict,
         cache: dict,
         nuevos_conceptos: dict = None,  # ya no se usa, se mantiene por compatibilidad
+        es_posible_duplicado: bool = False,
     ):
         legajo         = str(fila.get("legajo", "") or "")
         nombre_cliente = fila.get("nombre_cliente", "") or ""
@@ -563,6 +583,7 @@ class PreliquidacionService:
             importe_base=Decimal("0"),
             importe_total=Decimal("0"),
             es_duplicado=es_duplicado,
+            es_posible_duplicado=es_posible_duplicado,
             alerta_legajo=alerta_legajo,
             alerta_empresa=alerta_empresa,
             linea_incompleta=linea_incompleta,
@@ -1398,6 +1419,7 @@ class PreliquidacionService:
         if solo_alertas:
             q = q.filter(
                 (PreliquidacionLinea.es_duplicado == True) |
+                (PreliquidacionLinea.es_posible_duplicado == True) |
                 (PreliquidacionLinea.alerta_legajo == True) |
                 (PreliquidacionLinea.linea_incompleta == True)
             )
@@ -1770,28 +1792,31 @@ class PreliquidacionService:
 
     def estadisticas(self, preliq_id: int) -> dict:
         """Conteos agregados en SQL (antes: traía todas las líneas a RAM y
-        contaba en Python). Devuelve exactamente las mismas claves de siempre."""
+        contaba en Python). Mismas claves que `estadisticas_batch()`."""
         fila = self.db.query(
             func.count(PreliquidacionLinea.id),
             func.sum(case(
                 (or_(
                     PreliquidacionLinea.es_duplicado.is_(True),
+                    PreliquidacionLinea.es_posible_duplicado.is_(True),
                     PreliquidacionLinea.alerta_legajo.is_(True),
                     PreliquidacionLinea.linea_incompleta.is_(True),
                 ), 1), else_=0,
             )),
             func.sum(case((PreliquidacionLinea.linea_incompleta.is_(True), 1), else_=0)),
             func.sum(case((PreliquidacionLinea.es_duplicado.is_(True), 1), else_=0)),
+            func.sum(case((PreliquidacionLinea.es_posible_duplicado.is_(True), 1), else_=0)),
             func.sum(case((PreliquidacionLinea.alerta_legajo.is_(True), 1), else_=0)),
         ).filter(PreliquidacionLinea.preliquidacion_id == preliq_id).one()
 
-        total, con_alerta, incompletas, duplicados, alerta_legajo = fila
+        total, con_alerta, incompletas, duplicados, posibles, alerta_legajo = fila
 
         return {
             "total_lineas": total or 0,
             "lineas_con_alerta": int(con_alerta or 0),
             "incompletas": int(incompletas or 0),
             "duplicados": int(duplicados or 0),
+            "posibles_duplicados": int(posibles or 0),
             "alerta_legajo": int(alerta_legajo or 0),
             "por_empresa": self._agrupar_por_empresa_sql(preliq_id),
         }
@@ -1823,6 +1848,7 @@ class PreliquidacionService:
                 "lineas_con_alerta": 0,
                 "incompletas": 0,
                 "duplicados": 0,
+                "posibles_duplicados": 0,
                 "alerta_legajo": 0,
                 "por_empresa": {},
             }
@@ -1837,22 +1863,25 @@ class PreliquidacionService:
             func.sum(case(
                 (or_(
                     PreliquidacionLinea.es_duplicado.is_(True),
+                    PreliquidacionLinea.es_posible_duplicado.is_(True),
                     PreliquidacionLinea.alerta_legajo.is_(True),
                     PreliquidacionLinea.linea_incompleta.is_(True),
                 ), 1), else_=0,
             )),
             func.sum(case((PreliquidacionLinea.linea_incompleta.is_(True), 1), else_=0)),
             func.sum(case((PreliquidacionLinea.es_duplicado.is_(True), 1), else_=0)),
+            func.sum(case((PreliquidacionLinea.es_posible_duplicado.is_(True), 1), else_=0)),
             func.sum(case((PreliquidacionLinea.alerta_legajo.is_(True), 1), else_=0)),
         ).filter(
             PreliquidacionLinea.preliquidacion_id.in_(preliq_ids)
         ).group_by(PreliquidacionLinea.preliquidacion_id).all()
 
-        for pid, total, con_alerta, incompletas, duplicados, alerta_legajo in filas:
+        for pid, total, con_alerta, incompletas, duplicados, posibles, alerta_legajo in filas:
             resultado[pid]["total_lineas"] = total or 0
             resultado[pid]["lineas_con_alerta"] = int(con_alerta or 0)
             resultado[pid]["incompletas"] = int(incompletas or 0)
             resultado[pid]["duplicados"] = int(duplicados or 0)
+            resultado[pid]["posibles_duplicados"] = int(posibles or 0)
             resultado[pid]["alerta_legajo"] = int(alerta_legajo or 0)
 
         empresa_filas = self.db.query(
