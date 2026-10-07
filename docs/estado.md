@@ -2,15 +2,15 @@
 
 Sólo lo vivo: lo que está en curso, el próximo paso, lo que espera al usuario y lo que quedó para más adelante.
 Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva abajo). La regla está en
-`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-05**.
+`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-07**.
 
 ## En curso
 
-- Sin tarea en curso.
+- **Alerta "Posible duplicado"** (líneas iguales salvo en las horas, con la misma cantidad pagada): carril completo, fase 3 (ejecución) por arrancar. Plan aprobado: `docs/superpowers/plans/2026-10-07-posible-duplicado.md` (en la rama `feature/posible-duplicado` del backend). Worktrees `.claude/worktrees/posible-duplicado` en los dos repos. Dos PRs: backend (con la migración `ws18`) y después front.
 
 ## Próximo paso
 
-Sin tarea en curso.
+Ejecutar el par A1 del plan (detección en el motor) con el agente `ejecutor`.
 
 ## Pendientes del usuario
 
@@ -30,4 +30,7 @@ Sin tarea en curso.
 - Minors sin tocar de BK #70, FT #54 y BK #69: listados en sus entradas de la bitácora y en los cuerpos de los PRs.
 - Comentario viejo de Terceros en `migrations/ORDEN.txt`: dice que sus migraciones no se aplicaron en producción, y se aplicaron el 2026-09-30.
 - Agrupar Verificación por (empresa, legajo): descartado salvo caso real; si aparece, se agrupa por CUIL (respaldo en ramas locales `respaldo/verificacion-empresa-legajo`, 2026-10-01).
+- Refacción completa de UX/UI del sistema, después de la alerta "Posible duplicado": la sección nueva de Verificación se hace con el diseño actual mientras tanto (2026-10-07).
+- Botón para descartar un "Posible duplicado" ya revisado: descartado por ahora (2 casos en 5 quincenas); se agrega si con el uso molesta (2026-10-07).
+- El endpoint `GET /preliquidacion/{id}/dashboard-verificacion` no lo usa ninguna pantalla desde la primera versión (Verificación calcula en el front; la función del front se borró el 2026-09-07): candidato a borrar o a usar en la refacción de UX/UI (2026-10-07).
 - Deudas menores del incidente del 2026-09-18 al 2026-09-23 (candado, quincena cruda, parámetros de lectura): ver las entradas de esas fechas en la bitácora.
