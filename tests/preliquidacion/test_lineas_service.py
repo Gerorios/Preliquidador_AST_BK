@@ -114,13 +114,14 @@ def test_listar_solo_alertas_no_incluye_alerta_empresa(db):
     dup = _linea(db, preliq, "PERSONA A", es_duplicado=True)
     leg = _linea(db, preliq, "PERSONA B", alerta_legajo=True)
     inc = _linea(db, preliq, "PERSONA C", linea_incompleta=True)
+    pos = _linea(db, preliq, "PERSONA F", es_posible_duplicado=True)
     _linea(db, preliq, "PERSONA D", alerta_empresa=True)  # sólo alerta_empresa: NO entra
     _linea(db, preliq, "PERSONA E")  # limpia
 
     lineas = PreliquidacionService(db).listar_lineas(preliq.id, solo_alertas=True)
 
     # Revision.jsx replica esta misma condición en cliente (sin alerta_empresa).
-    assert {l.id for l in lineas} == {dup.id, leg.id, inc.id}
+    assert {l.id for l in lineas} == {dup.id, leg.id, inc.id, pos.id}
 
 
 def test_listar_nombre_empleado_es_ilike_case_insensitive(db):

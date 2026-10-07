@@ -29,6 +29,14 @@ La Empresa que paga una línea. Se resuelve automáticamente (por legajo o nombr
 Línea que no tiene ningún concepto aplicable con **código y precio > 0** a la vez. Es la única condición que el liquidador debe resolver; se muestra en la solapa "Sin concepto". Un concepto con código pero sin precio no completa la línea (no debe pagar 0 en silencio).
 _Avoid_: sin precio, sin código, faltante (eran tres nociones separadas; ahora es una)
 
+**Línea duplicada**:
+Línea igual a otra de la misma quincena en todo lo que trae del campo: planilla, fecha, persona, tarea, cliente, finca, tractor, horas y cantidades. Indica una carga repetida en el campo; el sistema la marca y no la corrige: se corrige en el campo.
+_Avoid_: confundirla con el Concepto duplicado (una regla repetida en el maestro).
+
+**Posible duplicado**:
+Línea igual a otra en todo salvo en las horas (jornal o máquina), con la misma cantidad pagada (unidades o tancadas, mayor a 0). Es una duda para el liquidador, no un error seguro: pueden ser dos trabajos reales. Una Línea duplicada no es además Posible duplicado.
+_Avoid_: "casi duplicado", "duplicado parcial".
+
 **Grupo de pago**:
 Atributo estandarizado que el catálogo de tareas asigna por defecto a cada tarea (ej.: "pulverización mecánica tancada" → TANCADA). Es informativo y sirve al control de PLANTA; **no** es una dimensión del precio ni clave de matching del maestro. El default no siempre aplica: la decisión real de cómo se paga la toma la Unidad base del concepto.
 _Avoid_: grupo de pago como criterio de precio
