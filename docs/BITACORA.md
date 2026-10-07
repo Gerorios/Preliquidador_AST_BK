@@ -2235,3 +2235,84 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
   entonces su `pre-commit` frena `docs/estado.md` en `main`.
 - Deuda previa: la skill `commit` dice que las ramas son siempre `feature/` y el repo usa
   también `fix/`, `docs/` y `chore/`.
+
+## 2026-10-07 — Alerta "Posible duplicado" en la línea (backend)
+
+**Mergeado**
+- PR #73 (backend) — alerta nueva en la línea, "Posible duplicado": una línea igual a otra
+  de la quincena salvo en las horas (jornal o máquina), que paga una cantidad mayor a 0.
+  Columna `es_posible_duplicado` con la migración `ws18`, marca en la API y en las
+  estadísticas.
+
+**Por frontera**
+- Preliquidación: `motor_reglas.py` suma `clave_posible_duplicado`, `paga_cantidad` y
+  `detectar_posibles_duplicados`; `detectar_duplicados` arma su clave a partir de la misma
+  más las horas. Columna `es_posible_duplicado` en `preliquidacion_linea`, con el mismo
+  ciclo que `es_duplicado` (se calcula al generar y se recalcula al actualizar con altas o
+  bajas). API: la marca en cada línea, `posibles_duplicados` en las estadísticas (también
+  en el lote), entra en `lineas_con_alerta` y en `solo_alertas`, y el mensaje de generar
+  suma "· N posibles duplicados". 21 tests nuevos (`test_posible_duplicado.py` y ajustes
+  en los de endpoints, estadísticas, generar y líneas).
+- Prod y Datos: `migrations/preliquidacion/ws18_posible_duplicado.sql` agrega la columna y
+  la llena para todas las quincenas existentes; `ws18` sumada a `migrations/ORDEN.txt`.
+- Docs: "Línea duplicada" y "Posible duplicado" en
+  `docs/modulos/preliquidacion/CONTEXT-preliquidacion.md`; plan
+  `docs/superpowers/plans/2026-10-07-posible-duplicado.md`.
+
+**Decisiones**
+- Se exige cantidad > 0. Porqué: sin ese filtro, en `testing` salían 86 pares en 5
+  quincenas, casi todos tareas por hora (talleres, traslados) que son trabajo real; con el
+  filtro, sólo los del caso que originó la tarea. Descartado: marcar cualquier par igual
+  salvo horas (demasiado ruido).
+- Excluyente con Duplicado: una línea duplicada no lleva además esta marca. Porqué: el
+  duplicado exacto ya dice más, y los contadores no se superponen.
+- Columna guardada y no cálculo al vuelo. Porqué: mismo patrón que `es_duplicado`; horas y
+  cantidades no se editan desde el sistema, así que la marca sólo cambia al generar o
+  actualizar. Descartado: calcularla en cada lectura (los contadores son SQL y habría un
+  mecanismo distinto al de duplicado).
+- `ws18` llena las quincenas existentes. Porqué: sólo agrega una marca, no cambia importes
+  ni conceptos.
+- Cuenta en `lineas_con_alerta`. Porqué: decisión del usuario; sube el número de alertas de
+  Inicio sin tocar su código.
+- No cambian el Excel de exportación a sueldos ni la pantalla de Inicio. Porqué no
+  registrado en el PR.
+- Sin botón de descarte. Porqué: 2 casos en 5 quincenas.
+- `dashboard_verificacion` no se toca. Porqué: ninguna pantalla lo usa.
+- El campo es aditivo: el front actual sigue andando con este backend.
+
+**Estado**
+- Deploy: no.
+- Migraciones: `ws18` aplicada en `testing` (no en producción).
+- Verificación: suite completa 1007 passed, 1 xfailed (preexistente); cada par
+  test+implementación con su test visto fallar antes. Antes de `ws18`, prueba en seco: el
+  SQL del backfill y el motor en Python marcan exactamente las mismas líneas (4, los dos
+  pares del caso real); después, 4 marcadas y 0 líneas con las dos marcas. Smoke por API
+  contra `testing`: `/lineas` trae la marca, `/estadisticas` da `posibles_duplicados: 4`,
+  `solo_alertas` las incluye, `generar` informa "· N posibles duplicados" y una segunda
+  corrida deja todo igual (0 nuevas, 0 eliminadas). Revisión de dos ejes con verificador:
+  0 urgent, 0 high, 6 minor, 4 descartados.
+
+**Pendiente**
+- PR hermano del front (Revisión y Verificación): todavía no abierto.
+- Deploy sólo con OK. `ws18` es NO DIFERIBLE: aplicarla en producción antes de reiniciar el
+  backend con este código; sin la columna, todo SELECT de líneas falla con "Unknown
+  column".
+- Hasta el deploy, no correr `scripts/refrescar_testing.py`: recrea las tablas de `testing`
+  con el esquema de producción y borra la columna.
+- Después del deploy, en PR aparte: regenerar `000_esquema_base.sql` y marcar `ws18` como
+  `historica`.
+- Rollback: `ALTER TABLE preliquidacion_linea DROP COLUMN es_posible_duplicado;` junto con
+  el revert del PR (sin la columna, este código falla).
+- Los 6 minor sin tocar, del cuerpo del BK #73:
+  1. `ws18` quedó en `migrations/ORDEN.txt` dentro del bloque de preliquidación y no al
+     final, como dice la regla literal; no puede fallar (no depende de las migraciones de
+     Terceros).
+  2. La condición "línea con alerta" vive en tres lugares (`estadisticas`,
+     `estadisticas_batch`, `listar_lineas`): deuda previa que este cambio agranda; los tres
+     quedaron iguales.
+  3. El par `detectar_duplicados` + `detectar_posibles_duplicados` se repite en tres
+     llamadas (en las tres el orden es correcto).
+  4. `clave_posible_duplicado` también es la base de la clave de duplicado: tema de nombre.
+  5. `(norm(hsjornal), norm(hsmaquina))` repetido en los dos detectores.
+  6. La cabecera de `ws18` no nombra que la collation tampoco distingue mayúsculas en el
+     legajo (la próxima actualización con altas o bajas lo corrige).

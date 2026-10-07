@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- **Alerta "Posible duplicado"** (líneas iguales salvo en las horas, con la misma cantidad pagada): carril completo. Etapa A (backend) ejecutada y revisada: suite 1007 passed, revisión 0 urgent, 0 high, 6 minor; `ws18` aplicada en `testing`. Etapa B (front) sin empezar. Plan aprobado: `docs/superpowers/plans/2026-10-07-posible-duplicado.md` (en la rama `feature/posible-duplicado` del backend). Worktrees `.claude/worktrees/posible-duplicado` en los dos repos. Dos PRs: backend (con la migración `ws18`) y después front.
+- **Alerta "Posible duplicado"** (líneas iguales salvo en las horas, con la misma cantidad pagada): carril completo. Etapa A (backend) mergeada (BK #73, sin deploy; `ws18` aplicada sólo en `testing`). Etapa B (front) en ejecución: pasos B1 a B4 hechos, faltan build, smoke (B5) y revisión. Plan aprobado: `docs/superpowers/plans/2026-10-07-posible-duplicado.md` (en la rama `feature/posible-duplicado` del backend). Worktrees `.claude/worktrees/posible-duplicado` en los dos repos. Dos PRs: backend (con la migración `ws18`) y después front.
 
 ## Próximo paso
 
-OK del usuario para abrir el PR del backend (Fase 5); después, la Etapa B (front).
+Build y smoke del front (B5) contra `testing`, revisión y PR hermano del front.
 
 ## Pendientes del usuario
 
@@ -33,4 +33,5 @@ OK del usuario para abrir el PR del backend (Fase 5); después, la Etapa B (fron
 - Refacción completa de UX/UI del sistema, después de la alerta "Posible duplicado": la sección nueva de Verificación se hace con el diseño actual mientras tanto (2026-10-07).
 - Botón para descartar un "Posible duplicado" ya revisado: descartado por ahora (2 casos en 5 quincenas); se agrega si con el uso molesta (2026-10-07).
 - El endpoint `GET /preliquidacion/{id}/dashboard-verificacion` no lo usa ninguna pantalla desde la primera versión (Verificación calcula en el front; la función del front se borró el 2026-09-07): candidato a borrar o a usar en la refacción de UX/UI (2026-10-07).
+- `npm run lint` del front da 6 errores en `main`, todos en `.claude/hooks/ultimas-entregas.mjs` (`process` sin `globals.node`, FT #56): sin urgencia, no corre en la app (2026-10-07).
 - Deudas menores del incidente del 2026-09-18 al 2026-09-23 (candado, quincena cruda, parámetros de lectura): ver las entradas de esas fechas en la bitácora.
