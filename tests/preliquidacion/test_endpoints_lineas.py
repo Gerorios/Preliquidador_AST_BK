@@ -203,6 +203,24 @@ def test_legajos_por_cuil_sin_servicio_de_sueldos_da_400(cliente, db):
     assert r.json()["detail"] == "Servicio de sueldos no disponible"
 
 
+# ─── GET /{preliq_id}/lineas ──────────────────────────────────────────────────
+
+def test_listar_lineas_expone_es_posible_duplicado(cliente, db):
+    preliq = _preliq(db)
+    marcada = _linea(db, preliq, "20111111119", "PEREZ JUAN")
+    comun = _linea(db, preliq, "27222222223", "GOMEZ ANA")
+    marcada.es_posible_duplicado = True
+    db.commit()
+    _con_service(db, _sueldos_con({}))
+
+    r = cliente.get(f"/api/preliquidacion/{preliq.id}/lineas")
+
+    assert r.status_code == 200, r.text
+    por_id = {l["id"]: l for l in r.json()}
+    assert por_id[marcada.id]["es_posible_duplicado"] is True
+    assert por_id[comun.id]["es_posible_duplicado"] is False
+
+
 # ─── GET /api/precios/conceptos/buscar ────────────────────────────────────────
 
 def test_buscar_sin_q_devuelve_codigos_distintos_ordenados(cliente, db):

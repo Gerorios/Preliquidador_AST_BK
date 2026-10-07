@@ -23,7 +23,8 @@ class ServiceFake:
         return self._generar(quincena, usuario_id)
 
     def estadisticas(self, pid):
-        return {"total_lineas": 0, "incompletas": 0, "duplicados": 0}
+        return {"total_lineas": 0, "incompletas": 0, "duplicados": 0,
+                "posibles_duplicados": 0}
 
 
 @pytest.fixture()
@@ -74,6 +75,16 @@ def test_segunda_generacion_de_la_misma_quincena_recibe_409(cliente):
     # El candado se liberó: vuelve a poder generarse.
     tercera = cliente.post("/api/preliquidacion/generar", json={"quincena": "2026-09-01"})
     assert tercera.status_code == 200, tercera.text
+
+
+def test_detalle_de_generar_informa_posibles_duplicados(cliente):
+    def generar_ok(quincena, usuario_id):
+        return {"preliquidacion_id": 1, "insertadas": 3, "eliminadas": 0, "sin_cambios": 0}
+
+    _con_service(generar_ok)
+    r = cliente.post("/api/preliquidacion/generar", json={"quincena": "2026-09-01"})
+    assert r.status_code == 200, r.text
+    assert r.json()["detalle"].endswith("0 duplicados · 0 posibles duplicados")
 
 
 def test_externa_no_disponible_da_503_con_mensaje_claro(cliente):
