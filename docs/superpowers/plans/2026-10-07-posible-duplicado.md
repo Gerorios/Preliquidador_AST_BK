@@ -316,6 +316,11 @@ en PR aparte), rollback (`DROP COLUMN` + revert). Incluye este plan.
 
 ### Etapa B — Frontend (PR 2: `frontend_preliquidacion`, después del PR 1)
 
+Ajuste en la ejecución: `npm run lint` ya da 6 errores en `main`, todos en
+`.claude/hooks/ultimas-entregas.mjs` (`process` sin `globals.node`, del FT #56). El criterio
+"0 errores" de B3, B4 y B6 se mide con `npx eslint` sobre los archivos que toca cada paso;
+la deuda del hook va a "A futuro" de `docs/estado.md`.
+
 #### Par B1 — Precedencia de alertas
 Archivos: `src/modulos/preliquidacion/pages/ordenarLineas.test.js`, `src/modulos/preliquidacion/pages/ordenarLineas.js`.
 
