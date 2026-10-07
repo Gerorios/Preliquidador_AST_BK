@@ -168,6 +168,9 @@ class PreliquidacionLinea(Base):
 
     # ── Flags de validación ──
     es_duplicado       = Column(Boolean, default=False)
+    # Igual a otra línea salvo en las horas, con la misma cantidad > 0; nunca junto
+    # con es_duplicado. La columna la agrega y la llena la migración ws18.
+    es_posible_duplicado = Column(Boolean, default=False, nullable=False)
     alerta_legajo      = Column(Boolean, default=False)
     alerta_empresa     = Column(Boolean, default=False)
     linea_incompleta   = Column(Boolean, default=True)

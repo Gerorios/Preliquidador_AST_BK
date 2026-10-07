@@ -29,7 +29,7 @@ def _preliq(db, quincena=date(2026, 5, 1)):
 
 
 def _linea(db, preliq, empresa=None, es_duplicado=False, alerta_legajo=False,
-           linea_incompleta=False):
+           linea_incompleta=False, es_posible_duplicado=False):
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id,
         empresa_asignada=empresa,
@@ -37,7 +37,7 @@ def _linea(db, preliq, empresa=None, es_duplicado=False, alerta_legajo=False,
         hsjornal=Decimal("8"), tancadas=Decimal("0"), unidades=Decimal("0"), hsmaquina=Decimal("0"),
         importe_total=Decimal("100"),
         es_duplicado=es_duplicado, alerta_legajo=alerta_legajo,
-        linea_incompleta=linea_incompleta,
+        linea_incompleta=linea_incompleta, es_posible_duplicado=es_posible_duplicado,
     )
     db.add(l)
     db.commit()
@@ -58,20 +58,24 @@ def test_estadisticas_cuenta_correctamente(db):
     _linea(db, preliq, empresa=None, linea_incompleta=True)
     # 1 con duplicado Y alerta_legajo a la vez (no debe contarse 2 veces en lineas_con_alerta)
     _linea(db, preliq, empresa="EMPRESA A", es_duplicado=True, alerta_legajo=True)
+    # 1 posible duplicado en "EMPRESA B" (cuenta como alerta)
+    _linea(db, preliq, empresa="EMPRESA B", es_posible_duplicado=True)
 
     svc = PreliquidacionService(db)
     stats = svc.estadisticas(preliq.id)
 
-    assert stats["total_lineas"] == 6
+    assert stats["total_lineas"] == 7
     assert stats["duplicados"] == 2
+    assert stats["posibles_duplicados"] == 1
     assert stats["alerta_legajo"] == 2
     assert stats["incompletas"] == 1
-    # con_alerta = OR de las 3 flags: duplicada(1) + alerta_legajo(1) + incompleta(1) + combinada(1) = 4
-    assert stats["lineas_con_alerta"] == 4
+    # con_alerta = OR de las 4 flags: duplicada(1) + alerta_legajo(1) + incompleta(1)
+    # + combinada(1) + posible duplicado(1) = 5
+    assert stats["lineas_con_alerta"] == 5
 
     assert stats["por_empresa"] == {
         "EMPRESA A": {"total": 3},
-        "EMPRESA B": {"total": 2},
+        "EMPRESA B": {"total": 3},
         "SIN EMPRESA": {"total": 1},
     }
 
@@ -86,6 +90,7 @@ def test_estadisticas_preliquidacion_vacia(db):
         "lineas_con_alerta": 0,
         "incompletas": 0,
         "duplicados": 0,
+        "posibles_duplicados": 0,
         "alerta_legajo": 0,
         "por_empresa": {},
     }
