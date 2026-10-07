@@ -2391,3 +2391,49 @@ Corrige su "Deploy: no", que era cierto al escribirse. El detalle técnico va en
      redondea igual que ROUND_HALF_UP; no puede fallar porque la API manda dos decimales.
 - Visto en el smoke: el importe se muestra "$53.644,8" en vez de "$53.644,80" (cosmético).
   Lo de "Cargando líneas…" al cambiar de sección es previo y ya está en "A futuro".
+
+## 2026-10-07 — Deploy a producción de la alerta "Posible duplicado"
+
+Entrada de deploy: no anota un merge sino el deploy de BK #73, BK #74 y FT #57, ya anotados
+arriba. Corrige su "Deploy: todavía no". El detalle técnico va en `docs/DEPLOY.md` (local,
+fuera de git).
+
+**Qué se deployó**
+- Backend: de `a45e2c0` a `d35ea04` (BK #73 y #74 más la bitácora).
+- Frontend: de `adc284c` a `93ba472` (FT #57), con build desde el checkout del front en
+  `main`, idéntico a `origin/main`.
+- Orden: código del backend sin reiniciar, `ws18`, reinicio del backend y frontend, en la
+  misma ventana. Autorizado por el usuario.
+
+**Decisiones** (porqués que las entradas del merge daban como no registrados; los dio el
+usuario en la entrevista)
+- No cambia el Excel de exportación a sueldos. Porqué: es lo que recibe sueldos y una
+  columna nueva puede romper cómo lo leen; el posible duplicado es una duda para el
+  liquidador, no un dato para sueldos.
+- "POSIBLE DUPLICADO" va segundo en la precedencia de alertas. Porqué: es el único aviso,
+  además del duplicado, que puede significar pagar dos veces; una línea incompleta no paga
+  de más.
+
+**Estado**
+- Deploy: sí, backend y frontend. Frontend con swap de carpeta; la versión anterior queda
+  como rollback.
+- Migraciones: `ws18` aplicada en producción antes del reinicio. Antes, prueba en seco de
+  sólo lectura: el SQL del backfill y el motor en Python marcan las mismas 4 líneas, todas
+  de la quincena del caso que originó la tarea. Después: 4 marcadas y 0 líneas con las dos
+  marcas. El primer intento del script cayó entre el ALTER y los UPDATE (sin efecto
+  visible: la columna existía en 0 y corría el código viejo); el segundo completó.
+- Verificación: un solo arranque del backend, conectado a la base de producción, con tablas
+  y columnas verificadas; `/health` ok. Build del front con 44 assets y el mismo bundle en
+  local y en el servidor; el sitio responde 200 y sirve el bundle nuevo. Smoke en sólo
+  lectura con el servicio de la app: la quincena tiene 4 posibles duplicados, ninguna línea
+  con las dos marcas, y las estadísticas (individual y por lote) y "sólo alertas" las
+  cuentan. Journal sin errores.
+- Rollback: backend al commit anterior y reinicio (el código viejo anda con la columna
+  nueva); la columna se borra sólo junto con el revert del código; swap inverso de la
+  carpeta del front.
+
+**Pendiente**
+- Mirar la alerta en el sitio real (Revisión y Verificación de la quincena del caso).
+- PR aparte: regenerar `000_esquema_base.sql` y marcar `ws18` como `historica`.
+- Queda cerrado el pendiente de deploy de las entradas del merge. Se puede volver a
+  refrescar `testing` desde producción: las dos bases tienen la columna.
