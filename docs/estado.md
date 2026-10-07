@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- **Alerta "Posible duplicado"** (líneas iguales salvo en las horas, con la misma cantidad pagada): carril completo, fase 3 (ejecución) por arrancar. Plan aprobado: `docs/superpowers/plans/2026-10-07-posible-duplicado.md` (en la rama `feature/posible-duplicado` del backend). Worktrees `.claude/worktrees/posible-duplicado` en los dos repos. Dos PRs: backend (con la migración `ws18`) y después front.
+- **Alerta "Posible duplicado"** (líneas iguales salvo en las horas, con la misma cantidad pagada): carril completo. Etapa A (backend) ejecutada y revisada: suite 1007 passed, revisión 0 urgent, 0 high, 6 minor; `ws18` aplicada en `testing`. Etapa B (front) sin empezar. Plan aprobado: `docs/superpowers/plans/2026-10-07-posible-duplicado.md` (en la rama `feature/posible-duplicado` del backend). Worktrees `.claude/worktrees/posible-duplicado` en los dos repos. Dos PRs: backend (con la migración `ws18`) y después front.
 
 ## Próximo paso
 
-Ejecutar el par A1 del plan (detección en el motor) con el agente `ejecutor`.
+OK del usuario para abrir el PR del backend (Fase 5); después, la Etapa B (front).
 
 ## Pendientes del usuario
 
