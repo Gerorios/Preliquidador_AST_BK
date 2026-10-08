@@ -6,15 +6,18 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Rediseño de UX/UI de Preliquidación con `impeccable` (carril completo; Terceros no se
-  toca). Fase: entrevista, empezando por `/impeccable init` (`PRODUCT.md`). Rama del front
-  `feature/rediseno-preliquidacion`. El PR también corrige `.gitignore`: hoy ignora todo
-  `.impeccable/`, y ahí `impeccable` guarda configuración del proyecto que va a git.
+- Refinamiento de la interfaz de Preliquidación con `impeccable` (carril completo; Terceros
+  no se toca). No es un rediseño: el usuario descartó la estética nueva y quiere la actual
+  mejorada. Fase: plan. Alcance cerrado: barra de filtros igual en todas las pantallas,
+  Inicio del módulo a todo el ancho con el sidebar contraído, detalle de alertas en el
+  historial (PR hermano en el backend), Verificación con tablas ordenables y detalle de
+  persona en un modal, Conceptos con los filtros comunes y una explicación de cómo se
+  combinan las reglas. Ramas `feature/refinamiento-preliquidacion` en los dos repos;
+  `PRODUCT.md` y el arreglo de `.gitignore` de `.impeccable/` van en el PR de la etapa 1.
 
 ## Próximo paso
 
-Entrevista de producto para `PRODUCT.md` (`init`), después `shape` y la dirección visual
-con el usuario; recién ahí el plan.
+Plan por etapas con el planificador; después, aprobación del usuario.
 
 ## Pendientes del usuario
 
