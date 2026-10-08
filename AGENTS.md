@@ -37,6 +37,22 @@ real: la invitación por email está descartada (mucha gente no tiene mail propi
 sistema no manda correo; eso no se deduce de ningún diff. Si no está, no asumir que no se
 decidió: preguntar.
 
+### Cambios de interfaz
+
+- **Todo cambio visual y toda feature nueva con interfaz se hacen con la skill
+  `impeccable`**, en los dos módulos del front. Vive en el repo del front
+  (`.claude/skills/impeccable/`). Vale también para un ajuste chico: antes de editar
+  interfaz se lee su `reference/craft-floor.md`. El momento de cada comando dentro de una
+  tarea lo fija la skill `flujo-preliquidacion`.
+- **La estética del sistema vive en los tokens de `src/index.css`** y, cuando exista, en
+  `DESIGN.md` del front (tokens, tipografía, componentes). El contexto de producto para
+  diseñar va en `PRODUCT.md` del front. Esos dos archivos los escribe `impeccable`.
+  Cambiar la estética es una decisión del usuario.
+- **`impeccable` no pasa por encima de las reglas del proyecto**: CSS Modules con los
+  tokens de `src/index.css`, sin Tailwind ni librería de componentes, dependencias nuevas
+  (fuentes incluidas) aprobadas antes, textos en español sin emojis y el feedback visible
+  de `docs/modulos/GUIA-MODULOS.md`. Si choca con ellas, valen ellas y se pregunta.
+
 ### Dónde se anota cada cosa
 
 Cada cosa que pasa tiene **un** lugar donde se anota, en el momento, sin esperar a que el
@@ -53,6 +69,8 @@ usuario lo pida.
 | Una regla para construir un módulo | `docs/modulos/GUIA-MODULOS.md` | cuando cambia la regla |
 | Cómo preparar una máquina de desarrollo | `docs/modulos/PUESTA-A-PUNTO.md` | cuando cambia |
 | El plan de una tarea | `docs/superpowers/plans/AAAA-MM-DD-<tema>.md` | en la fase de plan |
+| La estética del sistema: tokens, tipografía, componentes | `DESIGN.md` del front | al cambiar la estética, con `impeccable` |
+| Para quién y para qué es el sistema, como contexto de diseño | `PRODUCT.md` del front | con `/impeccable init`; sin datos de terceros |
 
 - **Lo que un agente guarde en su propia memoria no cuenta como anotación para una
   persona.** Si algo le importa al usuario o a Pitu, va a su archivo de la tabla.

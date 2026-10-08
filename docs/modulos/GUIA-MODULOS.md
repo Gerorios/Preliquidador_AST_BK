@@ -276,7 +276,7 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 17. **Pantallas con `lazy` en `rutas.jsx` del módulo**, protegidas con `ProtectedRoute` indicando módulo y rol.
 18. **Toda llamada al backend pasa por `src/core/api.js`** (que pone el token y maneja el 401) y vive en `src/modulos/<modulo>/services/`. Ningún `fetch` ni `axios` directo desde un componente.
 19. **Datos de servidor con React Query**: `useQuery` para leer, `useMutation` para escribir, invalidando las queries que corresponda. Nada de `useEffect` con fetch.
-20. **Estilos con CSS Modules** (`Pantalla.module.css`) usando **los tokens de `index.css`** (`var(--accent)`, `var(--bg-surface)`, `var(--danger)`, etc.). No se inventan colores nuevos: la paleta está definida y verificada para contraste. Sin CSS global nuevo.
+20. **Estilos con CSS Modules** (`Pantalla.module.css`) usando **los tokens de `index.css`** (`var(--accent)`, `var(--bg-surface)`, `var(--danger)`, etc.). No se inventan colores fuera de los tokens: la paleta la fija `src/index.css` (y `DESIGN.md` del front cuando exista), verificada para contraste, y sólo cambia con la skill `impeccable` y OK del usuario. Sin CSS global nuevo. Toda pantalla nueva o cambio visual se hace con `impeccable` (`AGENTS.md`, "Cambios de interfaz"); estas reglas valen por encima de lo que proponga.
 21. **Feedback siempre visible**: el sistema lo usa gente que necesita señales claras. Toda escritura muestra el overlay bloqueante "Procesando..." (`CargandoOverlay`), toda carga inicial muestra `CargandoContenido`, todo resultado muestra un toast. Esto es un pedido explícito de los usuarios, no un detalle estético.
 22. **Textos en español, sin emojis en la interfaz**, con acentos correctos.
 
@@ -461,7 +461,7 @@ Y aparte: las **consultas de Power Query**, exportadas tal cual (el SQL que gene
 
 ### 8.3 Las pantallas que necesita el módulo
 
-A partir de 8.1 y 8.2, una lista de pantallas con, para cada una: quién la usa, qué muestra, qué acciones permite, y de qué hoja del Excel viene. No hace falta diseño visual: el sistema tiene su estética definida y se reutiliza. Sí hace falta saber qué se ve y qué se hace en cada una.
+A partir de 8.1 y 8.2, una lista de pantallas con, para cada una: quién la usa, qué muestra, qué acciones permite, y de qué hoja del Excel viene. No hace falta diseño visual: la estética del sistema está en `src/index.css` (y en `DESIGN.md` del front cuando exista) y se reutiliza, y cada pantalla se diseña con la skill `impeccable` al construirla. Sí hace falta saber qué se ve y qué se hace en cada una.
 
 ### 8.4 El plan de implementación
 
