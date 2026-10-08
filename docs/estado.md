@@ -2,15 +2,19 @@
 
 Sólo lo vivo: lo que está en curso, el próximo paso, lo que espera al usuario y lo que quedó para más adelante.
 Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva abajo). La regla está en
-`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-07**.
+`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-08**.
 
 ## En curso
 
-- Sin tarea en curso.
+- Skill `impeccable` en el front y regla de usarla en todo cambio visual o feature nueva
+  (carril corto). Fase: ejecución. Plan: `docs/superpowers/plans/2026-10-08-skill-impeccable.md`.
+  Después sigue la refacción de UX/UI de Preliquidación (carril completo, entrevista
+  empezada y en pausa).
 
 ## Próximo paso
 
-Sin tarea en curso.
+Copiar la skill al worktree del front, ajustar las reglas en los dos repos y verificar
+(incluye ejecutar el motor del lanzador).
 
 ## Pendientes del usuario
 
