@@ -140,6 +140,11 @@ def listar(service: PreliquidacionService = Depends(get_service)):
             id=p.id, quincena=p.quincena, creado_en=p.creado_en,
             total_lineas=stats["total_lineas"],
             lineas_con_alerta=stats["lineas_con_alerta"],
+            incompletas=stats["incompletas"],
+            duplicados=stats["duplicados"],
+            posibles_duplicados=stats["posibles_duplicados"],
+            alerta_legajo=stats["alerta_legajo"],
+            sin_empresa=stats["por_empresa"].get("SIN EMPRESA", {}).get("total", 0),
         ))
     return resultado
 

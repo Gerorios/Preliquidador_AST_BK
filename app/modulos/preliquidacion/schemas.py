@@ -16,6 +16,14 @@ class PreliquidacionResponse(BaseModel):
     creado_en: datetime
     total_lineas: int
     lineas_con_alerta: int
+    # Desglose por tipo de alerta para el historial de Inicio (sale de
+    # estadisticas_batch, sin consultas nuevas). Default 0 para no romper a
+    # quien construya la respuesta sin ellos.
+    incompletas: int = 0
+    duplicados: int = 0
+    posibles_duplicados: int = 0
+    alerta_legajo: int = 0
+    sin_empresa: int = 0
 
     class Config:
         from_attributes = True
