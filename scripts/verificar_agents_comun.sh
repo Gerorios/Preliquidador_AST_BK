@@ -10,7 +10,13 @@ FT=Gerorios/Preliquidador_AST_FT
 
 # El repo se reconoce por su origin, no por el nombre de la carpeta.
 # https://github.com/X/Y(.git) y git@github.com:X/Y(.git) quedan como X/Y.
-repo_de() { git -C "$1" remote get-url origin 2>/dev/null | sed 's#\.git$##; s#^.*github\.com[:/]##'; }
+# Corre sin las variables locales de git: dentro de un hook (desde un worktree)
+# git exporta GIT_DIR, y con ella `git -C` lee el origin de este repo en
+# cualquier carpeta.
+repo_de() {
+  (unset $(git rev-parse --local-env-vars); git -C "$1" remote get-url origin 2>/dev/null) |
+    sed 's#\.git$##; s#^.*github\.com[:/]##'
+}
 falla() { echo "verificar_agents_comun: $1" >&2; exit 2; }
 
 raiz=$(git rev-parse --show-toplevel) || falla "no estoy dentro de un repo git"
