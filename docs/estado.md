@@ -8,8 +8,8 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 - Refinamiento de la interfaz de Preliquidación y Gerencial con `impeccable` (carril
   completo; Terceros no se toca). No es un rediseño: se mejora la estética actual. Fase:
-  ejecución, E2 (mergeados E0: FT #60 y E1: FT #61; plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
-  en el worktree del backend; 7 PRs, E0 a E6; deploy sólo al final y con OK). Antes:
+  ejecución, E3 (mergeados E0: FT #60, E1: FT #61 y E2: BK #77; plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
+  ya en `main` del backend; 7 PRs, E0 a E6; deploy sólo al final y con OK). Antes:
   prototipo para mirar antes del plan (desvío de la skill aprobado por el usuario: sin
   commits; lo que entre a `main` pasa por plan, tests y revisión). Prototipo en el worktree
   del front (rama `feature/refinamiento-preliquidacion`), en el puerto 5174 contra
@@ -26,8 +26,8 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-E2 del plan (backend): el listado de quincenas trae el desglose de alertas (par 2.1, paso 2.2),
-en el worktree `refinamiento-preliquidacion` del backend. Después E3 en el front.
+E3 del plan (front): Inicio del módulo con el desglose de alertas que trae el listado (BK #77),
+ancho completo, "Generar" en la última quincena generada y menú recordado. Después E4.
 
 ## Pendientes del usuario
 
