@@ -7,14 +7,15 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 ## En curso
 
 - Skill `impeccable` en el front y regla de usarla en todo cambio visual o feature nueva
-  (carril corto). Fase: ejecución. Plan: `docs/superpowers/plans/2026-10-08-skill-impeccable.md`.
+  (carril corto). Fase: revisión terminada (2 high arreglados, 2 minor sin tocar), espera el
+  OK del usuario para los PRs. Plan: `docs/superpowers/plans/2026-10-08-skill-impeccable.md`.
   Después sigue la refacción de UX/UI de Preliquidación (carril completo, entrevista
   empezada y en pausa).
 
 ## Próximo paso
 
-Copiar la skill al worktree del front, ajustar las reglas en los dos repos y verificar
-(incluye ejecutar el motor del lanzador).
+Con el OK del usuario: commits y PRs hermanos (front con la skill, backend con las reglas),
+merge y bitácora.
 
 ## Pendientes del usuario
 
