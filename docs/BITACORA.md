@@ -2487,3 +2487,48 @@ usuario en la entrevista)
 - Avisarle a Pitu que la regla de usar `impeccable` también le aplica en Terceros.
 - Los 2 minor sin tocar están en el cuerpo del FT #58.
 - Próximo: la refacción de UX/UI de Preliquidación, con el flujo completo y `/impeccable init`.
+
+## 2026-10-08 — El chequeo del bloque común de `AGENTS.md` corre dentro del `pre-commit`
+
+Cierra la deuda previa que anotó la entrada anterior.
+
+**Mergeado**
+- PR #76 (backend) — `scripts/verificar_agents_comun.sh` encuentra al repo hermano cuando lo
+  llama el `pre-commit` desde un worktree; test nuevo y plan.
+- PR #59 (frontend, hermano) — el mismo arreglo en su copia del script, idéntica a la del
+  backend.
+
+**Por frontera**
+- Controles (repo, fuera de las fronteras de código): `repo_de()` del script corre el
+  `git -C` sin las variables de `git rev-parse --local-env-vars`, en los dos repos.
+  `tests/hooks/test_verificar_agents_comun.py` nuevo en el backend, que cubre también el
+  script del front (el front no tiene pytest).
+- Docs: plan `docs/superpowers/plans/2026-10-08-verificar-agents-en-hook.md`.
+
+**Decisiones**
+- Causa: al commitear desde un worktree, git le exporta `GIT_DIR` absoluto al hook, y
+  `git -C <carpeta> remote get-url origin` devolvía el origin del repo propio para cualquier
+  carpeta; el aviso nunca comparaba nada. Desde el checkout principal sólo pasa un
+  `GIT_INDEX_FILE` relativo, que no molesta.
+- Se limpian las variables de `git rev-parse --local-env-vars`. Porqué: es la lista que
+  mantiene git (incluye `GIT_COMMON_DIR`, `GIT_OBJECT_DIRECTORY` y las demás) y es POSIX puro.
+  Descartado: `env -u` con las variables nombradas a mano; un `unset` al principio del
+  script, porque las llamadas de arriba (`--show-toplevel`, `--git-common-dir`) sí tienen que
+  respetar el repo del hook.
+
+**Estado**
+- Deploy: no; es tooling de desarrollo. Cada clon toma el arreglo con el próximo pull, sin
+  reinstalar los hooks.
+- Migraciones: ninguna.
+- Verificación: los dos casos del test nuevo (script con `GIT_DIR` exportado; commit desde
+  un worktree con el `pre-commit` real y un bloque distinto en el hermano) fallaron antes
+  del arreglo con exit 2 y pasan después. `tests/hooks/`: 19 passed. Suite completa: 1009
+  passed, 1 xfailed. Reproducción manual con `GIT_DIR` exportado: exit 0 desde los worktrees
+  de los dos repos (en el front, antes exit 2); `diff` entre los dos scripts vacío. Revisión
+  de dos ejes con verificador: 0 urgent, 0 high, 3 minor, 4 descartados.
+
+**Pendiente**
+- Los 3 minor sin tocar están en el cuerpo del BK #76 (helpers del test repetidos de
+  `test_pre_commit.py`, un nombre de parámetro, una fixture sin usar).
+- Deuda previa, ajena al PR: el script compara el `AGENTS.md` del directorio de trabajo y no
+  el stageado. No frena commits.
