@@ -87,6 +87,37 @@ Anotá la **ruta absoluta** de cada worktree: va en cada briefing.
 
 ---
 
+## Tareas con interfaz (`impeccable`)
+
+Si la tarea cambia algo visible en el front o suma una feature con interfaz, en
+cualquiera de los dos módulos, se usa la skill `impeccable` del repo del front
+(`.claude/skills/impeccable/SKILL.md`; `AGENTS.md`, "Cambios de interfaz"), en
+los dos carriles. No reemplaza ninguna fase: entra en ellas así.
+
+- **Entrevista**: lo de UX (quién usa la pantalla, qué ve, qué hace, qué
+  estados tiene) se trabaja con `/impeccable shape <pantalla>`. Si el front no
+  tiene `PRODUCT.md`, antes va `/impeccable init`. Si la tarea cambia la
+  estética, la dirección nueva se decide con el usuario y queda en `DESIGN.md`.
+  Corto: un ajuste sobre la estética actual no lleva `shape`.
+- **Plan**: cada paso de interfaz dice qué comando de `impeccable` corre y sobre
+  qué pantalla. El briefing del planificador y del ejecutor nombra la ruta
+  absoluta de la skill en el worktree del front: los agentes no la ven solos.
+- **Ejecución**: quien edita interfaz corre antes el setup de la skill
+  (`impeccable context`) y lee `reference/craft-floor.md`. La lógica sigue con
+  su par test rojo + implementación; lo puramente visual va como paso sin test,
+  verificado en el navegador.
+- **Revisión**: además de `revision-codigo`, una pasada de `/impeccable
+  critique` y `/impeccable audit` sobre las pantallas tocadas. Sus hallazgos
+  pasan por el `verificador-review` con la misma regla `urgent` / `high` /
+  `minor`. Si la tarea es de diseño, cierra con `/impeccable polish`.
+- **Entrega**: el smoke en el navegador muestra al usuario las pantallas
+  tocadas. Si cambió la estética, `DESIGN.md` va en el mismo PR.
+
+Las reglas del proyecto (`docs/modulos/GUIA-MODULOS.md`, sección 4.5) valen por
+encima de lo que proponga `impeccable`; si chocan, se pregunta.
+
+---
+
 ## Fase 0 — Entrevista
 
 **Completo:** cuando el pedido tiene decisiones abiertas que no te
