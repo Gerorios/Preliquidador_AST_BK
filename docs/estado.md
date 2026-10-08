@@ -6,18 +6,26 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Refinamiento de la interfaz de Preliquidación con `impeccable` (carril completo; Terceros
-  no se toca). No es un rediseño: el usuario descartó la estética nueva y quiere la actual
-  mejorada. Fase: plan. Alcance cerrado: barra de filtros igual en todas las pantallas,
-  Inicio del módulo a todo el ancho con el sidebar contraído, detalle de alertas en el
-  historial (PR hermano en el backend), Verificación con tablas ordenables y detalle de
-  persona en un modal, Conceptos con los filtros comunes y una explicación de cómo se
-  combinan las reglas. Ramas `feature/refinamiento-preliquidacion` en los dos repos;
-  `PRODUCT.md` y el arreglo de `.gitignore` de `.impeccable/` van en el PR de la etapa 1.
+- Refinamiento de la interfaz de Preliquidación y Gerencial con `impeccable` (carril
+  completo; Terceros no se toca). No es un rediseño: se mejora la estética actual. Fase:
+  prototipo para mirar antes del plan (desvío de la skill aprobado por el usuario: sin
+  commits; lo que entre a `main` pasa por plan, tests y revisión). Prototipo en el worktree
+  del front (rama `feature/refinamiento-preliquidacion`), en el puerto 5174 contra
+  `testing`. Hecho en el prototipo: barra de filtros común (quincena, búsqueda, filtros,
+  alertas, Limpiar y filtros activos como chips; cascada que considera búsqueda y
+  alertas), Revisión sin filtro de Empresa, Inicio y Gerencial a todo el ancho, menú que
+  recuerda si está contraído, detalle de alertas en el historial, "Generar" arranca en la
+  última quincena generada, estado de cada pantalla guardado al navegar, Verificación con
+  tablas ordenables, detalle en modal e íconos en vez de emojis, Conceptos con una sola
+  barra y la explicación de cómo se combinan las reglas. Decidido: la búsqueda de
+  Conceptos queda al cambiar de quincena; Verificación y Conceptos arrancan en la última
+  quincena generada. El historial usa `/estadisticas` por quincena en el prototipo; en la
+  versión final el desglose va en el listado (PR hermano en el backend).
 
 ## Próximo paso
 
-Plan por etapas con el planificador; después, aprobación del usuario.
+Que el usuario revise el prototipo completo; con su OK, plan por etapas con el
+planificador a partir del prototipo.
 
 ## Pendientes del usuario
 
