@@ -8,6 +8,8 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 - Refinamiento de la interfaz de Preliquidación y Gerencial con `impeccable` (carril
   completo; Terceros no se toca). No es un rediseño: se mejora la estética actual. Fase:
+  ejecución, paso 0 (plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
+  en el worktree del backend; 7 PRs, E0 a E6; deploy sólo al final y con OK). Antes:
   prototipo para mirar antes del plan (desvío de la skill aprobado por el usuario: sin
   commits; lo que entre a `main` pasa por plan, tests y revisión). Prototipo en el worktree
   del front (rama `feature/refinamiento-preliquidacion`), en el puerto 5174 contra
@@ -24,8 +26,8 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Que el usuario revise el prototipo completo; con su OK, plan por etapas con el
-planificador a partir del prototipo.
+Paso 0 del plan (respaldo local del prototipo, worktree nuevo del front, `.env` ficticio en el
+backend) y después E0.
 
 ## Pendientes del usuario
 
