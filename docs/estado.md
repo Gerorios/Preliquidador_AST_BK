@@ -6,16 +6,15 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Skill `impeccable` en el front y regla de usarla en todo cambio visual o feature nueva
-  (carril corto). Fase: revisión terminada (2 high arreglados, 2 minor sin tocar), espera el
-  OK del usuario para los PRs. Plan: `docs/superpowers/plans/2026-10-08-skill-impeccable.md`.
-  Después sigue la refacción de UX/UI de Preliquidación (carril completo, entrevista
-  empezada y en pausa).
+- Rediseño de UX/UI de Preliquidación con `impeccable` (carril completo; Terceros no se
+  toca). Fase: entrevista, empezando por `/impeccable init` (`PRODUCT.md`). Rama del front
+  `feature/rediseno-preliquidacion`. El PR también corrige `.gitignore`: hoy ignora todo
+  `.impeccable/`, y ahí `impeccable` guarda configuración del proyecto que va a git.
 
 ## Próximo paso
 
-Con el OK del usuario: commits y PRs hermanos (front con la skill, backend con las reglas),
-merge y bitácora.
+Entrevista de producto para `PRODUCT.md` (`init`), después `shape` y la dirección visual
+con el usuario; recién ahí el plan.
 
 ## Pendientes del usuario
 
@@ -28,6 +27,7 @@ merge y bitácora.
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - Mirar la alerta "Posible duplicado" en el sitio real: Revisión y Verificación de la 2Q de agosto (deploy del 2026-10-07).
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
+- Avisarle a Pitu que la regla de usar `impeccable` en todo cambio visual o feature nueva también le aplica en Terceros (BK #75 / FT #58, 2026-10-08).
 
 ## A futuro
 
@@ -37,7 +37,7 @@ merge y bitácora.
 - Minors sin tocar de BK #70, FT #54 y BK #69: listados en sus entradas de la bitácora y en los cuerpos de los PRs.
 - Comentario viejo de Terceros en `migrations/ORDEN.txt`: dice que sus migraciones no se aplicaron en producción, y se aplicaron el 2026-09-30.
 - Agrupar Verificación por (empresa, legajo): descartado salvo caso real; si aparece, se agrupa por CUIL (respaldo en ramas locales `respaldo/verificacion-empresa-legajo`, 2026-10-01).
-- Refacción completa de UX/UI del sistema, después de la alerta "Posible duplicado": la sección nueva de Verificación se hace con el diseño actual mientras tanto (2026-10-07).
+- `scripts/verificar_agents_comun.sh` no compara nada dentro del `pre-commit`: git exporta `GIT_DIR` y no encuentra el repo hermano (BK #75 / FT #58, 2026-10-08). Sugerida como tarea aparte.
 - Botón para descartar un "Posible duplicado" ya revisado: descartado por ahora (2 casos en 5 quincenas); se agrega si con el uso molesta (2026-10-07).
 - El endpoint `GET /preliquidacion/{id}/dashboard-verificacion` no lo usa ninguna pantalla desde la primera versión (Verificación calcula en el front; la función del front se borró el 2026-09-07): candidato a borrar o a usar en la refacción de UX/UI (2026-10-07).
 - `npm run lint` del front da 6 errores en `main`, todos en `.claude/hooks/ultimas-entregas.mjs` (`process` sin `globals.node`, FT #56): sin urgencia, no corre en la app (2026-10-07).

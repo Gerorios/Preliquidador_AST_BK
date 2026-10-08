@@ -2437,3 +2437,53 @@ usuario en la entrevista)
 - PR aparte: regenerar `000_esquema_base.sql` y marcar `ws18` como `historica`.
 - Queda cerrado el pendiente de deploy de las entradas del merge. Se puede volver a
   refrescar `testing` desde producción: las dos bases tienen la columna.
+
+## 2026-10-08 — Skill `impeccable` en el front y regla de usarla en toda interfaz
+
+**Mergeado**
+- PR #75 (backend) — regla de interfaz con `impeccable` en `AGENTS.md`, `GUIA-MODULOS.md`
+  (reglas 20 y 8.3) y la sección "Tareas con interfaz" de `flujo-preliquidacion`, con su plan.
+- PR #58 (frontend, hermano) — instala la skill `impeccable` (copiada tal cual, con
+  `LICENSE` y `NOTICE.md`) y sus 4 agentes, sin sus hooks; motor en `.impeccable/` del
+  proyecto, ignorado por git y por eslint.
+
+**Por frontera**
+- Docs: sección nueva "Cambios de interfaz" en el bloque común de `AGENTS.md` (igual en los
+  dos repos) y dos filas en "Dónde se anota cada cosa" (`DESIGN.md` y `PRODUCT.md` del
+  front). `GUIA-MODULOS.md`: reglas 20 y 8.3. `flujo-preliquidacion`: qué comando de
+  `impeccable` entra en cada fase.
+- Preliquidación y Liquidación Terceros (front): todo cambio visual y toda feature nueva con
+  interfaz se hacen con `impeccable`, en los dos módulos.
+
+**Decisiones**
+- Todo cambio visual o feature nueva usa `impeccable`, Terceros incluido. Porqué: pedido del
+  usuario; la refacción de UX/UI posterior es sólo de Preliquidación y va en otra tarea.
+- Instalada sólo en el repo del front. Porqué: pedido del usuario. Descartado: instalación
+  global; el backend, que no tiene interfaz.
+- Sin los hooks de `impeccable`. Porqué: correrían el motor en cada `Edit`/`Write` y al
+  cerrar cada respuesta. Descartado: el instalador `npx impeccable install`, que escribe en
+  carpetas globales del harness.
+- La skill va copiada tal cual y se actualiza reemplazando la carpeta entera en un PR.
+  Porqué: que el diff contra el original sea siempre cero.
+- La estética se nombra en `src/index.css` "y en `DESIGN.md` cuando exista". Porqué:
+  `DESIGN.md` recién lo escribe el `init` de la refacción, y una regla no puede apuntar a un
+  archivo inexistente (high de la revisión).
+- Descartado: el smoke "en escritorio y en celular" del primer borrador del flujo, porque
+  nadie decidió exigir celular (high de la revisión); una regla 23 en la guía, porque
+  renumeraría las siguientes y la bitácora cita "la regla 22".
+
+**Estado**
+- Deploy: no; no cambia la app.
+- Migraciones: ninguna.
+- Verificación: el motor 0.1.11 corrió con los dos lanzadores (`sh` y `.cmd`, exit 0) y bajó
+  a `.impeccable/` del worktree. Lint del front: 6 errores, los mismos de `main`.
+  `npm test` 35/35, build OK. pytest del backend: 1007 passed, 1 xfailed. Revisión de dos
+  ejes: 0 urgent, 2 high arreglados, 2 minor sin tocar, 8 descartados.
+
+**Pendiente**
+- Deuda previa: dentro del `pre-commit`, `scripts/verificar_agents_comun.sh` no encuentra el
+  repo hermano porque git exporta `GIT_DIR`, así que el chequeo del bloque común nunca corre
+  al commitear. Sugerida como tarea aparte.
+- Avisarle a Pitu que la regla de usar `impeccable` también le aplica en Terceros.
+- Los 2 minor sin tocar están en el cuerpo del FT #58.
+- Próximo: la refacción de UX/UI de Preliquidación, con el flujo completo y `/impeccable init`.
