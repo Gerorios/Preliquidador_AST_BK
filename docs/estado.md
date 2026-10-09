@@ -8,7 +8,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 - Refinamiento de la interfaz de Preliquidación y Gerencial con `impeccable` (carril
   completo; Terceros no se toca). No es un rediseño: se mejora la estética actual. Fase:
-  ejecución, E5 (mergeados E0: FT #60, E1: FT #61, E2: BK #77, E3: FT #62 y E4: FT #63; plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
+  ejecución, E6 (mergeados E0: FT #60, E1: FT #61, E2: BK #77, E3: FT #62, E4: FT #63 y E5: FT #64; plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
   ya en `main` del backend; 7 PRs, E0 a E6; deploy sólo al final y con OK). Antes:
   prototipo para mirar antes del plan (desvío de la skill aprobado por el usuario: sin
   commits; lo que entre a `main` pasa por plan, tests y revisión). Prototipo en el worktree
@@ -31,9 +31,10 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-E5 del plan (front, rama `feature/refinamiento-5-conceptos`): hecha y revisada (0 urgent, 2
-high arreglados como R8 y R9, 10 minor); espera el OK del usuario para el PR y el merge. Después
-la limpieza de worktrees (paso 5.5), E6 (ayuda) y el deploy cuando el usuario lo diga.
+E6 del plan (backend, sólo docs, rama `feature/refinamiento-6-ayuda`): `docs/AYUDA.md` a la
+interfaz nueva y el plan con los pasos R4 a R10. Después, el deploy del front cuando el usuario lo
+diga (el código ya está todo en `main`; worktrees del front y prototipo borrados, respaldo en la
+rama local `respaldo/prototipo-refinamiento`).
 
 ## Pendientes del usuario
 
