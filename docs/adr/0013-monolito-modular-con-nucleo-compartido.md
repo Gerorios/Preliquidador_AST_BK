@@ -15,6 +15,8 @@ Se decide un **monolito modular**: un solo backend FastAPI y un solo frontend Re
 
 - **Datos**: misma base `preliquidacion`, tablas de cada módulo nuevo con prefijo propio (`fletes_`). Las tablas actuales de preliquidación no se renombran (producción con datos reales). Migraciones SQL manuales como hasta ahora, pero en carpeta por módulo (`migrations/<modulo>/`).
 - **Permisos por módulo**: `admin` global; por módulo, roles `operador` y `gerente` (tabla `usuario_modulo`). Un operador no ve las vistas operativas de otro módulo; el gerente ve el analítico de los módulos que tiene asignados. Los usuarios actuales migran a preliquidación con su rol de hoy.
+
+  > Nota (2026-10-09): los permisos por módulo quedaron reemplazados por el ADR-0020 (roles armables con permisos de ver o editar por pantalla). El `admin` global sigue igual.
 - **Gerencial por módulo**: cada módulo trae su propio panel bajo `/api/<modulo>/gerencial`; una entrada "Gerencial" del sistema muestra una solapa por módulo. Sin consolidación entre módulos por ahora. Es la última etapa de cada módulo.
 - **Nombre**: se renombra solo lo visible (título, login, menú). URL quizás más adelante. Repos, base, servicio systemd y carpetas del VPS **nunca** se renombran.
 - **Bases externas**: cada módulo tiene su propio archivo de consultas al sistema de campo, SQL crudo parametrizado y de solo lectura, como `consulta_externa.py` hoy. El núcleo solo expone la conexión.
