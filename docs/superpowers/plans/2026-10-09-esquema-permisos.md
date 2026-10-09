@@ -891,3 +891,9 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
 - **Par 3.3 y paso 3.4 van juntos, en un solo lanzamiento y un solo commit.** Sacar `roles` de las rutas sin cambiar al mismo tiempo `ProtectedRoute`, `App.jsx`, `Layout.jsx` y `Login.jsx` dejaría la app rota en el medio.
   - El uso de `tienePermiso` en `Conceptos.jsx` (`esGerente`) pasa en este mismo lanzamiento a `usaListado = puedeVerAlguna(...)`, como dice el 3.6, para poder borrar `tienePermiso`.
   - El resto del 3.6 (Verificación y Revisión) queda donde estaba.
+- **Paso 3.4, la búsqueda final:** el `usuario.modulos` de `ListaUsuarios.jsx` (la fila de cada persona en Administración, no la sesión) sale en el 3.8, junto con `actualizarModulos`. La búsqueda tiene que dar vacía recién al terminar el 3.8.
+- **Para el 3.8:** `Login.jsx` e `Inicio.jsx` siguen diciendo "Tu usuario no tiene módulos asignados…". Con roles, el texto se revisa con `/impeccable clarify`, junto con los avisos de persona sin acceso de Administración.
+- **Par 3.7, textos:** `src/core/administracion/roles.js` del front fija los textos de las validaciones. El par 1.7 del backend usa **los mismos** (está en la cabecera y en el test de ese archivo).
+  - El 409 por un rol en uso dice: "Lo tienen 2 personas: A y B. Sacáselo primero para poder borrarlo." En singular: "Lo tiene 1 persona: …". Una persona inactiva aparece como "Nombre (inactiva)".
+  - La regla `requiere` dice: "Revisión necesita al menos Ver en Inicio."
+- **Para el 3.8:** el editor valida y manda sólo los módulos del catálogo, que trae sólo los activos. Los permisos de un módulo inactivo los conserva el backend en el PUT.
