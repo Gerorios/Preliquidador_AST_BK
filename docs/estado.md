@@ -11,9 +11,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
   Editar por pantalla. Diseño de Administración confirmado (`/impeccable shape`). Plan
   aprobado el 2026-10-09: `docs/superpowers/plans/2026-10-09-esquema-permisos.md` (en la rama
   `feature/permisos-pantallas`, worktrees `.claude/worktrees/permisos-pantallas` de los dos
-  repos), con 4 PRs (BK1, BK2, FT1, FT2) y un solo deploy. Fase: etapa 0 (preparación y
-  consultas previas, que corre el usuario). `docs/modulos/GUIA-MODULOS.md` todavía describe `operador`/`gerente` y la
-  "etiqueta de rol": cambia en el PR de la implementación.
+  repos), con 4 PRs (BK1, BK2, FT1, FT2) y un solo deploy. Fase: etapa 1 (BK1) y etapa 3
+  (FT1) en paralelo. BK1 tiene commiteados los pares 1.1 a 1.8 (hasta la API de roles);
+  la migración `core/002` ya se aplicó en `testing` (2026-10-09). FT1 tiene commiteado todo
+  lo que no necesitaba la API; falta probarlo en el navegador. `docs/modulos/GUIA-MODULOS.md`
+  todavía describe `operador`/`gerente` y la "etiqueta de rol": cambia en el BK2.
 - Módulo Facturación (carril completo, sin código): espera la implementación del esquema de
   permisos (ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
   el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
@@ -21,7 +23,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Esquema de permisos, etapa 0 del plan: el usuario corre las consultas de sólo lectura del paso 0.2 en `testing` y en producción. Las tablas nuevas no tienen que existir, y la consulta cuenta las personas por módulo y rol de hoy. Después sigue la etapa 1 (BK1, el núcleo sin cambios de comportamiento), con el `ejecutor` par por par. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
+Esquema de permisos: el paso 1.9 (`refrescar_testing.py` con las tablas nuevas), la revisión de código de BK1 en dos rondas y su PR (el merge, con OK del usuario). En el front, la prueba en el navegador de FT1 contra el backend de la rama; crear roles o usuarios de prueba en `testing` (smoke 3.10) espera el OK del usuario.
 
 ## Pendientes del usuario
 
