@@ -2,7 +2,7 @@
 
 Sólo lo vivo: lo que está en curso, el próximo paso, lo que espera al usuario y lo que quedó para más adelante.
 Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva abajo). La regla está en
-`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-08**.
+`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-09**.
 
 ## En curso
 
@@ -14,8 +14,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Deploy del refinamiento de Preliquidación y Gerencial (front y backend), cuando el usuario lo
-diga: ver "Pendientes del usuario".
+Sin tarea en curso del refinamiento: deployado el 2026-10-09. Queda el smoke del usuario en el sitio real.
 
 ## Pendientes del usuario
 
@@ -31,7 +30,7 @@ diga: ver "Pendientes del usuario".
 - Avisarle a Pitu que la regla de usar `impeccable` en todo cambio visual o feature nueva también le aplica en Terceros (BK #75 / FT #58, 2026-10-08); y que Terceros también hereda del núcleo el menú que recuerda si está contraído (FT #62).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
-- Deploy del refinamiento de Preliquidación y Gerencial, front y backend juntos y sólo con OK del usuario: el asistente lee `docs/AYUDA.md` una vez por proceso (FT #60 a #64, BK #77 y BK #79, 2026-10-08).
+- Mirar el refinamiento en el sitio real: barra de filtros y estado al navegar, historial con "Detalle", Verificación con tablas y detalle, Conceptos, Gerencial y la ayuda (deploy del 2026-10-09). Ojo: hay una quincena 2026-10-16 generada y vacía, y "Generar" arranca en esa.
 - Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (FT #64, 2026-10-08).
 
 ## A futuro
