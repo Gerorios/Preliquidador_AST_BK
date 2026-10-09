@@ -6,6 +6,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
+- Estilos de aviso (carril completo, decisión de estética del usuario del 2026-10-09): etiquetas con texto oscuro, aviso de error propio y barra de filtros alineada con el título. Plan aprobado: `docs/superpowers/plans/2026-10-09-estilos-aviso.md` (dos PRs del front y uno del plan; un deploy al final, con OK). Fase: ejecución, PR 1 (etiquetas). Después: el esquema de permisos, que destraba Facturación.
 - Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
   permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
   editor / admin por módulo); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
@@ -29,9 +30,8 @@ Sin tarea en curso: el FT #65 (avisos de error de Verificación y Gerencial) est
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
-- Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (FT #64, 2026-10-08).
 - Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).
-- Decidir si los avisos de error llevan un estilo propio (rojo con ícono) en vez del gris de "no hay datos", con el que hoy se confunden: es estética, va con la decisión de colores de aviso (FT #65, 2026-10-09).
+- Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"), cuando se mergee el PR 1 de estilos de aviso.
 
 ## A futuro
 
