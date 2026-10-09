@@ -2532,3 +2532,47 @@ Cierra la deuda previa que anotó la entrada anterior.
   `test_pre_commit.py`, un nombre de parámetro, una fixture sin usar).
 - Deuda previa, ajena al PR: el script compara el `AGENTS.md` del directorio de trabajo y no
   el stageado. No frena commits.
+
+## 2026-10-08 — Diseño del módulo Facturación
+
+**Mergeado**
+- PR #78 (backend) — sólo docs: glosario, pantallas y plan del módulo Facturación, y el
+  ADR-0019. Sin PR hermano en el front.
+
+**Por frontera**
+- Docs: `docs/modulos/facturacion/` nuevo (`CONTEXT-facturacion.md`, `pantallas.md`,
+  `plan-facturacion.md` y `fuentes/LEEME.md`), `docs/adr/0019-adjuntos-en-carpeta-del-vps.md`
+  y la fila de Facturación en `CONTEXT-MAP.md`.
+
+**Decisiones**
+- Módulo solitario: no lee mano de obra de Preliquidación. Porqué: el resultado operativo
+  (facturación − MO − combustible) queda para un futuro Gerencial que consolide módulos, con
+  su propio ADR, y así el ADR-0013 queda intacto. Descartado: un contrato de lectura en el
+  núcleo ahora.
+- Carga manual más un importador por formato, con equivalencias guardadas por cliente.
+  Descartado: leer el sistema contable (API paga y detalle dudoso para traducir a tareas).
+- El Grupo de facturación de cada tarea decide qué cantidad del campo se compara; una tarea
+  sin grupo avisa, mientras que el informe actual la deja en cero en silencio.
+- Cruce por rango de fechas libre, que arranca en el mes. Descartado: por quincena, porque
+  una diferencia de una quincena se compensa en la siguiente.
+- Adjuntos en una carpeta del VPS (ADR-0019). Descartados: en la base y en Google Drive.
+- Permisos por capacidades (consultar, cargar, mantener), para que el cambio de esquema de
+  permisos sólo toque el mapeo.
+- Cosecha fuera: se factura distinto y probablemente sea un submódulo.
+- El plan de implementación se difiere hasta que estén mergeados el cambio de permisos y el
+  refinamiento de Preliquidación. Porqué: cambian los componentes que el módulo reutiliza, y
+  un plan hecho hoy habría que rehacerlo. Es un desvío de la skill aprobado por el usuario.
+- Los nombres de clientes y los orígenes de los datos quedan en `fuentes/`, fuera de git,
+  porque el repo es público.
+
+**Estado**
+- Deploy: no; sólo docs.
+- Migraciones: ninguna.
+- Verificación: sin tests ni revisión de código (sólo docs). Se controló que ningún archivo
+  versionado tenga nombres de clientes, hosts ni URLs.
+
+**Pendiente**
+- El cambio del esquema de permisos (tarea aparte del núcleo) y el plan de implementación
+  después del refinamiento.
+- El respaldo de la carpeta de adjuntos y confirmar con las contadoras las horas del segundo
+  tractor en pulverización (en `docs/estado.md`).

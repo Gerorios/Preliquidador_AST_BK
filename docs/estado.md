@@ -23,14 +23,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
   Conceptos queda al cambiar de quincena; Verificación y Conceptos arrancan en la última
   quincena generada. El historial usa `/estadisticas` por quincena en el prototipo; en la
   versión final el desglose va en el listado (PR hermano en el backend).
-- Módulo Facturación (carril completo): diseño cerrado en BK #78 (glosario, pantallas,
-  `docs/modulos/facturacion/plan-facturacion.md` y ADR-0019). Sin código. Espera dos
-  dependencias: el cambio del esquema de permisos (tarea aparte del núcleo, sin empezar;
-  idea del usuario: algo como lector / editor / admin por módulo) y el fin del refinamiento.
-  Después: plan de implementación con el planificador y E1. Desvío de la skill aprobado por
-  el usuario: el plan de implementación no se hace al cerrar la entrevista, para no
-  rehacerlo. Las notas con nombres de clientes y orígenes están en
-  `docs/modulos/facturacion/fuentes/origenes.md` (local, fuera de git).
+- Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
+  permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
+  editor / admin por módulo) y el fin del refinamiento. Después: plan de implementación con
+  el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
+  locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
 
 ## Próximo paso
 
