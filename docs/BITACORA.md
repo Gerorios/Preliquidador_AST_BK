@@ -2848,3 +2848,25 @@ Entrada de deploy: no anota un merge sino el deploy del refinamiento (FT #60 a #
   (correspondería "Valor hora borrado"); la cadena carga/error/control se repite cuatro
   veces, `isLoading` de las líneas quedó sin renombrar y está `guardarValorHora` al lado de
   `guardarValorHoraTractorista`.
+
+## 2026-10-09 — Deploy a producción de los avisos de error de Verificación y Gerencial
+
+Entrada de deploy: no anota un merge sino el deploy del FT #65, ya anotado arriba. Corrige su
+"Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuera de git).
+
+**Qué se deployó**
+- Frontend: de `5265bd4` a `bad5aee` (FT #65), con build desde el checkout del front en
+  `main`, idéntico a `origin/main`. Autorizado por el usuario.
+- Backend: sin tocar. El BK #80 es sólo el plan y no necesita deploy.
+
+**Estado**
+- Deploy: sí, sólo frontend, con swap de carpeta; la versión anterior queda como rollback.
+- Migraciones: ninguna. Dependencias nuevas: ninguna.
+- Verificación: build con 47 assets y el mismo bundle en local y en el servidor; el sitio
+  responde 200 y sirve el bundle nuevo; `/health` del backend ok.
+- Rollback: swap inverso de la carpeta del front. No toca datos ni el backend.
+
+**Pendiente**
+- Mirar Verificación y Gerencial en el sitio real. Los avisos nuevos sólo aparecen si falla
+  una carga, así que en el uso normal no cambia nada a la vista.
+- Queda cerrado el pendiente de deploy de la entrada del FT #65.
