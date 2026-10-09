@@ -31,8 +31,9 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-E5 del plan (front, rama `feature/refinamiento-5-conceptos`): Conceptos y Gerencial con la
-barra común e íconos (pasos 5.1 a 5.5). Después E6 (ayuda) y el deploy cuando el usuario lo diga.
+E5 del plan (front, rama `feature/refinamiento-5-conceptos`): hecha y revisada (0 urgent, 2
+high arreglados como R8 y R9, 10 minor); espera el OK del usuario para el PR y el merge. Después
+la limpieza de worktrees (paso 5.5), E6 (ayuda) y el deploy cuando el usuario lo diga.
 
 ## Pendientes del usuario
 
