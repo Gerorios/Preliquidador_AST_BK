@@ -14,7 +14,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-El esquema de permisos (tarea del núcleo, sin empezar; idea del usuario: lector / editor / admin por módulo), que destraba Facturación. Antes, el deploy del front de estilos de aviso (FT #66 y #67) cuando el usuario lo diga. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
+El esquema de permisos (tarea del núcleo, sin empezar; idea del usuario: lector / editor / admin por módulo), que destraba Facturación. Fase: entrevista (2026-10-09). Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
 
 ## Pendientes del usuario
 
@@ -30,8 +30,8 @@ El esquema de permisos (tarea del núcleo, sin empezar; idea del usuario: lector
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
 - Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).
-- Deploy del front de estilos de aviso, FT #66 y #67 juntos en un solo deploy, sólo con OK del usuario; el BK #81 es sólo el plan y no se deploya (2026-10-09).
-- Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); se ve en el sitio cuando se deploye el front de FT #66 y #67.
+- Mirar en el sitio real las etiquetas con texto oscuro, el aviso de error rojo y la barra de filtros alineada (deploy del 2026-10-09).
+- Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
 
 ## A futuro
 

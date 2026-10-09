@@ -2991,3 +2991,26 @@ Entrada de deploy: no anota un merge sino el deploy del FT #65, ya anotado arrib
     (`.alertas { margin-left: 4px }`) (FT #67).
   - Si fallan las líneas, el panel de Filtros se abre sin opciones; el aviso igual informa
     el error (FT #67).
+
+## 2026-10-09 — Deploy a producción de los estilos de aviso
+
+Entrada de deploy: no anota un merge sino el deploy de FT #66 y FT #67, ya anotados arriba.
+Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuera de git).
+
+**Qué se deployó**
+- Frontend: de `bad5aee` a `5ce44cc` (FT #66 y #67), con build desde el checkout del front en
+  `main`, idéntico a `origin/main`. Autorizado por el usuario.
+- Backend: sin tocar. El BK #81 es sólo el plan.
+
+**Estado**
+- Deploy: sí, sólo frontend, con swap de carpeta; la versión anterior queda como rollback.
+- Migraciones: ninguna. Dependencias nuevas: ninguna.
+- Verificación: build con 49 assets y el mismo bundle en local y en el servidor; el sitio
+  responde 200 y sirve el bundle nuevo; `/health` del backend ok.
+- Rollback: swap inverso de la carpeta del front. No toca datos ni el backend.
+
+**Pendiente**
+- Mirar en el sitio real las etiquetas, el aviso de error y la barra alineada.
+- Las etiquetas cambian también en el Tarifario de Terceros: avisarle a Pitu (en
+  `docs/estado.md`).
+- Queda cerrado el pendiente de deploy de la entrada de estilos de aviso.
