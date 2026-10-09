@@ -6,23 +6,6 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Refinamiento de la interfaz de Preliquidación y Gerencial con `impeccable` (carril
-  completo; Terceros no se toca). No es un rediseño: se mejora la estética actual. Fase:
-  ejecución, E6 (mergeados E0: FT #60, E1: FT #61, E2: BK #77, E3: FT #62, E4: FT #63 y E5: FT #64; plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
-  ya en `main` del backend; 7 PRs, E0 a E6; deploy sólo al final y con OK). Antes:
-  prototipo para mirar antes del plan (desvío de la skill aprobado por el usuario: sin
-  commits; lo que entre a `main` pasa por plan, tests y revisión). Prototipo en el worktree
-  del front (rama `feature/refinamiento-preliquidacion`), en el puerto 5174 contra
-  `testing`. Hecho en el prototipo: barra de filtros común (quincena, búsqueda, filtros,
-  alertas, Limpiar y filtros activos como chips; cascada que considera búsqueda y
-  alertas), Revisión sin filtro de Empresa, Inicio y Gerencial a todo el ancho, menú que
-  recuerda si está contraído, detalle de alertas en el historial, "Generar" arranca en la
-  última quincena generada, estado de cada pantalla guardado al navegar, Verificación con
-  tablas ordenables, detalle en modal e íconos en vez de emojis, Conceptos con una sola
-  barra y la explicación de cómo se combinan las reglas. Decidido: la búsqueda de
-  Conceptos queda al cambiar de quincena; Verificación y Conceptos arrancan en la última
-  quincena generada. El historial usa `/estadisticas` por quincena en el prototipo; en la
-  versión final el desglose va en el listado (PR hermano en el backend).
 - Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
   permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
   editor / admin por módulo) y el fin del refinamiento. Después: plan de implementación con
@@ -31,11 +14,8 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-E6 del plan (backend, sólo docs, rama `feature/refinamiento-6-ayuda`): `docs/AYUDA.md` a la
-interfaz nueva y el plan con los pasos R4 a R10, hecha; espera el OK del usuario para el PR y el
-merge. Después, el deploy del front cuando el usuario lo
-diga (el código ya está todo en `main`; worktrees del front y prototipo borrados, respaldo en la
-rama local `respaldo/prototipo-refinamiento`).
+Deploy del refinamiento de Preliquidación y Gerencial (front y backend), cuando el usuario lo
+diga: ver "Pendientes del usuario".
 
 ## Pendientes del usuario
 
@@ -48,13 +28,16 @@ rama local `respaldo/prototipo-refinamiento`).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - Mirar la alerta "Posible duplicado" en el sitio real: Revisión y Verificación de la 2Q de agosto (deploy del 2026-10-07).
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
-- Avisarle a Pitu que la regla de usar `impeccable` en todo cambio visual o feature nueva también le aplica en Terceros (BK #75 / FT #58, 2026-10-08).
+- Avisarle a Pitu que la regla de usar `impeccable` en todo cambio visual o feature nueva también le aplica en Terceros (BK #75 / FT #58, 2026-10-08); y que Terceros también hereda del núcleo el menú que recuerda si está contraído (FT #62).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
+- Deploy del refinamiento de Preliquidación y Gerencial, front y backend juntos y sólo con OK del usuario: el asistente lee `docs/AYUDA.md` una vez por proceso (FT #60 a #64, BK #77 y BK #79, 2026-10-08).
+- Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (FT #64, 2026-10-08).
 
 ## A futuro
 
 - 5 warnings `react-hooks/exhaustive-deps` en Terceros (`FiltroMultiple.jsx` y `Grilla.jsx`): deuda del FT #48, no bloquea.
+- `app/core/asistente.py` le da al modelo de ejemplo el botón "▶ Generar / Actualizar", con un símbolo que la interfaz ya no tiene; y `/gerencial` no está en las `pantallas` de `rutas.jsx` del front, así que el asistente no sabe en qué pantalla está el gerente. Código, fuera del BK #79 (2026-10-08).
 - El control de completitud cuenta una regla con precio <= 0 como completa (`reglas_completas` en `preliquidacion_service.py` y el SQL de faltantes de `precios.py`): sin urgencia, no hay reglas así en producción (2026-10-01).
 - Un id repetido en `linea_ids` agrega el concepto dos veces en esa línea (`agregar_concepto_masivo`, BK #67): deuda previa a ese PR, quedó fuera de su alcance.
 - Minors sin tocar de BK #70, FT #54 y BK #69: listados en sus entradas de la bitácora y en los cuerpos de los PRs.

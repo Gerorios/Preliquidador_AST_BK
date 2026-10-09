@@ -2576,3 +2576,171 @@ Cierra la deuda previa que anotó la entrada anterior.
   después del refinamiento.
 - El respaldo de la carpeta de adjuntos y confirmar con las contadoras las horas del segundo
   tractor en pulverización (en `docs/estado.md`).
+
+## 2026-10-08 — Refinamiento de la interfaz de Preliquidación y Gerencial
+
+**Mergeado**
+- PR #60 (front) — E0: `PRODUCT.md` (contexto de producto para `impeccable`) y `.impeccable/`
+  en lista blanca del `.gitignore`.
+- PR #61 (front) — E1: barra de filtros común, estado por pantalla al navegar e íconos en
+  Revisión, el banner, el panel de la línea y Mantenimiento.
+- PR #77 (backend) — E2: el listado de quincenas trae el desglose de alertas por tipo; entra
+  el plan de la tarea.
+- PR #62 (front) — E3: Inicio con el detalle de alertas y a todo el ancho, menú que recuerda
+  si está contraído y "Generar" en la última quincena generada. Hermano del BK #77.
+- PR #63 (front) — E4: Verificación con tablas ordenables y el detalle de la persona en un
+  modal.
+- PR #64 (front) — E5: Conceptos y Gerencial con la barra común.
+- PR #79 (backend) — E6, sólo docs: `docs/AYUDA.md` describe la interfaz refinada y el plan
+  suma los pasos R4 a R10.
+
+**Por frontera**
+- Núcleo (front): `src/core/ui/iconos.jsx` con 15 íconos nuevos y la prop `enTexto`, que
+  alinea el ícono con el texto desde `Icono.module.css`. `src/core/layout/Layout.jsx`
+  recuerda en `localStorage` (con try/catch) si el menú está contraído, también en Terceros;
+  se borra la clase `shellCollapsed`, que no existía.
+- Preliquidación (backend): `GET /preliquidacion/` devuelve por quincena `incompletas`,
+  `duplicados`, `posibles_duplicados`, `alerta_legajo` y `sin_empresa`, con default 0
+  (`api/preliquidacion.py`, `schemas.py`). Test nuevo:
+  `tests/preliquidacion/test_listado_preliquidaciones.py`.
+- Preliquidación (front):
+  - Barra común (`components/FiltrosBar.jsx` con su CSS Module y `SelectorQuincena.jsx`):
+    quincena, búsqueda, Filtros, alertas y Limpiar, siempre en ese orden, y la fila
+    "Filtrando por" con un chip removible por filtro activo, incluidos la búsqueda y el
+    "sólo alertas" del banner. Las opciones en cascada salen de lo que ya pasa la búsqueda y
+    las alertas. Lógica pura con tests en `pages/`: `filtrarLineas.js`, `formatoQuincena.js`
+    (un solo formato, "1ra quincena septiembre 2026"), `opcionesCascada.js` y
+    `estadoGuardado.js`. El estado de cada pantalla vive en memoria (`estadoPantallas.js`):
+    se borra con F5, al cerrar sesión y al entrar con otro usuario.
+  - Revisión: la barra con selector de quincena, sin el filtro de Empresa, y filtros,
+    búsqueda y orden conservados al ir y volver. Mantenimiento (`CategoriasOperarios.jsx`):
+    quincena y búsqueda, arranca en la última quincena generada.
+  - Inicio (`Dashboard.jsx`): cada quincena con alertas muestra cuántas son incompletas,
+    duplicadas, posibles duplicados, legajo inválido y sin empresa, y un botón "Detalle"
+    con qué significa cada tipo (`desgloseAlertas.js`, con test); sin el `max-width`, a todo
+    el ancho y alto.
+  - Verificación: las cuatro listas ordenables en los dos sentidos y de vuelta al original,
+    con `aria-sort` (`TablaOrdenable.jsx`, `pages/ordenarFilas.js` con test), orden guardado
+    por sección; el detalle de la persona en `ModalDetalle.jsx` (mouse, Enter o Espacio;
+    Escape, cruz o click afuera; foco de vuelta en la fila). Plantas y Tancadas vs Jornal
+    ordenables con el Total abajo (`ControlesJornal.jsx`), también en Gerencial. Se borra
+    `InputBusqueda.jsx`.
+  - Conceptos: una sola barra sobre las solapas con los filtros de la solapa abierta, un
+    texto por solapa de alcance sobre cómo se combina su regla con las demás, y solapa,
+    quincena, búsqueda y filtros guardados al navegar. Gerencial: la barra con período y
+    empresa, a todo el ancho, estado guardado, en sólo lectura.
+  - Íconos en vez de símbolos y emojis (▲▼, ✓, ✕, ⚠, ⊞, ↓, ⇄, ›) en todas esas pantallas.
+    Tests del front: de 35 a 76.
+- Docs: en el front, `PRODUCT.md`, `.gitignore` y la viñeta "Interfaz" de `CLAUDE.md`. En el
+  backend, `docs/AYUDA.md` (sección nueva "Moverse por el sistema", historial con el
+  desglose, Verificación con 7 controles, Conceptos con seis solapas y la vista "Por
+  concepto", y una sección de la vista gerencial) y el plan
+  `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`, con R1 a R10.
+
+**Decisiones**
+- Se refina la estética actual, no se reemplaza (`PRODUCT.md`). Porqué: el usuario descartó
+  un rediseño y las estéticas temáticas.
+- Todo lo que entró lo vio y aprobó el usuario en un prototipo antes del plan (desvío de la
+  skill aprobado por él). Porqué de cada pantalla, pedidos del usuario: los filtros en el
+  mismo lugar en todas las pantallas y el estado guardado al navegar; que las alertas del
+  historial digan qué está pendiente y que el Inicio se vea entero con el menú contraído;
+  ordenar las tablas de Verificación y un detalle más claro; en Conceptos, sólo filtros y
+  detalles y explicar qué regla aplica; en Gerencial, los mismos cambios que en
+  Preliquidación en cuanto se pueda.
+- De `.impeccable/` sólo van a git `config.json`, `design.json` y `live/config.json` (R1).
+  Porqué: ahí `impeccable` guarda configuración que se comparte, y las capturas de
+  `review/` salen de pantallas de `testing` con nombres reales en un repo público.
+  Descartado: ignorar rutas sueltas (primer borrador), que dejaba versionables capturas,
+  sesiones y mocks.
+- La cascada y el estado guardado van en módulos puros. Porqué: testearlos con `npm test` sin
+  React.
+- El estado por pantalla se limpia en cualquier cambio de token, no sólo al pasar a null.
+  Porqué: `/login` se abre con la sesión abierta y `login()` cambia de usuario sin pasar por
+  null; quien entra no tiene que ver los filtros de la persona anterior.
+- La alineación de los íconos va en un CSS Module del núcleo (prop `enTexto`). Porqué:
+  GUIA-MODULOS regla 20 prohíbe CSS global nuevo. Descartado: la clase global `icono-texto`
+  del prototipo y una excepción a la regla.
+- Revisión sin el filtro de Empresa. Porqué: no se usa.
+- El desglose de alertas sale del listado (BK #77). Porqué: `estadisticas_batch` ya calculaba
+  esos conteos, así que no agrega consultas. Descartado: un pedido a `/estadisticas` por
+  quincena en cada visita al Inicio, como hacía el prototipo.
+- Se exponen cinco enteros con default 0 y no `por_empresa` entero. Porqué: el front sólo
+  necesita cuántas líneas no tienen empresa, y el default deja andar a un cliente que no los
+  lee y al front nuevo contra un backend viejo, sin orden obligatorio de deploy. No cambia
+  qué cuenta `lineas_con_alerta` ni se toca `preliquidacion_service.py` (zona sensible).
+- El Inicio vuelve a pedir el listado en cada visita (`refetchOnMount: 'always'`). Porqué:
+  Revisión y Conceptos no lo invalidan al editar.
+- El desglose se muestra sólo en las filas con líneas con alerta. Porqué: "sin empresa" no
+  cuenta en el total de alertas (regla del backend, fuera de alcance) y una quincena OK no
+  tiene que mostrar "Detalle".
+- Contraste de los chips del historial (R5) y del dato destacado del modal (R7): texto en el
+  color normal y el tono en el fondo y un borde, sin tocar tokens. Porqué: elección del
+  usuario. Descartado: oscurecer los tokens de alerta, que afecta a todo el sistema, y
+  dejarlo como estaba.
+- En Verificación el orden se guarda por sección y no uno común. Porqué: cada tabla tiene
+  columnas distintas.
+- El modal devuelve el foco al elemento anterior y encierra el Tab (ajuste A5 del plan).
+  Porqué no registrado en el PR.
+- `InputBusqueda.jsx` se borra (A6). Porqué: la búsqueda vive en la barra común y el
+  componente quedaba sin uso.
+- La búsqueda de Conceptos se mantiene al cambiar de quincena (decisión del usuario) y se
+  limpia al cambiar de solapa, como en `main`.
+- R8: la barra de Conceptos se vuelve a montar sólo cuando Conceptos cambia la búsqueda desde
+  afuera. Descartado: darle a `FiltrosBar` una búsqueda controlada, porque es un componente
+  compartido por cinco pantallas; queda para otro PR.
+- `docs/AYUDA.md` corrige también lo que ya estaba desactualizado antes del refinamiento
+  ("4 pestañas" con "Específicos", emojis del menú, formatos viejos de quincena, el precio
+  masivo mal explicado). Porqué: el asistente responde con esta guía. Suma la vista
+  gerencial porque el asistente también atiende al gerente (el chat está montado en el marco
+  Gerencial y el endpoint sólo pide sesión). Saca "Sueldos / Empleados (todavía no
+  disponible)", porque la pantalla no existe.
+
+**Estado**
+- Deploy: no. Espera el OK del usuario y es de front y backend: el asistente lee
+  `docs/AYUDA.md` una vez por proceso (`lru_cache` en `app/core/asistente.py`), así que la
+  guía nueva necesita pull y reinicio del backend. Por los defaults del BK #77 no hay orden
+  obligatorio entre los dos.
+- Migraciones: ninguna.
+- Respaldo del prototipo: rama local `respaldo/prototipo-refinamiento` del front, sin push.
+  Los worktrees del front se borraron.
+- Verificación:
+  - Front: `npm test` 76/76, con cada par de lógica visto en rojo contra un stub;
+    `npm run build` OK; `npx eslint` de los archivos tocados, 0 errores; detector de
+    `impeccable`, sin hallazgos. Conformidad con el prototipo (FT #64): el diff contra
+    `respaldo/prototipo-refinamiento` muestra sólo los ajustes A1 a A7, los arreglos R2 a
+    R10 y los tests.
+  - Backend: 1013 passed, 1 xfailed (BK #77); `tests/core/test_asistente_docs.py`, 6 passed
+    (BK #79).
+  - Smoke contra `testing` en cada etapa (el detalle está en cada PR). No probado: una
+    cuenta sólo operador y otra sólo gerente (hay una sola cuenta).
+  - Revisión de dos ejes con verificador en cada PR menos E6 (sólo docs, como define el
+    plan); de E1 en adelante, también `/impeccable critique` y `audit`. Arreglados:
+    - R1 (high, E0): la lista blanca de `.impeccable/`.
+    - R2 (urgent, E1): al cambiar de quincena con el selector, el panel seguía con la línea
+      de la quincena anterior y "Guardar" la editaba; Revisión se vuelve a montar con
+      `key={id}`.
+    - R3 y R6 (high, E1 y E4): Mantenimiento y Verificación decían "Todavía no hay
+      quincenas generadas." mientras cargaba o si fallaba la lista.
+    - R4 (high, E3): "Generar" quedaba habilitado con el mes en curso mientras cargaba el
+      listado, y un clic temprano generaba la quincena equivocada.
+    - R5 y R7 (high, E3 y E4): contrastes de 3,69, 3,89 y 4,26:1, que pasan a 11,62, 12,09 y
+      13,22:1.
+    - R8 (high, E5): la barra de Conceptos perdía el foco del selector con las flechas, y al
+      volver a tocar la solapa el campo seguía con la búsqueda vieja.
+    - R9 (high, E5): la variación de los KPI de Gerencial se leía sin signo y el badge
+      "Reemplaza al común" quedó sin texto accesible.
+    - R10 (deuda previa, pedida por el usuario, E5): Conceptos distingue carga y error de la
+      lista de quincenas.
+
+**Pendiente**
+- Deploy de front y backend juntos, sólo con OK del usuario (en `docs/estado.md`).
+- Decisiones del usuario: los contrastes de tokens compartidos por debajo de AA (`badge-*`;
+  warn, danger e info sobre su `-dim`) y el padding de `FiltrosBar` (16 px) contra el de las
+  páginas (24 o 28 px).
+- Fuera de los PRs, código para más adelante: `app/core/asistente.py` le da al modelo, de
+  ejemplo, el botón "▶ Generar / Actualizar", con un símbolo que ya no existe; y `/gerencial`
+  no está en las `pantallas` de `rutas.jsx` del front, así que el asistente no sabe en qué
+  pantalla está el gerente.
+- Minors sin tocar, en el cuerpo de cada PR: 2 del FT #60, 9 del FT #61, 3 del BK #77, 9 del
+  FT #62, 9 del FT #63 y 10 del FT #64. La deuda previa vista en las revisiones está en los
+  cuerpos de FT #61 a FT #64.
