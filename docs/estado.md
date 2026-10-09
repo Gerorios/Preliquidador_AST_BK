@@ -26,8 +26,9 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-E4 del plan (front): Verificación con tablas ordenables y detalle de persona en un modal
-(par 4.1, pasos 4.2 a 4.4). Después E5 (Conceptos y Gerencial) y E6 (ayuda).
+E4 del plan (front, rama `feature/refinamiento-4-verificacion`): hecha y revisada (0 urgent,
+2 high arreglados como R6 y R7, 9 minor); espera el OK del usuario para el PR y el merge.
+Después E5 (Conceptos y Gerencial) y E6 (ayuda).
 
 ## Pendientes del usuario
 
