@@ -24,6 +24,9 @@ Qué hace, en orden, dentro del destino:
   2. Copia de filas en lotes.
   3. Recrea las vistas (si el usuario destino no puede, avisa y sigue).
 
+Una tabla de la lista que no exista en el origen se saltea con un aviso y no se
+toca en el destino (por ejemplo, las de roles antes de deployarlas en producción).
+
 Protecciones: se niega a correr si origen y destino son la misma base, y
 pide confirmación escribiendo el nombre del destino antes de borrar nada.
 """
@@ -45,6 +48,9 @@ load_dotenv()
 TABLAS = [
     "usuarios",
     "usuario_modulo",
+    "rol",
+    "rol_permiso",
+    "usuario_rol",
     "preliquidacion",
     "concepto_liquidacion",
     "preliquidacion_linea",
@@ -80,6 +86,16 @@ def config_destino(origen):
     return dict(host=host, port=port, user=user, password=password, db=db)
 
 
+def existe_tabla(cur, tabla: str) -> bool:
+    """Si `tabla` existe como tabla (no vista) en la base de la conexión del cursor."""
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.TABLES "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND TABLE_TYPE = 'BASE TABLE'",
+        (tabla,),
+    )
+    return cur.fetchone()[0] > 0
+
+
 def limpiar_ddl_vista(ddl: str, db_origen: str) -> str:
     """SHOW CREATE VIEW trae DEFINER y SQL SECURITY del origen y, a veces, la
     base calificando las tablas. Nada de eso sirve en el destino."""
@@ -109,15 +125,27 @@ def main():
 
     print(f"Origen : {origen['db']} @ {origen['host']} (usuario {origen['user']})")
     print(f"Destino: {destino['db']} @ {destino['host']} (usuario {destino['user']})")
+
+    # Las tablas que no existen en el origen se saltean antes de confirmar, para que
+    # la lista que se muestra sea la que de verdad se va a borrar y recrear.
+    src = conectar(**origen)
+    cs = src.cursor()
+    salteadas = [t for t in tablas if not existe_tabla(cs, t)]
+    for t in salteadas:
+        print(f"AVISO: se saltea la tabla {t} porque no existe en el origen ({origen['db']}). En el destino no se toca.")
+    tablas = [t for t in tablas if t not in salteadas]
+    if not tablas:
+        src.close()
+        sys.exit("Ninguna de las tablas pedidas existe en el origen. No se tocó nada.")
+
     print(f"Tablas : {', '.join(tablas)}")
     print("Se van a BORRAR y recrear esas tablas en el destino. Las demás tablas del destino no se tocan.")
     if not args.si:
         if input(f"Escribí el nombre del destino para confirmar ({destino['db']}): ").strip() != destino["db"]:
             sys.exit("Confirmación incorrecta. Abortado.")
 
-    src = conectar(**origen)
     dst = conectar(**destino)
-    cs, cd = src.cursor(), dst.cursor()
+    cd = dst.cursor()
 
     cd.execute("SET FOREIGN_KEY_CHECKS=0")
     cd.execute("SET UNIQUE_CHECKS=0")
@@ -175,6 +203,8 @@ def main():
         marca = "OK " if b == esperado else "DIF"
         ok &= b == esperado
         print(f"  {marca} {t}: {a} -> {b}")
+    for t in salteadas:
+        print(f"  SALTEADA {t}: no existe en el origen, el destino quedó como estaba")
 
     src.close()
     dst.close()
