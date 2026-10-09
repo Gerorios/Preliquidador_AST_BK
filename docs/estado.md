@@ -23,7 +23,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Esquema de permisos: el paso 1.9 (`refrescar_testing.py` con las tablas nuevas), la revisión de código de BK1 en dos rondas y su PR (el merge, con OK del usuario). En el front, la prueba en el navegador de FT1 contra el backend de la rama; crear roles o usuarios de prueba en `testing` (smoke 3.10) espera el OK del usuario.
+Esquema de permisos, retomar en el paso 1.10 (pausa del 2026-10-09): BK1 tiene commiteados los pasos 1.1 a 1.9 y la suite completa da 1107 passed y 1 xfailed. La revisión de código de BK1 quedó en la primera ronda: los dos ejes ya reportaron (copiados en la sección 9 del plan, "Paso 1.10"); falta pasarlos por `verificador-review`, arreglar los urgent y high, hacer la segunda ronda sólo sobre los arreglos y abrir el PR (el merge, con OK del usuario). En el front, FT1 ya se miró en el navegador como admin, en sólo lectura: Administración con sus dos solapas y la validación del editor andan. Falta `/impeccable critique`, `audit` y `polish`, `PRODUCT.md` (3.9) y el smoke 3.10, que crea roles y usuarios de prueba en `testing` y espera el OK del usuario.
 
 ## Pendientes del usuario
 
