@@ -901,3 +901,8 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
   - El banner de líneas incompletas de Revisión dice "cargá los conceptos y precios en el maestro".
   - El aviso de valor hora faltante en Verificación, con sólo Ver, dice "El liquidador todavía no cargó…".
 - **Par 1.3:** el comentario `-- está vacía; correrla otra vez…` de 2.5 caía en la trampa del aplicador, porque el texto quedaba después de un `;`. Pasó a `-- está vacía. Correrla…`, en el `.sql` y en 2.5. Lo vigila el test (d).
+- **Paso 3.8, construcción** (commit del front). Pendiente, cuando el backend tenga la API de roles: la verificación en el navegador, `/impeccable critique`, `audit` y `polish`.
+  - El selector global pasa a llamarse "Tipo de usuario" (Usuario / Administrador).
+  - Login e Inicio dicen: "Tu usuario todavía no tiene acceso a ninguna pantalla. Pedile al administrador las que necesitás."
+  - El editor manda sólo los módulos con alguna pantalla. El `PUT` del backend reemplaza los módulos activos del catálogo, no sólo los que recibe, y el par 1.8 lo testea así.
+- **Deuda de Terceros, para Pitu:** `src/modulos/terceros/pages/Inicio.jsx:97` le pasa `texto` a `CargandoOverlay`, que no recibe props. El texto propio nunca se muestra.
