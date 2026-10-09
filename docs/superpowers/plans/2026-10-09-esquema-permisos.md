@@ -915,3 +915,7 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
   - **El backend de la rama** contra `testing`: el banner dice "Tablas y columnas BD propia: verificadas" y `/health` responde `ok`.
   - **Cada usuario de `testing`**, cargado con el modelo de la rama en sólo lectura, muestra los permisos que le corresponden. Los admin quedan con `{}`.
   - **El login por HTTP no se probó:** las credenciales de prueba viven en el `.env`, que no se lee. Queda para el smoke 3.10, con usuarios de prueba creados con OK.
+- **Paso 1.8 (`cee9639`):** `DELETE /roles/{id}` responde 204 sin cuerpo, como los `DELETE` de Terceros. Un rol inexistente da 404 "El rol no existe". `GET /roles` sale ordenado por nombre, y las personas de cada rol también.
+- **Paso 1.9 (`8b6b369`):** una tabla que no existe en el origen se saltea antes de confirmar y no se toca en el destino.
+  - Riesgo, sin acción en el código: si se refresca `testing` antes del deploy, `usuarios` vuelve con los ids de producción y `rol`, `rol_permiso` y `usuario_rol` quedan como estaban. `usuario_rol` puede apuntar a otras personas.
+  - Las FK no lo frenan, porque la copia corre con `FOREIGN_KEY_CHECKS=0`. Después de un refresco así, vaciar `usuario_rol` y volver a correr la semilla de `core/002` en `testing`, con OK.
