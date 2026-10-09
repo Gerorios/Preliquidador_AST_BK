@@ -6,7 +6,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Estilos de aviso (carril completo, decisión de estética del usuario del 2026-10-09): etiquetas con texto oscuro, aviso de error propio y barra de filtros alineada con el título. Plan aprobado: `docs/superpowers/plans/2026-10-09-estilos-aviso.md` (dos PRs del front y uno del plan; un deploy al final, con OK). Fase: ejecución, PR 1 (etiquetas). Después: el esquema de permisos, que destraba Facturación.
+- Estilos de aviso (carril completo, decisión de estética del usuario del 2026-10-09): etiquetas con texto oscuro, aviso de error propio y barra de filtros alineada con el título. Plan aprobado: `docs/superpowers/plans/2026-10-09-estilos-aviso.md` (dos PRs del front y uno del plan; un deploy al final, con OK). Fase: ejecución, PR 2 (aviso de error y barra); PR 1 mergeado (FT #66). Después: el esquema de permisos, que destraba Facturación.
 - Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
   permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
   editor / admin por módulo); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
