@@ -2744,3 +2744,38 @@ Cierra la deuda previa que anotó la entrada anterior.
 - Minors sin tocar, en el cuerpo de cada PR: 2 del FT #60, 9 del FT #61, 3 del BK #77, 9 del
   FT #62, 9 del FT #63 y 10 del FT #64. La deuda previa vista en las revisiones está en los
   cuerpos de FT #61 a FT #64.
+
+## 2026-10-09 — Deploy a producción del refinamiento de Preliquidación y Gerencial
+
+Entrada de deploy: no anota un merge sino el deploy del refinamiento (FT #60 a #64, BK #77 y
+#79), ya anotado arriba. Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md`
+(local, fuera de git).
+
+**Qué se deployó**
+- Backend: de `d35ea04` a `46e4b2b` (BK #75 a #79). De código, sólo el BK #77; el resto son
+  docs y tooling. El BK #79 trae `docs/AYUDA.md`, que el asistente lee una vez por proceso:
+  por eso el backend se reinició en la misma ventana.
+- Frontend: de `93ba472` a `5265bd4` (FT #58 a #64), con build desde el checkout del front
+  en `main`, idéntico a `origin/main`.
+- Orden: backend y después frontend, en la misma ventana. El BK #77 sólo agrega campos con
+  default 0, así que no había orden obligatorio. Autorizado por el usuario.
+
+**Estado**
+- Deploy: sí, backend y frontend. Frontend con swap de carpeta; la versión anterior queda
+  como rollback.
+- Migraciones: ninguna. Dependencias nuevas: ninguna.
+- Verificación: un solo arranque del backend, conectado a la base de producción, con tablas
+  y columnas verificadas; `/health` ok. Build del front con 47 assets y el mismo bundle en
+  local y en el servidor; el sitio responde 200 y sirve el bundle nuevo. Smoke en sólo
+  lectura con el endpoint del listado: trae los cinco campos del desglose, y la quincena del
+  2026-08-16 da los mismos números que el smoke del deploy anterior (150 líneas con alerta,
+  10 duplicados, 4 posibles duplicados). Journal sin errores ni 5xx desde el reinicio.
+- Rollback: backend al commit anterior y reinicio (el front nuevo muestra sólo el total de
+  alertas contra el backend viejo); swap inverso de la carpeta del front. Sin DDL ni datos
+  tocados.
+
+**Pendiente**
+- Mirar el refinamiento en el sitio real.
+- En producción hay una quincena del 2026-10-16 generada y sin líneas; "Generar" del Inicio
+  arranca en la última generada, así que va a proponer esa.
+- Queda cerrado el pendiente de deploy de la entrada del refinamiento.
