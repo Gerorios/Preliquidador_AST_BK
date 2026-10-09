@@ -2779,3 +2779,72 @@ Entrada de deploy: no anota un merge sino el deploy del refinamiento (FT #60 a #
 - En producción hay una quincena del 2026-10-16 generada y sin líneas; "Generar" del Inicio
   arranca en la última generada, así que va a proponer esa.
 - Queda cerrado el pendiente de deploy de la entrada del refinamiento.
+
+## 2026-10-09 — Verificación y Gerencial avisan si un control no cargó
+
+**Mergeado**
+- PR #65 (frontend) — Verificación y Gerencial avisan si un control no cargó, y guardar el
+  valor hora confirma o avisa el error.
+- PR #80 (backend) — sólo el plan de la tarea,
+  `docs/superpowers/plans/2026-10-09-verificacion-errores-valor-hora.md`. Hermano del FT #65.
+
+**Por frontera**
+- Preliquidación (front):
+  - `pages/Verificacion.jsx`: si falla la carga de las líneas de la quincena, aparece el
+    aviso "No se pudieron cargar las líneas de la quincena. Probá recargar la página."
+    donde antes cada sección decía "No hay excesos…", "No hay posibles duplicados." o "No
+    hay líneas en esta quincena.". Plantas vs Jornal y Tancadas vs Jornal muestran "Cargando
+    el control…" y un aviso propio si falla su consulta. Guardar el valor hora confirma con
+    "Valor hora guardado" y, si falla, avisa "No se guardó el valor hora: <motivo>".
+  - `pages/Gerencial.jsx`: los dos controles de jornal tienen el mismo estado de carga y el
+    mismo aviso de error. `ControlesJornal.jsx` no cambia.
+- Docs: el plan de la tarea (BK #80).
+
+**Decisiones**
+- Un control que no pudo cargar no dice "no hay". Porqué: con el backend lento o caído,
+  alguien podría cerrar la quincena creyendo que está todo bien. Guardar el valor hora
+  cambia los porcentajes del control, así que el liquidador tiene que saber si quedó
+  guardado.
+- Los controles de jornal quedan afuera de la carga y el error de las líneas. Porqué: tienen
+  su propia consulta.
+- Se sigue el patrón ya aprobado del refinamiento (R3, R6, R10): `CargandoContenido`, un
+  aviso con la clase de vacío de cada pantalla y "Probá recargar la página."; la pantalla
+  decide qué mostrar. Descartado: tocar `api.js` para traducir los mensajes de axios
+  ("Network Error"), porque es del núcleo y queda como deuda; el prefijo "No se guardó el
+  valor hora:" ya deja claro qué pasó.
+- Si falla la recarga que sigue al guardado, el control se reemplaza por el aviso de error.
+  Porqué: los porcentajes en caché ya son viejos. Alternativa, si se prefiere conservar la
+  tabla: `isError && data === undefined`.
+- El plan va en el backend aunque la tarea sea sólo de front. Porqué: lo pide el flujo.
+
+**Estado**
+- Deploy: no; espera el OK del usuario. Sólo el front (swap de carpeta); el BK #80 no
+  necesita deploy.
+- Migraciones: ninguna.
+- Verificación:
+  - En el navegador contra `testing`, forzando las consultas a fallar y con los guardados
+    interceptados (no se escribió nada en la base): antes se veían los falsos "no hay" y
+    guardar no mostraba toast; después aparecen los avisos y los toasts. El aviso de líneas
+    también se vio con una caída real del proxy de desarrollo.
+  - `npm test` 76/76, `npm run build` OK, `npx eslint` de los dos archivos, 0; detector de
+    `impeccable`, sin hallazgos; los avisos nuevos pasan AA (5,4 a 6,7:1).
+  - Revisión de carril corto con verificador: 0 urgent, 2 high arreglados, 3 minor sin
+    tocar y 4 descartados, más `impeccable` con 1 high (el R2) y 1 descartado.
+    - R1 (high): la primera versión tapaba los controles de jornal cuando fallaban las
+      líneas, una regresión; reproducido y arreglado.
+    - R2 (high): el toast de error decía sólo "Network Error"; ahora lleva el prefijo.
+- Rollback: revertir el FT #65 y redeployar el front. No toca datos ni el backend.
+
+**Pendiente**
+- Deploy del front, sólo con OK del usuario (en `docs/estado.md`).
+- Consultas al usuario y deuda previa, en el cuerpo del FT #65:
+  - El error usa el mismo estilo gris que un vacío (`.empty`); un estilo de error propio es
+    una decisión de estética del usuario.
+  - Los mensajes de axios llegan en inglés (`api.js`); `CargandoContenido` no tiene
+    `role="status"`; los toasts duran 3,5 y 5 s.
+  - Después de un guardado fallido, el campo conserva el valor tipeado.
+  - Los paneles de desvíos e indicadores de Gerencial no avisan si falla la carga.
+- Minors sin tocar del FT #65: al vaciar el campo también dice "Valor hora guardado"
+  (correspondería "Valor hora borrado"); la cadena carga/error/control se repite cuatro
+  veces, `isLoading` de las líneas quedó sin renombrar y está `guardarValorHora` al lado de
+  `guardarValorHoraTractorista`.

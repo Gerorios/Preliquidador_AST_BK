@@ -6,7 +6,6 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Verificación y Gerencial: error de carga visible y aviso al guardar el valor hora (carril corto, los dos pendientes altos del refinamiento). Fase: revisada (0 urgent, 2 high arreglados como R1 y R2, 3 minor); espera el OK del usuario para el PR. Plan: `docs/superpowers/plans/2026-10-09-verificacion-errores-valor-hora.md`.
 - Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
   permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
   editor / admin por módulo) y el fin del refinamiento. Después: plan de implementación con
@@ -15,7 +14,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Refinamiento deployado y revisado por el usuario (2026-10-09). Siguen: capturas para el mail de cambios y los pendientes más importantes que quedaron del refinamiento.
+Deploy del FT #65 (avisos de error de Verificación y Gerencial) cuando el usuario lo diga. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
 
 ## Pendientes del usuario
 
@@ -31,9 +30,12 @@ Refinamiento deployado y revisado por el usuario (2026-10-09). Siguen: capturas 
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
 - Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (FT #64, 2026-10-08).
+- Deploy del arreglo de Verificación y Gerencial (avisos de error de carga y del valor hora): sólo front, espera el OK del usuario (FT #65, 2026-10-09).
+- Decidir si los avisos de error llevan un estilo propio (rojo con ícono) en vez del gris de "no hay datos", con el que hoy se confunden: es estética, va con la decisión de colores de aviso (FT #65, 2026-10-09).
 
 ## A futuro
 
+- Deuda vista en la revisión del FT #65: los paneles de desvíos e indicadores de Gerencial no avisan si falla la carga (dicen "Ningún cliente con historial comparable"); los mensajes de axios llegan en inglés (`api.js`, núcleo); después de un guardado fallido del valor hora el campo conserva lo tipeado (2026-10-09).
 - 5 warnings `react-hooks/exhaustive-deps` en Terceros (`FiltroMultiple.jsx` y `Grilla.jsx`): deuda del FT #48, no bloquea.
 - `app/core/asistente.py` le da al modelo de ejemplo el botón "▶ Generar / Actualizar", con un símbolo que la interfaz ya no tiene; y `/gerencial` no está en las `pantallas` de `rutas.jsx` del front, así que el asistente no sabe en qué pantalla está el gerente. Código, fuera del BK #79 (2026-10-08).
 - El control de completitud cuenta una regla con precio <= 0 como completa (`reglas_completas` en `preliquidacion_service.py` y el SQL de faltantes de `precios.py`): sin urgencia, no hay reglas así en producción (2026-10-01).
@@ -45,5 +47,5 @@ Refinamiento deployado y revisado por el usuario (2026-10-09). Siguen: capturas 
 - Botón para descartar un "Posible duplicado" ya revisado: descartado por ahora (2 casos en 5 quincenas); se agrega si con el uso molesta (2026-10-07).
 - El endpoint `GET /preliquidacion/{id}/dashboard-verificacion` no lo usa ninguna pantalla desde la primera versión (Verificación calcula en el front; la función del front se borró el 2026-09-07): candidato a borrar o a usar en la refacción de UX/UI (2026-10-07).
 - `npm run lint` del front da 6 errores en `main`, todos en `.claude/hooks/ultimas-entregas.mjs` (`process` sin `globals.node`, FT #56): sin urgencia, no corre en la app (2026-10-07).
-- Verificación queda en "Cargando líneas…" si se cambia de sección mientras cargan las líneas (pasa también con las secciones viejas; visto en el smoke del 2026-10-07): sin investigar.
+- Verificación quedaba en "Cargando líneas…": en desarrollo, el proxy de Vite corta la descarga de las líneas (ECONNRESET) y deja el pedido colgado; en producción ese corte lo responde nginx y desde el FT #65 la pantalla lo avisa. Sin acción, salvo que se vea en el sitio real (2026-10-09).
 - Deudas menores del incidente del 2026-09-18 al 2026-09-23 (candado, quincena cruda, parámetros de lectura): ver las entradas de esas fechas en la bitácora.
