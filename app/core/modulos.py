@@ -3,6 +3,8 @@ ModuloInfo en app/modulos/<m>/__init__.py; app/modulos/__init__.py los lista.
 El núcleo consume la lista y no conoce módulos por nombre."""
 from dataclasses import dataclass, field
 
+from fastapi import Request
+
 
 @dataclass(frozen=True)
 class Pantalla:
@@ -47,3 +49,11 @@ class ModuloInfo:
             "etiquetas_rol": dict(self.etiquetas_rol), "panel_gerencial": self.panel_gerencial,
             "pantallas": [p.publico() for p in self.pantallas],
         }
+
+
+def catalogo_activo(request: Request) -> tuple[ModuloInfo, ...]:
+    """Dependencia: los módulos activos, con sus pantallas. Los carga
+    `app/main.py` en `app.state.modulos` al registrar los routers; así el núcleo
+    (la Administración) valida claves de módulo y pantalla sin importar
+    módulos."""
+    return request.app.state.modulos

@@ -163,6 +163,9 @@ from app.core.models import Usuario  # noqa: E402
 
 app.include_router(auth.router)
 app.include_router(administracion.router)
+# Catálogo de módulos activos para el núcleo (`modulos.catalogo_activo`): la
+# Administración valida con él los permisos de los roles sin importar módulos.
+app.state.modulos = activos()
 for modulo in activos():
     for r in modulo.routers:
         app.include_router(r)
