@@ -11,6 +11,7 @@ uno solo, y el front no tiene glosario propio.
 | Sistema (núcleo compartido) | [`CONTEXT.md`](CONTEXT.md) | Módulos, roles, acceso y administración de usuarios, y los términos que usan todos los módulos: Quincena, Persona, Legajo, Empresa |
 | Preliquidación | [`docs/modulos/preliquidacion/CONTEXT-preliquidacion.md`](docs/modulos/preliquidacion/CONTEXT-preliquidacion.md) | La preliquidación de sueldos por quincena a partir de las tareas de campo |
 | Liquidación Terceros | [`docs/modulos/terceros/CONTEXT-terceros.md`](docs/modulos/terceros/CONTEXT-terceros.md) | La liquidación a transportistas y a dueños de maquinaria de terceros |
+| Facturación | [`docs/modulos/facturacion/CONTEXT-facturacion.md`](docs/modulos/facturacion/CONTEXT-facturacion.md) | El registro de lo facturado a los clientes por las tareas agrícolas y su cruce contra lo cargado en el campo |
 
 ## Cómo se relacionan
 
