@@ -6,15 +6,20 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
-  permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
-  editor / admin por módulo); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
+- Esquema de permisos (tarea del núcleo, carril completo, zona sensible): la decisión está
+  tomada (ADR-0020, BK #82, 2026-10-09): roles armables por el admin con permisos de Ver o
+  Editar por pantalla. Fase: diseño de las pantallas nuevas de Administración con
+  `impeccable`. Después: plan con el planificador (dos rondas de revisión) e implementación
+  en PRs hermanos. `docs/modulos/GUIA-MODULOS.md` todavía describe `operador`/`gerente` y la
+  "etiqueta de rol": cambia en el PR de la implementación.
+- Módulo Facturación (carril completo, sin código): espera la implementación del esquema de
+  permisos (ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
   el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
   locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
 
 ## Próximo paso
 
-El esquema de permisos (tarea del núcleo, sin empezar; idea del usuario: lector / editor / admin por módulo), que destraba Facturación. Fase: entrevista (2026-10-09). Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
+El esquema de permisos, que destraba Facturación: la decisión está tomada (ADR-0020, BK #82, 2026-10-09). Fase: diseño con `impeccable` de las pantallas nuevas de Administración (los roles con su grilla de pantallas por Ver/Editar, y la asignación de varios roles a cada persona). Después, plan con el planificador (carril completo, zona sensible: dos rondas de revisión) y la implementación en PRs hermanos. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
 
 ## Pendientes del usuario
 
@@ -32,6 +37,7 @@ El esquema de permisos (tarea del núcleo, sin empezar; idea del usuario: lector
 - Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).
 - Mirar en el sitio real las etiquetas con texto oscuro, el aviso de error rojo y la barra de filtros alineada (deploy del 2026-10-09).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
+- Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82).
 
 ## A futuro
 

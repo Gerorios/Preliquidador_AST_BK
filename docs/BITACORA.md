@@ -3014,3 +3014,42 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Las etiquetas cambian también en el Tarifario de Terceros: avisarle a Pitu (en
   `docs/estado.md`).
 - Queda cerrado el pendiente de deploy de la entrada de estilos de aviso.
+
+## 2026-10-09 — Decisión del esquema de permisos: ADR-0020 y glosario
+
+**Mergeado**
+- PR #82 (backend, merge `8e8e083`) — `docs(permisos)`: ADR-0020 (roles armables con permisos
+  de ver o editar por pantalla) y glosarios de roles, permisos y pantallas. Sólo docs.
+
+**Por frontera**
+- Docs: ADR-0020 nuevo; nota en el ADR-0013 de que su parte de permisos la reemplaza el
+  ADR-0020; `CONTEXT.md` suma Pantalla y Permiso, redefine Rol y Admin, pasa Operador,
+  Gerente y Etiqueta de rol a `_Avoid_`, y Inicio, Tarjeta y Administración hablan de
+  permisos; `CONTEXT-MAP.md` nombra los permisos; el glosario de Preliquidación cambia
+  "Roles en Preliquidación" por sus seis pantallas con qué es ver y editar; el de Terceros
+  suma sus cinco pantallas con el mismo formato.
+- Núcleo, Preliquidación y Terceros: sin código todavía; la implementación cambia la
+  protección de rutas y endpoints de los tres.
+
+**Decisiones**
+- Un Rol es un conjunto de Permisos con nombre que arma el admin desde la Administración; un
+  Permiso es Ver o Editar una Pantalla (Editar incluye Ver); una persona tiene uno o más
+  roles y sus permisos se suman; el admin sigue siendo una marca global aparte. Porqué: el
+  esquema operador/gerente no cubre sin programar que el gerente vea Verificación y los
+  precios de Conceptos, ni los tres niveles con que se diseñó Facturación. Descartado: roles
+  fijos como hasta ahora (cada caso nuevo exige cambiar el código); lector / editor / admin
+  por módulo (no deja que el gerente vea Verificación sin ver Revisión); permisos por botón
+  (la grilla del admin se vuelve ilegible); un solo rol por persona (obliga a un rol por
+  cada combinación). Decidido con el usuario el 2026-10-09, en una entrevista.
+- La migración no cambia el acceso de nadie: copia el de hoy en tres roles, Preliquidador,
+  Gerente y Liquidador de terceros (ADR-0020, "Consecuencias").
+
+**Estado**
+- Deploy: no. Migraciones: ninguna.
+
+**Pendiente**
+- Diseño de las pantallas nuevas de Administración con `impeccable`, plan con el
+  planificador e implementación en PRs hermanos (en `docs/estado.md`).
+- `docs/modulos/GUIA-MODULOS.md` todavía describe `operador`/`gerente`; cambia en el PR de
+  la implementación.
+- Avisarle a Pitu del cambio en el glosario de Terceros (en `docs/estado.md`).
