@@ -919,3 +919,21 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
 - **Paso 1.9 (`8b6b369`):** una tabla que no existe en el origen se saltea antes de confirmar y no se toca en el destino.
   - Riesgo, sin acción en el código: si se refresca `testing` antes del deploy, `usuarios` vuelve con los ids de producción y `rol`, `rol_permiso` y `usuario_rol` quedan como estaban. `usuario_rol` puede apuntar a otras personas.
   - Las FK no lo frenan, porque la copia corre con `FOREIGN_KEY_CHECKS=0`. Después de un refresco así, vaciar `usuario_rol` y volver a correr la semilla de `core/002` en `testing`, con OK.
+- **Paso 1.10, revisión ronda 1 (2026-10-09), reportes de los revisores, todavía sin verificar.** Falta pasarlos por `verificador-review` con `git diff origin/main...HEAD`.
+  - **Standards:**
+    - Duro: el asunto de `91fe489` tiene 74 caracteres, y el máximo es 72.
+    - De criterio: `_norm` está copiada de `precios.py` en `roles_service.py` ("lo compartido sube al núcleo").
+    - De criterio: `7342f05` mezcla el plan con código.
+    - De criterio: el cuerpo de `cee9639` describe en lugar de decidir.
+    - De criterio: `GUIA-MODULOS` todavía habla de `requiere_modulo`; queda para el BK2, en el 2.7.
+    - Olores: `NIVELES` duplicado en `permisos.py` y `roles_service.py`.
+    - Olores: "¿es admin?" repetido en `puede`, `requiere_pantalla` y `_permisos_de_sesion`.
+    - Olores: el motivo es un `str`, y por eso `_rechazar_rol` vuelve a consultar el nombre.
+    - Olores: el trío `(modulo, pantalla, nivel)` y el tipo `dict[str, dict[str, str]]` se repiten.
+    - Olores: nombres cortos (`_filas`, `alguna`, `cs`/`cd`).
+    - Olores: `permisos_de` tolera objetos sin `roles`.
+    - Olores: `ModuloInfo.pantallas: tuple` sin tipo de elemento.
+  - **Spec:** nada bloqueante; la etapa 1 está completa y no se coló nada del BK2.
+    - Dudoso: dos altas simultáneas, o una diferencia entre `_norm` y la collation, chocan con `uq_rol_nombre` como `IntegrityError` y dan 500 en vez de 409.
+    - Dudoso: `permisos_de` usa `NIVELES.index(nivel)` sin CHECK en la base, así que un nivel cargado a mano da 500.
+    - Proceso: el aviso a Pitu en `estado.md` no nombra la declaración de `PANTALLAS` en Terceros.
