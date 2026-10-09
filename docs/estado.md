@@ -32,7 +32,8 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 ## Próximo paso
 
 E6 del plan (backend, sólo docs, rama `feature/refinamiento-6-ayuda`): `docs/AYUDA.md` a la
-interfaz nueva y el plan con los pasos R4 a R10. Después, el deploy del front cuando el usuario lo
+interfaz nueva y el plan con los pasos R4 a R10, hecha; espera el OK del usuario para el PR y el
+merge. Después, el deploy del front cuando el usuario lo
 diga (el código ya está todo en `main`; worktrees del front y prototipo borrados, respaldo en la
 rama local `respaldo/prototipo-refinamiento`).
 
