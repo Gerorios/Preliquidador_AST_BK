@@ -8,9 +8,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 - Esquema de permisos (tarea del núcleo, carril completo, zona sensible): la decisión está
   tomada (ADR-0020, BK #82, 2026-10-09): roles armables por el admin con permisos de Ver o
-  Editar por pantalla. Fase: diseño de las pantallas nuevas de Administración con
-  `impeccable`. Después: plan con el planificador (dos rondas de revisión) e implementación
-  en PRs hermanos. `docs/modulos/GUIA-MODULOS.md` todavía describe `operador`/`gerente` y la
+  Editar por pantalla. Diseño de Administración confirmado (`/impeccable shape`). Plan
+  aprobado el 2026-10-09: `docs/superpowers/plans/2026-10-09-esquema-permisos.md` (en la rama
+  `feature/permisos-pantallas`, worktrees `.claude/worktrees/permisos-pantallas` de los dos
+  repos), con 4 PRs (BK1, BK2, FT1, FT2) y un solo deploy. Fase: etapa 0 (preparación y
+  consultas previas, que corre el usuario). `docs/modulos/GUIA-MODULOS.md` todavía describe `operador`/`gerente` y la
   "etiqueta de rol": cambia en el PR de la implementación.
 - Módulo Facturación (carril completo, sin código): espera la implementación del esquema de
   permisos (ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
@@ -19,7 +21,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-El esquema de permisos, que destraba Facturación: la decisión está tomada (ADR-0020, BK #82, 2026-10-09). Fase: diseño con `impeccable` de las pantallas nuevas de Administración (los roles con su grilla de pantallas por Ver/Editar, y la asignación de varios roles a cada persona). Después, plan con el planificador (carril completo, zona sensible: dos rondas de revisión) y la implementación en PRs hermanos. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
+Esquema de permisos, etapa 0 del plan: el usuario corre las consultas de sólo lectura del paso 0.2 en `testing` y en producción. Las tablas nuevas no tienen que existir, y la consulta cuenta las personas por módulo y rol de hoy. Después sigue la etapa 1 (BK1, el núcleo sin cambios de comportamiento), con el `ejecutor` par por par. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
 
 ## Pendientes del usuario
 
