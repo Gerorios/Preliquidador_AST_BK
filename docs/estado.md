@@ -14,7 +14,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Sin tarea en curso del refinamiento: deployado el 2026-10-09. Queda el smoke del usuario en el sitio real.
+Refinamiento deployado y revisado por el usuario (2026-10-09). Siguen: capturas para el mail de cambios y los pendientes más importantes que quedaron del refinamiento.
 
 ## Pendientes del usuario
 
@@ -27,10 +27,8 @@ Sin tarea en curso del refinamiento: deployado el 2026-10-09. Queda el smoke del
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - Mirar la alerta "Posible duplicado" en el sitio real: Revisión y Verificación de la 2Q de agosto (deploy del 2026-10-07).
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
-- Avisarle a Pitu que la regla de usar `impeccable` en todo cambio visual o feature nueva también le aplica en Terceros (BK #75 / FT #58, 2026-10-08); y que Terceros también hereda del núcleo el menú que recuerda si está contraído (FT #62).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
-- Mirar el refinamiento en el sitio real: barra de filtros y estado al navegar, historial con "Detalle", Verificación con tablas y detalle, Conceptos, Gerencial y la ayuda (deploy del 2026-10-09). Ojo: hay una quincena 2026-10-16 generada y vacía, y "Generar" arranca en esa.
 - Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (FT #64, 2026-10-08).
 
 ## A futuro
