@@ -8,7 +8,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 - Refinamiento de la interfaz de Preliquidación y Gerencial con `impeccable` (carril
   completo; Terceros no se toca). No es un rediseño: se mejora la estética actual. Fase:
-  ejecución, E4 (mergeados E0: FT #60, E1: FT #61, E2: BK #77 y E3: FT #62; plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
+  ejecución, E5 (mergeados E0: FT #60, E1: FT #61, E2: BK #77, E3: FT #62 y E4: FT #63; plan aprobado el 2026-10-08: `docs/superpowers/plans/2026-10-08-refinamiento-preliquidacion.md`,
   ya en `main` del backend; 7 PRs, E0 a E6; deploy sólo al final y con OK). Antes:
   prototipo para mirar antes del plan (desvío de la skill aprobado por el usuario: sin
   commits; lo que entre a `main` pasa por plan, tests y revisión). Prototipo en el worktree
@@ -26,9 +26,8 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-E4 del plan (front, rama `feature/refinamiento-4-verificacion`): hecha y revisada (0 urgent,
-2 high arreglados como R6 y R7, 9 minor); espera el OK del usuario para el PR y el merge.
-Después E5 (Conceptos y Gerencial) y E6 (ayuda).
+E5 del plan (front, rama `feature/refinamiento-5-conceptos`): Conceptos y Gerencial con la
+barra común e íconos (pasos 5.1 a 5.5). Después E6 (ayuda) y el deploy cuando el usuario lo diga.
 
 ## Pendientes del usuario
 
