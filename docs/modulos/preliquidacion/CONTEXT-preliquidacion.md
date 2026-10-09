@@ -4,14 +4,18 @@ Lenguaje ubicuo del módulo **Preliquidación**, el primer módulo del Sistema: 
 
 Los términos del Sistema (Módulo, roles, Quincena, Persona, Legajo, Empresa) están en [`CONTEXT.md`](../../../CONTEXT.md); el índice de glosarios es [`CONTEXT-MAP.md`](../../../CONTEXT-MAP.md).
 
-## Roles en Preliquidación
+## Pantallas de Preliquidación
 
-**Operador de Preliquidación (Preliquidador)**:
-El liquidador. Opera la preliquidación completa (Revisión, Verificación, Dashboard, Mantenimiento) pero **no** ve la Vista gerencial.
-_Avoid_: jefe (nombre viejo de este rol)
+Las Pantallas del módulo y qué es ver y qué es editar en cada una (Pantalla y Permiso están en `CONTEXT.md`):
 
-**Gerente de Preliquidación**:
-Accede a la Vista gerencial y opera el maestro de Conceptos **completo** (crear, editar y eliminar reglas, precios, precio masivo, copiar quincena), porque es quien muchas veces decide un cambio de precios. No opera el resto de la preliquidación.
+- **Inicio** (el Dashboard de quincenas): ver el historial de quincenas; editar es generar o actualizar una quincena.
+- **Revisión**: ver las líneas de una quincena y exportar el Excel; editar es corregir líneas, agregar conceptos extra, la Liquidación masiva y reasignar la empresa.
+- **Verificación**: ver los controles; editar es cargar el valor hora de la quincena.
+- **Mantenimiento**: ver las categorías de los operarios; editar es asignarlas y heredarlas.
+- **Conceptos** (el maestro de conceptos): ver reglas y precios; editar es crear, editar y borrar reglas, cargar precios, el precio masivo y copiar una quincena.
+- **Vista gerencial**: solo ver.
+
+_Avoid_: Preliquidador y Gerente como roles del módulo: son nombres de Roles que arma el Admin (ADR-0020); "jefe" (nombre viejo del liquidador).
 
 ## La quincena y sus líneas
 
@@ -146,7 +150,7 @@ _Avoid_: excluirlas de Revisión (ahí siguen visibles y editables, porque igual
 ## Vista gerencial
 
 **Vista gerencial**:
-Tablero de solo lectura para el rol gerente con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).
+Pantalla de solo lectura con los indicadores de Mano de obra gastada: total por período con comparación contra el anterior, evolución por quincena, desglose por cliente y por Grupo de tareas, y Desvío por persona. Filtrable por empresa y por período (quincena o mes calendario = sus 2 quincenas).
 
 **Mano de obra gastada**:
 Costo total de la preliquidación de un período: la suma de **todos** los Conceptos adicionales de sus líneas, manuales incluidos (es lo que efectivamente se paga), **excepto** las líneas de Personas mensualizadas. Consolidada entre empresas por defecto, filtrable por empresa.

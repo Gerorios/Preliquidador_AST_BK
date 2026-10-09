@@ -7,7 +7,7 @@ están en su propio glosario; el índice es [`CONTEXT-MAP.md`](CONTEXT-MAP.md).
 ## Sistema y módulos
 
 **Sistema**:
-El conjunto que comparten todos los Módulos: usuarios, roles, acceso a las bases externas, la Quincena, el menú y el login. El nombre visible es "Sistema de gestión La Asturiana"; los nombres internos (repos, base, servicio) siguen diciendo "preliquidacion" y no se renombran (ADR-0013).
+El conjunto que comparten todos los Módulos: usuarios, roles y permisos, acceso a las bases externas, la Quincena, el menú y el login. El nombre visible es "Sistema de gestión La Asturiana"; los nombres internos (repos, base, servicio) siguen diciendo "preliquidacion" y no se renombran (ADR-0013).
 _Avoid_: llamar "Preliquidación" al sistema completo; ese es el nombre de un módulo.
 
 **Módulo**:
@@ -15,7 +15,7 @@ Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (
 _Avoid_: "sección", "pantalla" (una pantalla es parte de un módulo, no un módulo)
 
 **Núcleo compartido**:
-Lo que el Sistema ofrece a todos los Módulos: autenticación y roles, conexión de solo lectura al sistema de campo y al maestro de sueldos, lectura de Cliente, Finca, Persona/Legajo y Empresa, la Quincena, y los componentes visuales comunes (layout, menú, avisos, overlays). Es de lectura para los módulos: ningún módulo escribe datos del Núcleo salvo a través de sus servicios. Crece solo cuando dos módulos necesitan lo mismo; lo que usa un solo módulo vive en ese módulo.
+Lo que el Sistema ofrece a todos los Módulos: autenticación, roles y permisos, conexión de solo lectura al sistema de campo y al maestro de sueldos, lectura de Cliente, Finca, Persona/Legajo y Empresa, la Quincena, y los componentes visuales comunes (layout, menú, avisos, overlays). Es de lectura para los módulos: ningún módulo escribe datos del Núcleo salvo a través de sus servicios. Crece solo cuando dos módulos necesitan lo mismo; lo que usa un solo módulo vive en ese módulo.
 _Avoid_: "utils", "común" (ambiguo con Concepto común)
 
 **Módulo activo**:
@@ -24,36 +24,36 @@ Un módulo registrado puede estar inactivo: su código existe, pero el Sistema n
 ## Pantallas del Sistema
 
 **Inicio**:
-La pantalla a la que llega toda persona al entrar al Sistema: la saluda por su nombre, y le ofrece una Tarjeta por cada Módulo al que tiene acceso, más una tarjeta de Gerencial si es gerente o admin en algún módulo con panel gerencial, y una de Administración si es admin. Se pasa siempre por Inicio, aunque la persona tenga acceso a un solo módulo. Es también el único lugar donde viven las dos acciones de cuenta —cambiar la propia contraseña y cerrar sesión—, al pie de las tarjetas: dentro de un Módulo solo se puede cerrar sesión, y el cambio de contraseña se ofrece además en la Administración.
+La pantalla a la que llega toda persona al entrar al Sistema: la saluda por su nombre, y le ofrece una Tarjeta por cada Módulo al que tiene acceso, más una tarjeta de Gerencial si puede ver la Vista gerencial de algún módulo, y una de Administración si es admin. Se pasa siempre por Inicio, aunque la persona tenga acceso a un solo módulo. Es también el único lugar donde viven las dos acciones de cuenta —cambiar la propia contraseña y cerrar sesión—, al pie de las tarjetas: dentro de un Módulo solo se puede cerrar sesión, y el cambio de contraseña se ofrece además en la Administración.
 _Avoid_: confundir con el "Inicio" del módulo Preliquidación (el Dashboard de quincenas, otra pantalla).
 
 **Tarjeta**:
-La entrada a un Módulo (o a Gerencial, o a la Administración) desde el Inicio: ícono, nombre y una línea de descripción. Solo se muestra si el módulo está activo y la persona tiene rol en él (el admin las ve todas). No muestra el rol de la persona: ver Etiqueta de rol.
+La entrada a un Módulo (o a Gerencial, o a la Administración) desde el Inicio: ícono, nombre y una línea de descripción. Solo se muestra si el módulo está activo y la persona tiene permiso en alguna de sus pantallas (el admin las ve todas). No muestra los roles de la persona.
 
 **Administración**:
-La pantalla del Sistema, visible solo para el rol Admin, donde se da de alta a una persona buscándola en el Padrón de empleados, se le asignan su rol global y sus roles por Módulo, y se gestionan los usuarios existentes (activar/desactivar, cambiar rol, reiniciar contraseña). El identificador de la persona es su CUIL: el alta le genera un email sintético derivado del CUIL, y la contraseña inicial es el CUIL, que cada persona puede cambiar cuando quiera desde su propia sesión. Los usuarios no se borran: se desactivan.
+La pantalla del Sistema, visible solo para el Admin, donde se da de alta a una persona buscándola en el Padrón de empleados, se le asignan sus roles y la marca de admin, se gestionan los usuarios existentes (activar/desactivar, cambiar roles, reiniciar contraseña) y se arman los Roles con sus Permisos. El identificador de la persona es su CUIL: el alta le genera un email sintético derivado del CUIL, y la contraseña inicial es el CUIL, que cada persona puede cambiar cuando quiera desde su propia sesión. Los usuarios no se borran: se desactivan.
 _Avoid_: ABM de usuarios (nombre técnico, no el término de dominio); confundir con los scripts de consola, que quedan como alternativa y como salida de emergencia si el Admin pierde su propio acceso.
 
 **Padrón de empleados**:
 El listado de empleados del maestro de sueldos (solo lectura) de donde sale el alta de una persona en la Administración: apellido y nombre, CUIL, y sus legajos por Empresa. El Sistema nunca escribe en él.
 
-## Roles
+## Roles y permisos
+
+**Pantalla**:
+Parte de un Módulo con nombre propio en su menú (Revisión, Conceptos, Tarifario…). Es la unidad sobre la que se dan los Permisos. Cada glosario de módulo lista sus pantallas y qué es ver y qué es editar en cada una. Las pantallas del Sistema no llevan Permisos: el Inicio lo ve toda persona, y la Administración solo el Admin.
+_Avoid_: "submódulo", "sección"; confundir con el Módulo entero.
+
+**Permiso**:
+Ver o Editar una Pantalla. Editar incluye ver. Una pantalla sin acción propia solo tiene Ver. Quien no tiene permiso en ninguna pantalla de un Módulo no ve ese Módulo, y quien no tiene permiso en una pantalla no la ve. Cada dato que el Sistema entrega pide Ver en alguna pantalla que lo usa, y la restricción se aplica en el backend, no solo en pantalla.
+_Avoid_: "capacidad" (nombre provisorio del diseño de Facturación); "acceso al módulo" como permiso aparte.
 
 **Rol**:
-Nivel de acceso de un usuario del Sistema. Hay un rol **global**, Admin, y por cada Módulo un usuario puede tener rol Operador o Gerente (uno por usuario y módulo). Qué puede hacer cada rol dentro de un módulo lo define ese módulo. La restricción se aplica en el backend, no solo en pantalla.
+Un conjunto de Permisos con un nombre, que el Admin arma y cambia desde la Administración sin programar. Puede reunir pantallas de varios Módulos. Una persona tiene uno o más roles y sus permisos se suman. Cambiar un rol cambia enseguida lo que pueden todas las personas que lo tienen, y un rol que alguien tiene no se puede borrar. A la persona el Sistema no le muestra qué roles tiene: solo ve sus pantallas.
+_Avoid_: "rol de módulo", "perfil"; Operador y Gerente como roles fijos (esquema anterior, ADR-0020); "etiqueta de rol".
 
 **Admin**:
-Rol global del Sistema: ve y opera todos los módulos y administra usuarios y permisos desde la Administración. No es un rol de módulo.
-
-**Operador (de módulo)**:
-Rol dentro de un Módulo: quien opera el circuito completo de ese módulo (en Preliquidación, el liquidador; en Liquidación Terceros, quien liquida a los terceros). Un operador de un módulo no ve las pantallas operativas de otro módulo. En Preliquidación se muestra como Preliquidador (ver Etiqueta de rol).
-
-**Gerente (de módulo)**:
-Rol dentro de un Módulo que accede al panel gerencial de ese módulo y a lo que el módulo decida abrirle. Una misma persona puede ser gerente de varios módulos y entonces ve el analítico de todos ellos.
-
-**Etiqueta de rol**:
-El nombre visible que cada módulo le da a sus roles de módulo. El código interno siempre es `operador`/`gerente`; en Preliquidación el operador se muestra como **Preliquidador**. Se usa **solo en la Administración**, para que el Admin elija y lea los roles con palabras y no con códigos: a la propia persona el Sistema **no le muestra en ninguna pantalla** qué rol tiene.
-_Avoid_: usar "operador" en pantalla; mostrarle a alguien su propio rol.
+Marca global de una persona, aparte de los Roles: ve y edita todo, y es la única que administra usuarios y roles desde la Administración. No se arma con Permisos. El Sistema nunca queda sin un admin activo.
+_Avoid_: tratarlo como un Rol más.
 
 ## Términos que usan todos los módulos
 

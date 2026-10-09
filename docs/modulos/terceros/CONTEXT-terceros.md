@@ -34,6 +34,14 @@ Máquina (tractor, cargadora, pulverizadora, elevador) que pertenece a un Tercer
 **Quincena**:
 El período de liquidación, el mismo corte que el resto del Sistema: 1ra = días 1 a 15, 2da = 16 a fin de mes. En el Excel de origen se escribe `MM-1Q` / `MM-2Q`.
 
+**Pantallas de Liquidación Terceros**:
+Las Pantallas del módulo y qué es ver y qué es editar en cada una (Pantalla y Permiso están en `CONTEXT.md`):
+- **Inicio**: ver el resumen de la quincena; editar es generarla y calcular la liquidación.
+- **Quincena**: ver los movimientos de la quincena; editar es moverlos de quincena y repartir cuotas.
+- **Tarifario**: ver las tarifas; editar es crearlas, editarlas, borrarlas, confirmarlas y copiarlas.
+- **Estaciones**: ver lo facturado por cada estación; editar es subir su archivo, cargar o borrar líneas y definir el origen.
+- **Verificaciones**: solo ver.
+
 ---
 
 ## Lo que se le paga al Tercero
