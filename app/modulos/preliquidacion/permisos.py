@@ -1,8 +1,21 @@
 """Dependencias de autorización del módulo Preliquidación sobre el núcleo
 (app/core/permisos.py). Quién pasa: ver CONTEXT-preliquidacion.md "Roles en Preliquidación" y ADR-0013."""
+from app.core.modulos import Pantalla
 from app.core.permisos import requiere_modulo
 
 MODULO = "preliquidacion"
+
+# Pantallas del módulo (ADR-0020). Las claves se guardan en la base y no cambian;
+# el orden es el del editor de roles.
+PANTALLAS = (
+    Pantalla("inicio", "Inicio"),
+    # Revisión no tiene entrada de menú: se abre desde el Inicio del módulo.
+    Pantalla("revision", "Revisión", requiere=("inicio",)),
+    Pantalla("verificacion", "Verificación"),
+    Pantalla("mantenimiento", "Mantenimiento"),
+    Pantalla("conceptos", "Conceptos"),
+    Pantalla("gerencial", "Vista gerencial", editable=False),
+)
 
 # Opera la preliquidación completa: admin y operador (liquidador).
 requiere_operativo = requiere_modulo(MODULO, "operador")

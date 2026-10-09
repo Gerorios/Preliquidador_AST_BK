@@ -6,6 +6,7 @@ la documentación OpenAPI; se conserva el orden histórico.
 """
 from app.core.modulos import ModuloInfo
 from app.modulos.preliquidacion.api import preliquidacion, precios, export, gerencial
+from app.modulos.preliquidacion.permisos import PANTALLAS
 
 routers = [preliquidacion.router, precios.router, export.router, gerencial.router]
 
@@ -18,4 +19,5 @@ MODULO = ModuloInfo(
     etiquetas_rol={"operador": "Preliquidador", "gerente": "Gerente"},
     panel_gerencial=True,
     modelos="app.modulos.preliquidacion.models",
+    pantallas=PANTALLAS,
 )

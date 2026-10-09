@@ -10,6 +10,7 @@ tuvo su primera pantalla real, que es la condición que fija CONTEXT.md en
 guarda nada — las tarifas y el neto empiezan en la etapa 4."""
 from app.core.modulos import ModuloInfo
 from app.modulos.terceros.api import terceros
+from app.modulos.terceros.permisos import PANTALLAS
 
 routers = [terceros.router]
 MODULO = ModuloInfo(
@@ -19,4 +20,5 @@ MODULO = ModuloInfo(
     etiquetas_rol={"operador": "Liquidador de terceros", "gerente": "Gerente"},
     panel_gerencial=False,
     modelos="app.modulos.terceros.models",
+    pantallas=PANTALLAS,
 )
