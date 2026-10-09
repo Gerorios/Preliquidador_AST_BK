@@ -6,6 +6,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
+- Verificación y Gerencial: error de carga visible y aviso al guardar el valor hora (carril corto, los dos pendientes altos del refinamiento). Fase: ejecución. Plan: `docs/superpowers/plans/2026-10-09-verificacion-errores-valor-hora.md`.
 - Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
   permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
   editor / admin por módulo) y el fin del refinamiento. Después: plan de implementación con
