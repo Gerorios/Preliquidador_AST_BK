@@ -23,6 +23,14 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
   Conceptos queda al cambiar de quincena; Verificación y Conceptos arrancan en la última
   quincena generada. El historial usa `/estadisticas` por quincena en el prototipo; en la
   versión final el desglose va en el listado (PR hermano en el backend).
+- Módulo Facturación (carril completo): diseño cerrado en BK #78 (glosario, pantallas,
+  `docs/modulos/facturacion/plan-facturacion.md` y ADR-0019). Sin código. Espera dos
+  dependencias: el cambio del esquema de permisos (tarea aparte del núcleo, sin empezar;
+  idea del usuario: algo como lector / editor / admin por módulo) y el fin del refinamiento.
+  Después: plan de implementación con el planificador y E1. Desvío de la skill aprobado por
+  el usuario: el plan de implementación no se hace al cerrar la entrevista, para no
+  rehacerlo. Las notas con nombres de clientes y orígenes están en
+  `docs/modulos/facturacion/fuentes/origenes.md` (local, fuera de git).
 
 ## Próximo paso
 
@@ -41,6 +49,8 @@ barra común e íconos (pasos 5.1 a 5.5). Después E6 (ayuda) y el deploy cuando
 - Mirar la alerta "Posible duplicado" en el sitio real: Revisión y Verificación de la 2Q de agosto (deploy del 2026-10-07).
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 - Avisarle a Pitu que la regla de usar `impeccable` en todo cambio visual o feature nueva también le aplica en Terceros (BK #75 / FT #58, 2026-10-08).
+- Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
+- Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
 
 ## A futuro
 
