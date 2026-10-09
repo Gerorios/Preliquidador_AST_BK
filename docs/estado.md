@@ -14,7 +14,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Deploy del FT #65 (avisos de error de Verificación y Gerencial) cuando el usuario lo diga. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
+Sin tarea en curso: el FT #65 (avisos de error de Verificación y Gerencial) está deployado desde el 2026-10-09. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
 
 ## Pendientes del usuario
 
@@ -29,8 +29,7 @@ Deploy del FT #65 (avisos de error de Verificación y Gerencial) cuando el usuar
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
-- Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (FT #64, 2026-10-08).
-- Deploy del arreglo de Verificación y Gerencial (avisos de error de carga y del valor hora): sólo front, espera el OK del usuario (FT #65, 2026-10-09).
+- Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (- Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).(FT #65, 2026-10-09).
 - Decidir si los avisos de error llevan un estilo propio (rojo con ícono) en vez del gris de "no hay datos", con el que hoy se confunden: es estética, va con la decisión de colores de aviso (FT #65, 2026-10-09).
 
 ## A futuro
