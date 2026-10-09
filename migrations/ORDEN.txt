@@ -46,3 +46,6 @@ terceros/004_calculo.sql
 terceros/005_observacion_combustible.sql
 terceros/006_estaciones.sql
 terceros/007_cuotas_repuesto.sql
+
+# Núcleo: roles armables con permisos por pantalla (ADR-0020).
+core/002_roles_y_permisos.sql

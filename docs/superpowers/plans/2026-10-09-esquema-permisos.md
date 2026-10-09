@@ -248,7 +248,7 @@ Columna "Lo usa": qué pantalla del front lo llama. Lo leí en `src/modulos/*/se
 -- NO DIFERIBLE: el código de esta versión lee rol, rol_permiso y usuario_rol cada vez que
 -- carga a la persona (login y cada pedido con sesión). Sin estas tablas no entra nadie.
 -- Idempotente: las tablas se crean si no existen y la carga inicial corre sólo si `rol`
--- está vacía; correrla otra vez no cambia nada.
+-- está vacía. Correrla otra vez no cambia nada.
 -- No toca usuario_modulo: queda como foto del esquema anterior hasta el PR que la borra.
 
 -- Los literales comparan con la collation de las tablas (si no, "Illegal mix of collations").
@@ -897,3 +897,7 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
   - El 409 por un rol en uso dice: "Lo tienen 2 personas: A y B. Sacáselo primero para poder borrarlo." En singular: "Lo tiene 1 persona: …". Una persona inactiva aparece como "Nombre (inactiva)".
   - La regla `requiere` dice: "Revisión necesita al menos Ver en Inicio."
 - **Para el 3.8:** el editor valida y manda sólo los módulos del catálogo, que trae sólo los activos. Los permisos de un módulo inactivo los conserva el backend en el PUT.
+- **Para el FT2 (`/impeccable clarify`):** dos textos que nombran un rol fijo o mandan a una pantalla que la persona puede no ver.
+  - El banner de líneas incompletas de Revisión dice "cargá los conceptos y precios en el maestro".
+  - El aviso de valor hora faltante en Verificación, con sólo Ver, dice "El liquidador todavía no cargó…".
+- **Par 1.3:** el comentario `-- está vacía; correrla otra vez…` de 2.5 caía en la trampa del aplicador, porque el texto quedaba después de un `;`. Pasó a `-- está vacía. Correrla…`, en el `.sql` y en 2.5. Lo vigila el test (d).
