@@ -135,6 +135,15 @@ Antes de 1.5: `impeccable context --target .../components/FiltrosBar.jsx` y `cra
   plural, tono, explicación.
 - Paso 3.2 Dashboard, su CSS y `Layout.jsx` (A3, A4).
 - Paso 3.3 smoke con el backend de E2 y con el de `main`; menú recordado también en Terceros.
+- **Paso R4** (revisión de E3, high): "Generar" y el selector de quincena quedan habilitados
+  mientras carga el listado, con la quincena del mes en curso elegida (la última generada recién
+  aparece al terminar la carga). Falla: un clic temprano genera la quincena equivocada
+  (reproducido: "cargando · Generar HABILITADO · 1ra quincena octubre 2026"). Arreglo:
+  deshabilitar el botón y el selector mientras carga el listado.
+- **Paso R5** (revisión de E3, high; decisión del usuario): los chips de tipo del historial no
+  llegan a AA (texto rojo o ámbar sobre su fondo pálido, 3,3-4,3:1 con texto de 12 px). Arreglo
+  elegido por el usuario: texto en el color normal y el tono en el fondo pálido y un borde fino,
+  sólo en esos chips (sin tocar tokens). Evidencia: contraste calculado antes y después.
 
 ### E4 — PR front: Verificación
 
@@ -143,6 +152,17 @@ Antes de 1.5: `impeccable context --target .../components/FiltrosBar.jsx` y `cra
 - Paso 4.3 Verificación y su CSS; se borra `InputBusqueda.jsx` (A6).
 - Paso 4.4 smoke: tablas, ciclo de orden, orden por sección, modal con mouse y teclado, foco,
   controles de jornal ordenables también en Gerencial.
+- **Paso R6** (revisión de E4, high): Verificación muestra "Todavía no hay quincenas
+  generadas." mientras carga la lista de quincenas o si falla (en `main` decía "Seleccioná una
+  quincena…"; mismo caso que R3). Falla: con el backend lento o caído la pantalla dice que no
+  existen quincenas (visto en el smoke). Arreglo: `isLoading` e `isError` de esa query, con el
+  patrón de `CategoriasOperarios.jsx`: `CargandoContenido` mientras carga, un error visible si
+  falla, y el texto actual sólo con la lista vacía. Evidencia: lectura de la pantalla durante
+  la carga antes y después.
+- **Paso R7** (revisión de E4, high; mismo criterio que R5): el dato destacado del modal de
+  detalle (`.datos .destacado dd`) va en ámbar sobre su fondo pálido, 4,26:1 con 16 px/600, por
+  debajo de AA. Arreglo: el `dd` en `--text-primary` y el ámbar sólo en fondo y borde, sin tocar
+  tokens. Evidencia: contraste medido en la pantalla antes y después.
 
 ### E5 — PR front: Conceptos y Gerencial
 
@@ -150,6 +170,31 @@ Antes de 1.5: `impeccable context --target .../components/FiltrosBar.jsx` y `cra
 - Paso 5.3 smoke con operador y con gerente.
 - Paso 5.4 conformidad: `git diff respaldo origin/main` muestra sólo A1-A7; grep de símbolos en 0.
 - Paso 5.5 limpieza: quitar junctions con `cmd /c rmdir node_modules` antes de borrar worktrees.
+- **Paso R8** (revisión de E5, high): en Conceptos la barra común lleva `key={`${tab}-${quincena}`}`
+  y `FiltrosBar` guarda el texto de búsqueda en su propio estado, que sólo toma de la pantalla al
+  montarse. Falla: (1) al cambiar de quincena con las flechas del teclado la barra se vuelve a
+  montar y el foco se va al `body`; (2) en "Comunes" con "cosecha" escrito, un clic en la misma
+  solapa limpia la búsqueda y muestra todo, pero el campo sigue diciendo "cosecha"; lo mismo con
+  "Ver por cliente" de la franja de solapamientos estando en esa solapa. En `main` el campo era
+  controlado por Conceptos. Arreglo local (sin tocar `FiltrosBar`, compartido): un contador
+  `versionBarra` que sube en el clic de las solapas y en `verReglasSolap`, y
+  `key={`${tab}-${versionBarra}`}`. Evidencia: foco y texto del campo antes y después.
+- **Paso R9** (revisión de E5, high; mismo criterio que R5 y R7): el cambio a íconos dejó
+  información sólo en un ícono `aria-hidden`. Falla: un lector de pantalla lee la variación de los
+  KPI de Gerencial como "12 %" sin decir si sube o baja (el número pasa por `Math.abs`), y la celda
+  "Reemplaza" del Panel de precios queda vacía. Arreglo: el signo en el texto
+  (`{v > 0 ? '+' : ''}{v.toLocaleString('es-AR')} %`, como el desvío) y `aria-label="Reemplaza al
+  común"` en el badge. Evidencia: texto accesible antes y después.
+- **Paso R10** (deuda previa de Conceptos, igual en `main`; el usuario pidió sumarla a E5, mismo
+  caso que R3 y R6): mientras carga la lista de quincenas (`claves.preliquidaciones`, o
+  `gerencial-quincenas` para el gerente) o si falla, el selector dice "Sin quincenas generadas" y
+  la solapa "No hay conceptos … para esta quincena". Falla: un F5 o una caída del backend se leen
+  como que no hay quincenas ni conceptos (visto con el backend caído). Arreglo: `isLoading` e
+  `isError` de la query que corresponda al rol; sin quincena elegida, `CargandoContenido` mientras
+  carga y un error visible si falla en lugar del contenido de la solapa, y el selector con
+  "Cargando quincenas…" o "No se pudieron cargar" en vez de "Sin quincenas generadas". Con la lista
+  vacía de verdad, el texto actual. Evidencia: lectura de la pantalla durante la carga y con la
+  consulta fallando, antes y después.
 
 ### E6 — PR backend de docs (si P8 = sí)
 
