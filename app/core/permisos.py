@@ -24,7 +24,8 @@ por nombre salvo esta lista, que crece cuando se registra uno nuevo.
 Nota de import: este módulo importa `get_usuario_actual` de `app.core.auth` a
 nivel de módulo. Por eso `auth.py` NO debe importar `permisos` a nivel de
 módulo (para evitar el ciclo) — en Task 2, `auth.py` importa `modulos_de`
-dentro de las funciones (`login`/`me`), no arriba del archivo.
+dentro de las funciones (`login`/`me`), no arriba del archivo; lo mismo con
+`permisos_de` (ADR-0020), que importa dentro de `_permisos_de_sesion`.
 """
 from fastapi import Depends, HTTPException, status
 

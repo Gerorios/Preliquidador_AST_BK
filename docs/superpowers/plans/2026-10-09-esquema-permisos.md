@@ -906,3 +906,12 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
   - Login e Inicio dicen: "Tu usuario todavía no tiene acceso a ninguna pantalla. Pedile al administrador las que necesitás."
   - El editor manda sólo los módulos con alguna pantalla. El `PUT` del backend reemplaza los módulos activos del catálogo, no sólo los que recibe, y el par 1.8 lo testea así.
 - **Deuda de Terceros, para Pitu:** `src/modulos/terceros/pages/Inicio.jsx:97` le pasa `texto` a `CargandoOverlay`, que no recibe props. El texto propio nunca se muestra.
+- **Paso 1.4, hecho el 2026-10-09 con OK del usuario.** `core/002` quedó aplicada en `testing`. El aplicador partió el archivo por `;` en 10 sentencias y se negó a correr en otra base que no fuera `testing`.
+  - V1: las tres tablas, con sus UNIQUE y sus FK como en 2.5.
+  - V2: 12 filas.
+  - V3: 3 Preliquidadores y 2 Gerentes, igual que `usuario_modulo`. Liquidador de terceros queda con 0.
+  - V4 y su inversa: vacías.
+  - V5: la segunda corrida deja los mismos números.
+  - **El backend de la rama** contra `testing`: el banner dice "Tablas y columnas BD propia: verificadas" y `/health` responde `ok`.
+  - **Cada usuario de `testing`**, cargado con el modelo de la rama en sólo lectura, muestra los permisos que le corresponden. Los admin quedan con `{}`.
+  - **El login por HTTP no se probó:** las credenciales de prueba viven en el `.env`, que no se lee. Queda para el smoke 3.10, con usuarios de prueba creados con OK.
