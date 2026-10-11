@@ -30,17 +30,12 @@ Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK 
 
 - Cargar `TALLER_SHEET_URL` en el `.env` del servidor y reiniciar el backend: hasta entonces las alertas de Terceros responden 502 a propósito (deploy del 2026-09-30).
 - Asignar el módulo Terceros desde Administración a los usuarios que corresponda (deploy del 2026-09-30).
-- Confirmar si las líneas de campo repetidas por parte en agosto fueron dos pasadas reales (tarea aparte, mencionada en la entrada del 2026-10-04; la sesión "Investigar líneas repetidas sin marca de duplicado" espera esa respuesta).
 - Actualizar en `docs/DEPLOY.md` (local, fuera de git) la nota de migraciones históricas: `ws17` ya es `historica` (BK #71, 2026-10-05).
-- Probar una sesión nueva: aprobar el hook de arranque y responder "qué se hizo y qué está pendiente" sin leer archivos (BK #72 / FT #56, 2026-10-05).
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
-- Mirar la alerta "Posible duplicado" en el sitio real: Revisión y Verificación de la 2Q de agosto (deploy del 2026-10-07).
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
-- Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).
-- Mirar en el sitio real las etiquetas con texto oscuro, el aviso de error rojo y la barra de filtros alineada (deploy del 2026-10-09).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
 - Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82). En el BK1 (rama `feature/permisos-pantallas`), Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py` y `__init__.py`, y en el front cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla.
 
