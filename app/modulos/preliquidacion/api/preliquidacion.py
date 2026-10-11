@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
-from app.core.auth import get_usuario_actual
-from app.modulos.preliquidacion.permisos import requiere_operativo
+from app.modulos.preliquidacion.permisos import (
+    editar_inicio, editar_mantenimiento, editar_revision, editar_verificacion,
+    ver_lineas, ver_mantenimiento, ver_quincenas, ver_revision, ver_verificacion,
+)
 from app.modulos.preliquidacion.services.preliquidacion_service import (
     ExtraCodigoRepetido, ExtraRequiereOpcion, PreliquidacionService,
 )
@@ -20,17 +22,14 @@ from app.modulos.preliquidacion.schemas import (
     CategoriaOperarioRequest, OperarioMantenimientoResponse,
 )
 
-# dependencies: TODOS los endpoints del router exigen sesión válida — antes
-# los GET (líneas, dashboard, estadísticas, etc.) eran públicos y exponían
-# datos de liquidación sin token. El costo por request es ~0: get_usuario_actual
-# cachea el usuario 60s y FastAPI deduplica la dependencia si el endpoint
-# también la declara como parámetro.
-# Además exige rol operativo del módulo (admin o preliquidacion=operador):
-# el gerente solo accede a /api/gerencial y a los GET del maestro de conceptos.
+# Permisos por pantalla (ADR-0020): cada endpoint declara la suya, y el router
+# no tiene dependencia propia. Todas pasan por get_usuario_actual, así que
+# ninguno queda sin sesión (antes los GET eran públicos). Los que usan a la
+# persona la reciben de la dependencia de permiso. El mapa lo fija
+# tests/preliquidacion/test_mapa_permisos.py.
 router = APIRouter(
     prefix="/api/preliquidacion",
     tags=["Preliquidación"],
-    dependencies=[Depends(requiere_operativo)],
 )
 
 
@@ -55,7 +54,7 @@ _CANDADO_GENERACIONES = threading.Lock()
 @router.post("/generar", response_model=MensajeResponse)
 def generar(
     req: PreliquidacionGenerarRequest,
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_inicio),
     service: PreliquidacionService = Depends(get_service),
 ):
     with _CANDADO_GENERACIONES:
@@ -91,7 +90,7 @@ def generar(
 
 
 @router.post("/refrescar-sueldos", response_model=MensajeResponse)
-def refrescar_sueldos(_=Depends(get_usuario_actual)):
+def refrescar_sueldos(_=Depends(editar_inicio)):
     """Marca el maestro de sueldos (cache de proceso) para recargarse en el
     próximo uso. Útil cuando cambió nuempleados y no se quiere esperar al TTL."""
     from app.core.sueldos_service import refrescar_cache_sueldos
@@ -112,7 +111,7 @@ def invalidar_cache_empresas():
     _EMPRESAS_CACHE["expira"] = 0.0
 
 
-@router.get("/empresas")
+@router.get("/empresas", dependencies=[Depends(ver_revision)])
 def listar_empresas(db_sueldos: Session = Depends(get_db_sueldos)):
     import time
     from sqlalchemy import text
@@ -129,7 +128,8 @@ def listar_empresas(db_sueldos: Session = Depends(get_db_sueldos)):
     return empresas
 
 
-@router.get("/", response_model=list[PreliquidacionResponse])
+@router.get("/", response_model=list[PreliquidacionResponse],
+            dependencies=[Depends(ver_quincenas)])
 def listar(service: PreliquidacionService = Depends(get_service)):
     preliquidaciones = service.listar()
     stats_por_id = service.estadisticas_batch([p.id for p in preliquidaciones])
@@ -153,7 +153,7 @@ def listar(service: PreliquidacionService = Depends(get_service)):
 # preliquidación inexistente (ValueError → 404). Con la base remota, ese
 # precheck costaba un round-trip entero (~200ms) en cada carga de pantalla.
 
-@router.get("/{preliq_id}/dashboard-verificacion")
+@router.get("/{preliq_id}/dashboard-verificacion", dependencies=[Depends(ver_verificacion)])
 def dashboard_verificacion(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     try:
         return service.dashboard_verificacion(preliq_id)
@@ -161,7 +161,7 @@ def dashboard_verificacion(preliq_id: int, service: PreliquidacionService = Depe
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/{preliq_id}/control-plantas-jornal")
+@router.get("/{preliq_id}/control-plantas-jornal", dependencies=[Depends(ver_verificacion)])
 def control_plantas_jornal(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     try:
         return service.control_plantas_jornal(preliq_id)
@@ -169,7 +169,7 @@ def control_plantas_jornal(preliq_id: int, service: PreliquidacionService = Depe
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/{preliq_id}/control-tancadas-jornal")
+@router.get("/{preliq_id}/control-tancadas-jornal", dependencies=[Depends(ver_verificacion)])
 def control_tancadas_jornal(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     try:
         return service.control_tancadas_jornal(preliq_id)
@@ -177,7 +177,8 @@ def control_tancadas_jornal(preliq_id: int, service: PreliquidacionService = Dep
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/{preliq_id}/operarios-mantenimiento", response_model=list[OperarioMantenimientoResponse])
+@router.get("/{preliq_id}/operarios-mantenimiento", response_model=list[OperarioMantenimientoResponse],
+            dependencies=[Depends(ver_mantenimiento)])
 def operarios_mantenimiento(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     """Operarios (por CUIL) con líneas de taller (Mantenimiento mecánico) en
     esta quincena, junto con la categoría ya asignada (ADR-0008)."""
@@ -187,7 +188,7 @@ def operarios_mantenimiento(preliq_id: int, service: PreliquidacionService = Dep
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.put("/{preliq_id}/categoria-operario")
+@router.put("/{preliq_id}/categoria-operario", dependencies=[Depends(editar_mantenimiento)])
 def set_categoria_operario(
     preliq_id: int,
     datos: CategoriaOperarioRequest,
@@ -201,7 +202,8 @@ def set_categoria_operario(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/{preliq_id}/categorias-operario/heredar", response_model=MensajeResponse)
+@router.post("/{preliq_id}/categorias-operario/heredar", response_model=MensajeResponse,
+             dependencies=[Depends(editar_mantenimiento)])
 def heredar_categorias_operario(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     """Copia las asignaciones de categoría de la quincena anterior hacia
     esta, para los CUIL que todavía no tengan asignación."""
@@ -213,7 +215,7 @@ def heredar_categorias_operario(preliq_id: int, service: PreliquidacionService =
 
 
 @router.patch("/{preliq_id}/valor-hora-pulv")
-def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Depends(editar_verificacion), service: PreliquidacionService = Depends(get_service)):
     try:
         preliq = service.set_valor_hora_pulv(preliq_id, datos.valor_hora_pulv)
         return {"valor_hora_pulv": float(preliq.valor_hora_pulv) if preliq.valor_hora_pulv is not None else None}
@@ -222,7 +224,7 @@ def set_valor_hora_pulv(preliq_id: int, datos: ValorHoraPulvRequest, usuario=Dep
 
 
 @router.patch("/{preliq_id}/valor-hora-tractorista")
-def set_valor_hora_tractorista(preliq_id: int, datos: ValorHoraTractoristaRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def set_valor_hora_tractorista(preliq_id: int, datos: ValorHoraTractoristaRequest, usuario=Depends(editar_verificacion), service: PreliquidacionService = Depends(get_service)):
     try:
         preliq = service.set_valor_hora_tractorista(preliq_id, datos.valor_hora_tractorista)
         return {"valor_hora_tractorista": float(preliq.valor_hora_tractorista) if preliq.valor_hora_tractorista is not None else None}
@@ -230,7 +232,7 @@ def set_valor_hora_tractorista(preliq_id: int, datos: ValorHoraTractoristaReques
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/{preliq_id}/estadisticas")
+@router.get("/{preliq_id}/estadisticas", dependencies=[Depends(ver_revision)])
 def estadisticas(preliq_id: int, service: PreliquidacionService = Depends(get_service)):
     stats = service.estadisticas(preliq_id)
     # Solo si la quincena vino vacía vale la pena pagar el round-trip extra
@@ -240,7 +242,8 @@ def estadisticas(preliq_id: int, service: PreliquidacionService = Depends(get_se
     return stats
 
 
-@router.get("/{preliq_id}/lineas", response_model=list[LineaResponse])
+@router.get("/{preliq_id}/lineas", response_model=list[LineaResponse],
+            dependencies=[Depends(ver_lineas)])
 def listar_lineas(
     preliq_id: int,
     empresa: Optional[str] = Query(None),
@@ -258,7 +261,7 @@ def listar_lineas(
 
 
 @router.patch("/linea/{linea_id}", response_model=LineaResponse)
-def actualizar_linea(linea_id: int, datos: LineaUpdateRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def actualizar_linea(linea_id: int, datos: LineaUpdateRequest, usuario=Depends(editar_revision), service: PreliquidacionService = Depends(get_service)):
     try:
         return service.actualizar_linea(linea_id=linea_id, datos=datos, usuario_id=usuario.id)
     except ValueError as e:
@@ -266,7 +269,7 @@ def actualizar_linea(linea_id: int, datos: LineaUpdateRequest, usuario=Depends(g
 
 
 @router.get("/linea/{linea_id}/legajos-disponibles")
-def legajos_disponibles_de_linea(linea_id: int, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def legajos_disponibles_de_linea(linea_id: int, usuario=Depends(ver_revision), service: PreliquidacionService = Depends(get_service)):
     """
     Pares (empresa, legajo) reales de la persona de esta línea, para el
     desplegable 'EMPRESA — legajo' del panel individual. Lista vacía si la
@@ -279,7 +282,7 @@ def legajos_disponibles_de_linea(linea_id: int, usuario=Depends(get_usuario_actu
 
 
 @router.post("/linea/{linea_id}/concepto", response_model=ConceptoAdicionalResponse)
-def agregar_concepto(linea_id: int, datos: ConceptoAdicionalRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def agregar_concepto(linea_id: int, datos: ConceptoAdicionalRequest, usuario=Depends(editar_revision), service: PreliquidacionService = Depends(get_service)):
     try:
         return service.agregar_concepto(linea_id=linea_id, datos=datos, usuario_id=usuario.id)
     except ValueError as e:
@@ -290,7 +293,7 @@ def agregar_concepto(linea_id: int, datos: ConceptoAdicionalRequest, usuario=Dep
 def agregar_concepto_por_codigo(
     linea_id: int,
     datos: ConceptoPorCodigoRequest,
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_revision),
     service: PreliquidacionService = Depends(get_service),
 ):
     try:
@@ -315,7 +318,7 @@ def agregar_concepto_por_codigo(
 
 
 @router.delete("/linea/concepto/{concepto_id}", response_model=MensajeResponse)
-def eliminar_concepto(concepto_id: int, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def eliminar_concepto(concepto_id: int, usuario=Depends(editar_revision), service: PreliquidacionService = Depends(get_service)):
     try:
         service.eliminar_concepto(concepto_id=concepto_id, usuario_id=usuario.id)
         return MensajeResponse(mensaje="Concepto eliminado correctamente")
@@ -337,7 +340,7 @@ class ConceptoExtraMasivoRequest(ConceptoMasivoRequest):
 
 
 @router.post("/lineas/concepto-masivo", response_model=MensajeResponse)
-def agregar_concepto_masivo(datos: ConceptoExtraMasivoRequest, usuario=Depends(get_usuario_actual), service: PreliquidacionService = Depends(get_service)):
+def agregar_concepto_masivo(datos: ConceptoExtraMasivoRequest, usuario=Depends(editar_revision), service: PreliquidacionService = Depends(get_service)):
     if not datos.linea_ids or not datos.codigo:
         raise HTTPException(status_code=400, detail="Se requieren linea_ids y codigo")
     try:
@@ -364,7 +367,8 @@ def agregar_concepto_masivo(datos: ConceptoExtraMasivoRequest, usuario=Depends(g
     return MensajeResponse(mensaje="Concepto agregado", detalle=detalle)
 
 
-@router.post("/lineas/concepto-masivo/eliminar", response_model=MensajeResponse)
+@router.post("/lineas/concepto-masivo/eliminar", response_model=MensajeResponse,
+             dependencies=[Depends(editar_revision)])
 def eliminar_concepto_masivo(datos: ConceptoMasivoRequest, service: PreliquidacionService = Depends(get_service)):
     if not datos.linea_ids or not datos.codigo:
         raise HTTPException(status_code=400, detail="Se requieren linea_ids y codigo")
@@ -384,7 +388,7 @@ class ReasignarEmpresaRequest(BaseModel):
     motivo_ajuste: Optional[str] = None
 
 
-@router.post("/lineas/legajos-por-cuil")
+@router.post("/lineas/legajos-por-cuil", dependencies=[Depends(ver_revision)])
 def legajos_por_cuil(datos: LegajosPorCuilRequest, service: PreliquidacionService = Depends(get_service)):
     """
     Agrupa las líneas seleccionadas por CUIL y devuelve, para cada persona,
@@ -402,7 +406,7 @@ def legajos_por_cuil(datos: LegajosPorCuilRequest, service: PreliquidacionServic
 @router.post("/lineas/reasignar-empresa", response_model=MensajeResponse)
 def reasignar_empresa_masivo(
     datos: ReasignarEmpresaRequest,
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_revision),
     service: PreliquidacionService = Depends(get_service),
 ):
     if not datos.linea_ids or not datos.empresa:

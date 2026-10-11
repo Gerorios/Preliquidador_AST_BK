@@ -7,9 +7,10 @@ from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db_propia, get_db_externa
-from app.core.auth import get_usuario_actual
 from app.core.quincena import Quincena
-from app.modulos.preliquidacion.permisos import requiere_conceptos
+from app.modulos.preliquidacion.permisos import (
+    editar_conceptos, ver_buscar_conceptos, ver_conceptos,
+)
 from app.modulos.preliquidacion.models import ConceptoLiquidacion, Preliquidacion
 from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
 from app.modulos.preliquidacion.services.preliquidacion_service import (
@@ -97,30 +98,29 @@ def _norm(texto) -> str:
     return "".join(ch for ch in descompuesto if unicodedata.category(ch) != "Mn")
 
 
-# dependencies: todos los endpoints exigen sesión válida (antes eran públicos).
-# Los GET quedan accesibles a todo rol (todos ven el maestro); las mutaciones
-# agregan requiere_conceptos endpoint por endpoint — admin/operador/gerente,
-# ya que el gerente opera el maestro de Conceptos completo (decide precios).
+# Permisos por pantalla (ADR-0020): cada endpoint declara el suyo, y todos
+# pasan por get_usuario_actual (antes eran públicos). Las lecturas piden Ver en
+# Conceptos, y desde ADR-0020 ya no alcanza con tener sesión. El combo de
+# búsqueda lo usa también Revisión. Las mutaciones piden Editar en Conceptos.
 router = APIRouter(
     prefix="/api/precios",
     tags=["Precios"],
-    dependencies=[Depends(get_usuario_actual)],
 )
 
 
 # ─── Catálogos externos ───────────────────────────────────────────────────────
 
-@router.get("/maestro/clientes")
+@router.get("/maestro/clientes", dependencies=[Depends(ver_conceptos)])
 def listar_clientes(db_externa: Session = Depends(get_db_externa)):
     return ConsultaExternaService(db_externa).obtener_clientes()
 
 
-@router.get("/maestro/fincas")
+@router.get("/maestro/fincas", dependencies=[Depends(ver_conceptos)])
 def listar_fincas(cliente: str = Query(...), db_externa: Session = Depends(get_db_externa)):
     return ConsultaExternaService(db_externa).obtener_fincas(cliente)
 
 
-@router.get("/maestro/tareas")
+@router.get("/maestro/tareas", dependencies=[Depends(ver_conceptos)])
 def listar_tareas(db_externa: Session = Depends(get_db_externa)):
     tareas = ConsultaExternaService(db_externa).obtener_tareas()
     # ADR-0012: las tareas alias de pago no existen para el maestro.
@@ -130,7 +130,7 @@ def listar_tareas(db_externa: Session = Depends(get_db_externa)):
     ]
 
 
-@router.get("/grupos-pago")
+@router.get("/grupos-pago", dependencies=[Depends(ver_conceptos)])
 def listar_grupos_pago(db_externa: Session = Depends(get_db_externa)):
     return ConsultaExternaService(db_externa).obtener_grupos_pago()
 
@@ -144,7 +144,7 @@ def listar_grupos_pago(db_externa: Session = Depends(get_db_externa)):
 #   POR SUPERVISOR (supervisor_nombre)         → esa tarea con ese supervisor
 # El tilde reemplaza_comun de cualquier regla no-común apaga SOLO los comunes.
 
-@router.get("/conceptos/quincenas")
+@router.get("/conceptos/quincenas", dependencies=[Depends(ver_conceptos)])
 def listar_quincenas(db: Session = Depends(get_db_propia)):
     from sqlalchemy import distinct
     rows = db.query(distinct(ConceptoLiquidacion.quincena)).order_by(
@@ -153,7 +153,7 @@ def listar_quincenas(db: Session = Depends(get_db_propia)):
     return [str(r[0]) for r in rows]
 
 
-@router.get("/conceptos/supervisores")
+@router.get("/conceptos/supervisores", dependencies=[Depends(ver_conceptos)])
 def listar_supervisores(
     quincena: date = Query(...),
     db: Session = Depends(get_db_propia),
@@ -175,7 +175,8 @@ def listar_supervisores(
     return [r[0] for r in rows]
 
 
-@router.get("/conceptos", response_model=list[ConceptoUnifResponse])
+@router.get("/conceptos", response_model=list[ConceptoUnifResponse],
+            dependencies=[Depends(ver_conceptos)])
 def listar_conceptos(
     quincena: Optional[date] = Query(None),
     scope: Optional[str] = Query(None),   # 'comun' | 'cliente' | 'finca' | 'supervisor' | 'especifico' (legado = cliente+finca juntos)
@@ -218,7 +219,8 @@ def listar_conceptos(
     ).all()
 
 
-@router.get("/conceptos/panel", response_model=list[ConceptoPanelResponse])
+@router.get("/conceptos/panel", response_model=list[ConceptoPanelResponse],
+            dependencies=[Depends(ver_conceptos)])
 def panel_conceptos(
     quincena: date = Query(...),
     db: Session = Depends(get_db_propia),
@@ -277,7 +279,7 @@ def panel_conceptos(
 
 
 @router.patch("/conceptos/precio-masivo", response_model=ConceptoPrecioMasivoResponse,
-              dependencies=[Depends(requiere_conceptos)])
+              dependencies=[Depends(editar_conceptos)])
 def precio_masivo(
     datos: ConceptoPrecioMasivoRequest,
     db: Session = Depends(get_db_propia),
@@ -353,7 +355,7 @@ def precio_masivo(
 
 
 @router.post("/conceptos", response_model=ConceptoUnifResponse,
-             dependencies=[Depends(requiere_conceptos)])
+             dependencies=[Depends(editar_conceptos)])
 def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_propia)):
     _validar_tarea_no_alias(datos.tarea_nombre)
     cliente_nombre = datos.cliente_nombre.strip() if datos.cliente_nombre else None
@@ -420,7 +422,7 @@ def crear_concepto(datos: ConceptoUnifRequest, db: Session = Depends(get_db_prop
 
 
 @router.patch("/conceptos/{concepto_id}", response_model=ConceptoUnifResponse,
-              dependencies=[Depends(requiere_conceptos)])
+              dependencies=[Depends(editar_conceptos)])
 def actualizar_concepto(
     concepto_id: int,
     datos: ConceptoUnifUpdateRequest,
@@ -486,7 +488,7 @@ def actualizar_concepto(
 
 
 @router.delete("/conceptos/{concepto_id}", response_model=MensajeResponse,
-               dependencies=[Depends(requiere_conceptos)])
+               dependencies=[Depends(editar_conceptos)])
 def eliminar_concepto(
     concepto_id: int,
     db: Session = Depends(get_db_propia),
@@ -517,7 +519,7 @@ def eliminar_concepto(
 
 
 @router.post("/conceptos/copiar", response_model=MensajeResponse,
-             dependencies=[Depends(requiere_conceptos)])
+             dependencies=[Depends(editar_conceptos)])
 def copiar_quincena(
     # Annotated[Quincena, Query()] y no `Quincena = Query(...)`: con la segunda
     # forma FastAPI descarta el validador y un 17 pasa (ver app/core/quincena.py).
@@ -623,7 +625,7 @@ def copiar_quincena(
     )
 
 
-@router.get("/conceptos/solapamientos")
+@router.get("/conceptos/solapamientos", dependencies=[Depends(ver_conceptos)])
 def solapamientos_quincena(
     quincena: date = Query(...),
     db: Session = Depends(get_db_propia),
@@ -637,7 +639,7 @@ def solapamientos_quincena(
     return listar_solapamientos(db, quincena)
 
 
-@router.get("/conceptos/faltantes")
+@router.get("/conceptos/faltantes", dependencies=[Depends(ver_conceptos)])
 def conceptos_faltantes(
     quincena: date = Query(...),
     db: Session = Depends(get_db_propia),
@@ -692,7 +694,7 @@ def conceptos_faltantes(
     ]
 
 
-@router.get("/conceptos/buscar")
+@router.get("/conceptos/buscar", dependencies=[Depends(ver_buscar_conceptos)])
 def buscar_conceptos_para_combo(
     q: str = "",
     quincena: Optional[date] = Query(None),

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_propia, get_db_externa, get_db_sueldos
-from app.modulos.preliquidacion.permisos import requiere_gerencial
+from app.modulos.preliquidacion.permisos import ver_gerencial, ver_quincenas_gerencial
 from app.modulos.preliquidacion.models import Preliquidacion
 from app.modulos.preliquidacion.services.consulta_externa import ConsultaExternaService
 from app.modulos.preliquidacion.services.preliquidacion_service import PreliquidacionService
@@ -13,12 +13,12 @@ from app.modulos.preliquidacion.services.gerencial_service import (
     GerencialService, PeriodoInvalidoError, UMBRAL_DESVIO_DEFAULT,
 )
 
-# Vista gerencial: solo lectura, reservada a gerente/admin del módulo — el
-# operador NO llega acá (decisión 2026-09-08).
+# Vista gerencial: sólo lectura, con Ver en la pantalla `gerencial` (ADR-0020).
+# Cada endpoint declara su permiso; `/quincenas` lo ve también quien tiene
+# Conceptos, que lo usa de selector cuando no ve las pantallas del listado.
 router = APIRouter(
     prefix="/api/gerencial",
     tags=["Gerencial"],
-    dependencies=[Depends(requiere_gerencial)],
 )
 
 
@@ -33,19 +33,19 @@ def _atrapar_periodo(fn, *args, **kwargs):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/quincenas")
+@router.get("/quincenas", dependencies=[Depends(ver_quincenas_gerencial)])
 def quincenas_disponibles(service: GerencialService = Depends(get_service)):
     """Quincenas con preliquidación, para el selector de período."""
     return [str(q) for q in service.quincenas_disponibles()]
 
 
-@router.get("/empresas")
+@router.get("/empresas", dependencies=[Depends(ver_gerencial)])
 def empresas_disponibles(service: GerencialService = Depends(get_service)):
     """Empresas con líneas preliquidadas, para el filtro."""
     return service.empresas_disponibles()
 
 
-@router.get("/resumen")
+@router.get("/resumen", dependencies=[Depends(ver_gerencial)])
 def resumen(
     quincena: Optional[date] = Query(None),
     mes: Optional[str] = Query(None, description="Mes calendario YYYY-MM"),
@@ -56,7 +56,7 @@ def resumen(
     return _atrapar_periodo(service.resumen, quincena, mes, empresa)
 
 
-@router.get("/evolucion")
+@router.get("/evolucion", dependencies=[Depends(ver_gerencial)])
 def evolucion(
     empresa: Optional[str] = Query(None),
     limite: int = Query(24, ge=1, le=120),
@@ -66,7 +66,7 @@ def evolucion(
     return service.evolucion(empresa, limite)
 
 
-@router.get("/por-cliente")
+@router.get("/por-cliente", dependencies=[Depends(ver_gerencial)])
 def por_cliente(
     quincena: Optional[date] = Query(None),
     mes: Optional[str] = Query(None),
@@ -77,7 +77,7 @@ def por_cliente(
     return _atrapar_periodo(service.por_cliente, quincena, mes, empresa)
 
 
-@router.get("/por-grupo-tarea")
+@router.get("/por-grupo-tarea", dependencies=[Depends(ver_gerencial)])
 def por_grupo_tarea(
     quincena: Optional[date] = Query(None),
     mes: Optional[str] = Query(None),
@@ -94,7 +94,7 @@ def por_grupo_tarea(
     )
 
 
-@router.get("/desvios-persona")
+@router.get("/desvios-persona", dependencies=[Depends(ver_gerencial)])
 def desvios_persona(
     quincena: Optional[date] = Query(None),
     mes: Optional[str] = Query(None),
@@ -106,7 +106,7 @@ def desvios_persona(
     return _atrapar_periodo(service.desvios_por_persona, quincena, mes, empresa, umbral)
 
 
-@router.get("/indicadores")
+@router.get("/indicadores", dependencies=[Depends(ver_gerencial)])
 def indicadores(
     quincena: Optional[date] = Query(None),
     mes: Optional[str] = Query(None),
@@ -118,7 +118,7 @@ def indicadores(
     return _atrapar_periodo(service.indicadores, quincena, mes, empresa)
 
 
-@router.get("/desvios-cliente")
+@router.get("/desvios-cliente", dependencies=[Depends(ver_gerencial)])
 def desvios_cliente(
     quincena: Optional[date] = Query(None),
     mes: Optional[str] = Query(None),
@@ -161,7 +161,7 @@ def _control_por_quincena(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/control-plantas")
+@router.get("/control-plantas", dependencies=[Depends(ver_gerencial)])
 def control_plantas(
     quincena: date = Query(...),
     db_propia: Session = Depends(get_db_propia),
@@ -174,7 +174,7 @@ def control_plantas(
     )
 
 
-@router.get("/control-tancadas")
+@router.get("/control-tancadas", dependencies=[Depends(ver_gerencial)])
 def control_tancadas(
     quincena: date = Query(...),
     db_propia: Session = Depends(get_db_propia),
