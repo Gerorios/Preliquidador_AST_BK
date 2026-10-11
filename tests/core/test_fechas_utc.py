@@ -13,7 +13,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.core.models import Usuario, UsuarioModulo, ahora_utc
+from app.core.models import Rol, Usuario, UsuarioModulo, UsuarioRol, ahora_utc
 
 TOLERANCIA = timedelta(seconds=5)
 
@@ -53,3 +53,17 @@ def test_usuario_y_usuario_modulo_nacen_con_creado_en_naive_utc(db):
 
     _es_naive_utc_de_ahora(db.query(Usuario).one().creado_en)
     _es_naive_utc_de_ahora(db.query(UsuarioModulo).one().creado_en)
+
+
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+def test_rol_y_usuario_rol_nacen_con_creado_en_naive_utc(db):
+    # La fila de usuario_rol la inserta el ORM por el `secondary` de
+    # Usuario.roles: el default de creado_en tiene que valer también ahí.
+    u = Usuario(nombre="Liq", email="liq@t.com", password="x", rol="usuario", activo=True)
+    u.roles.append(Rol(nombre="Preliquidador"))
+    db.add(u)
+    db.commit()
+    db.expire_all()
+
+    _es_naive_utc_de_ahora(db.query(Rol).one().creado_en)
+    _es_naive_utc_de_ahora(db.query(UsuarioRol).one().creado_en)

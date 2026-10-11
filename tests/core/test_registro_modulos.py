@@ -1,4 +1,5 @@
 """Registro de módulos (ADR-0013, PR 4): un objeto por módulo, el núcleo consume la lista."""
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -56,6 +57,81 @@ def test_endpoint_modulos_devuelve_solo_activos():
     assert all(m.clave in claves_resp for m in REGISTRO if m.activo)
     assert all(m.clave not in claves_resp for m in REGISTRO if not m.activo)
     assert r.json()[0]["etiquetas_rol"]["operador"] == "Preliquidador"
+
+
+# ── Catálogo de pantallas (ADR-0020) ────────────────────────────────────────
+# Las claves se guardan en la base (rol_permiso.pantalla) y no cambian. El orden
+# es el del editor de roles. Tabla del plan 2026-10-09-esquema-permisos.md, 2.3.
+
+CATALOGO_PRELIQUIDACION = [
+    ("inicio", "Inicio", True),
+    ("revision", "Revisión", True),
+    ("verificacion", "Verificación", True),
+    ("mantenimiento", "Mantenimiento", True),
+    ("conceptos", "Conceptos", True),
+    ("gerencial", "Vista gerencial", False),
+]
+
+CATALOGO_TERCEROS = [
+    ("inicio", "Inicio", True),
+    ("quincena", "Quincena", True),
+    ("tarifario", "Tarifario", True),
+    ("estaciones", "Estaciones", True),
+    ("verificaciones", "Verificaciones", False),
+]
+
+
+def _modulo(clave):
+    return {m.clave: m for m in REGISTRO}[clave]
+
+
+def test_cada_modulo_activo_declara_sus_pantallas():
+    for m in activos():
+        assert m.pantallas, f"{m.clave} no declara pantallas"
+        claves_p = [p.clave for p in m.pantallas]
+        assert len(claves_p) == len(set(claves_p)), f"{m.clave} repite claves de pantalla"
+        for c in claves_p:
+            assert re.fullmatch(r"[a-z]+", c), f"{m.clave}: clave inválida {c!r}"
+        assert any(p.editable for p in m.pantallas), f"{m.clave} no tiene ninguna pantalla editable"
+        # `requiere` sólo nombra pantallas del mismo módulo, distintas de sí misma.
+        for p in m.pantallas:
+            assert isinstance(p.requiere, tuple)
+            for r in p.requiere:
+                assert r in claves_p and r != p.clave, f"{m.clave}.{p.clave} requiere {r!r}"
+
+
+def test_catalogo_de_preliquidacion():
+    m = _modulo("preliquidacion")
+    assert [(p.clave, p.nombre, p.editable) for p in m.pantallas] == CATALOGO_PRELIQUIDACION
+    # Revisión no tiene menú: se abre desde el Inicio del módulo (pregunta 2 = a).
+    assert {p.clave: p.requiere for p in m.pantallas} == {
+        "inicio": (), "revision": ("inicio",), "verificacion": (),
+        "mantenimiento": (), "conceptos": (), "gerencial": (),
+    }
+
+
+def test_catalogo_de_terceros():
+    m = _modulo("terceros")
+    assert [(p.clave, p.nombre, p.editable) for p in m.pantallas] == CATALOGO_TERCEROS
+    assert all(p.requiere == () for p in m.pantallas)
+
+
+def test_endpoint_modulos_devuelve_pantallas():
+    usuario = SimpleNamespace(id=1, nombre="T", email="t@t.com", rol="admin", activo=True, modulos=[])
+    app.dependency_overrides[get_usuario_actual] = lambda: usuario
+    try:
+        r = TestClient(app).get("/api/auth/modulos")
+    finally:
+        app.dependency_overrides.pop(get_usuario_actual, None)
+    assert r.status_code == 200
+    por_clave = {m["clave"]: m for m in r.json()}
+    preli = por_clave["preliquidacion"]["pantallas"]
+    assert [(p["clave"], p["nombre"], p["editable"]) for p in preli] == CATALOGO_PRELIQUIDACION
+    assert {p["clave"]: p["requiere"] for p in preli}["revision"] == ["inicio"]
+    assert set(preli[0]) == {"clave", "nombre", "editable", "requiere"}
+    if "terceros" in por_clave:
+        terc = por_clave["terceros"]["pantallas"]
+        assert [(p["clave"], p["nombre"], p["editable"]) for p in terc] == CATALOGO_TERCEROS
 
 
 def test_modelos_de_activos_registrados():

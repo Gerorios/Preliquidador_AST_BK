@@ -37,7 +37,8 @@ class UsuarioMe(BaseModel):
     nombre: str
     email: str
     rol: str
-    modulos: dict[str, str]
+    modulos: dict[str, str]  # esquema anterior (ADR-0013); sale en BK2
+    permisos: dict[str, dict[str, str]]  # {modulo: {pantalla: 'ver' | 'editar'}}
 
 
 class CambioPassword(BaseModel):
@@ -112,7 +113,9 @@ def get_usuario_actual(
         raise credenciales_exc
 
     # Se desliga de la sesión para que sobreviva al cierre de esta request
-    # (id/nombre/email/rol/modulos, cargados por selectin).
+    # (id/nombre/email/rol/modulos/roles y los permisos de cada rol, cargados
+    # por selectin; `roles` se desliga junto con la persona por el expunge de
+    # su cascada, ver Usuario.roles).
     db.expunge(usuario)
     _USUARIO_CACHE[user_id] = (usuario, time.monotonic() + _USUARIO_CACHE_TTL)
     return usuario
@@ -141,6 +144,20 @@ def _password_es_la_inicial(usuario: Usuario) -> bool:
     bloqueante; nadie queda impedido de trabajar por esto."""
     cuil = cuil_de_email(usuario.email)
     return bool(cuil) and verificar_password(cuil, usuario.password)
+
+
+def _permisos_de_sesion(usuario: Usuario) -> dict[str, dict[str, str]]:
+    """Los permisos por pantalla que viajan en la sesión (login y /me). El
+    admin recibe {}: pasa todo por la marca global, y el front lo trata como
+    "todo" por `rol == 'admin'`. Los roles de la persona no se devuelven."""
+    # Import local: app.core.permisos importa get_usuario_actual de este
+    # módulo a nivel de módulo, así que un import arriba de auth.py crearía
+    # un ciclo.
+    from app.core.permisos import permisos_de
+
+    if usuario.rol == "admin":
+        return {}
+    return permisos_de(usuario)
 
 
 def clave_limite(tipeado: str) -> str:
@@ -197,6 +214,7 @@ def login(
             "email": usuario.email,
             "rol": usuario.rol,
             "modulos": modulos_de(usuario),
+            "permisos": _permisos_de_sesion(usuario),
             "password_inicial": _password_es_la_inicial(usuario),
         }
     )
@@ -213,6 +231,7 @@ def me(usuario: Usuario = Depends(get_usuario_actual)):
         email=usuario.email,
         rol=usuario.rol,
         modulos=modulos_de(usuario),
+        permisos=_permisos_de_sesion(usuario),
     )
 
 
