@@ -3190,3 +3190,40 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Mirar en el sitio real Administración y cada rol, incluido uno de sólo Ver (en
   `docs/estado.md`).
 - Etapa 6: PR aparte que borra `usuario_modulo`, con OK.
+
+## 2026-10-11 — Etapa 6 del esquema de permisos: sale `usuario_modulo`
+
+**Mergeado**
+- PR #87 (backend, merge `b5e4b50`) — migración `core/003` que borra la tabla
+  `usuario_modulo`; `refrescar_testing.py` deja de copiarla, con un test que exige que cada
+  tabla del script exista en el modelo; `DOCUMENTACION.md` remite al orden de `ORDEN.txt`
+  para una base nueva.
+
+**Por frontera**
+- Prod y Datos: `core/003_borrar_usuario_modulo.sql` al final de `ORDEN.txt`. Desde ella,
+  `core/002` ya no se puede volver a correr en una base existente (su carga inicial lee la
+  tabla); en una base nueva el orden 001, 002, 003 sigue andando.
+- Docs: `DOCUMENTACION.md` ("Base nueva desde cero") deja de listar archivos.
+
+**Decisiones**
+- La tabla se borra después de mirar el esquema nuevo en el sitio real. Porqué: quedaba como
+  vuelta atrás al código anterior sin tocar la base, y el usuario confirmó que el esquema
+  anda.
+- El respaldo del VPS tomado en el deploy se borra junto con el `DROP`. Porqué: tiene hashes
+  de contraseñas, y `usuario_rol` guarda la misma información de acceso. Decisión del
+  usuario. Consecuencia: el código anterior al esquema de permisos deja de ser una vuelta
+  atrás posible.
+- Antes del `DROP` en producción, V4 no dio vacía: tres personas habían pasado de
+  Preliquidador a Gerente desde Administración después del deploy. El usuario confirmó que
+  fue a propósito.
+
+**Estado**
+- Deploy: sí, a producción. `git pull` sin reiniciar (el código que corre no cambia).
+- Migraciones: `core/003` en `testing` y en producción; la tabla ya no existe en ninguna de
+  las dos. Respaldo del VPS borrado.
+- Pruebas: suite 1137 passed y 1 xfailed; en `testing`, backend de la rama arrancando con
+  las tablas verificadas. Revisión: 0 urgent, 0 high, 5 minor (en el cuerpo del PR).
+
+**Pendiente**
+- Minor 1 del PR: el encabezado de `core/002` todavía dice que volver al código anterior no
+  toca la base y que la migración se puede volver a correr (en `docs/estado.md`).
