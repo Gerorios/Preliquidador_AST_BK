@@ -2870,3 +2870,186 @@ Entrada de deploy: no anota un merge sino el deploy del FT #65, ya anotado arrib
 - Mirar Verificación y Gerencial en el sitio real. Los avisos nuevos sólo aparecen si falla
   una carga, así que en el uso normal no cambia nada a la vista.
 - Queda cerrado el pendiente de deploy de la entrada del FT #65.
+
+## 2026-10-09 — Estilos de aviso: etiquetas, aviso de error y barra de filtros
+
+**Mergeado**
+- PR #66 (frontend) — las etiquetas `.badge-*` pasan a texto oscuro, con el tono en el fondo
+  y en el borde (núcleo).
+- PR #67 (frontend) — aviso de error de carga con estilo propio y barra de filtros alineada
+  con el título.
+- PR #81 (backend) — sólo el plan de la tarea,
+  `docs/superpowers/plans/2026-10-09-estilos-aviso.md`. Hermano de los FT #66 y #67.
+
+**Por frontera**
+- Núcleo (front): `src/index.css`. `.badge-warn`, `.badge-danger`, `.badge-info` y
+  `.badge-green` llevan el texto en `--text-primary`; el tono queda en el fondo pálido y en
+  el borde. `.badge-green` suma un borde en su tono, como las otras tres: el anterior,
+  `--accent-dim`, casi no se veía. Lo ven también Administración ("Activo") y el Tarifario
+  de Terceros ("sin confirmar").
+- Preliquidación (front):
+  - Componente nuevo `components/AvisoError.jsx`, con su CSS Module: fondo rojo pálido
+    (`--danger-dim`), borde fino, ícono de alerta, texto oscuro de peso 500 y
+    `role="alert"`. Reemplaza los 8 avisos "No se pudo/No se pudieron cargar… Probá
+    recargar la página.": en Verificación (quincenas, líneas, Plantas vs Jornal y Tancadas
+    vs Jornal), en Gerencial (los dos controles) y en Mantenimiento y Conceptos (las
+    quincenas). El texto no cambia; los vacíos ("No hay…") siguen grises y centrados.
+  - `FiltrosBar.module.css` toma el padding lateral de `--filtros-margen` (16 px por
+    defecto) y el margen negativo de `--filtros-sangria` (0 por defecto). Cada pantalla las
+    declara con su propio padding: Verificación y Mantenimiento 32, Conceptos 24 y
+    Gerencial 28. La topbar de Revisión pasa de 20 a 16 px, alineada con el banner, la barra
+    y la Liquidación masiva.
+- Liquidación Terceros (front): sin código propio tocado; hereda del núcleo las etiquetas
+  nuevas en el Tarifario.
+- Docs: el plan de la tarea (BK #81).
+
+**Decisiones**
+- Es una decisión de estética del usuario del 2026-10-09, tomada eligiendo entre muestras:
+  la opción "A" de etiquetas (entre tres), un aviso de error propio y la barra alineada con
+  el título.
+- Etiquetas con texto oscuro y el tono en el fondo y el borde. Porqué: el texto de color
+  sobre su fondo pálido daba entre 3,0 y 4,3:1 con 11 px, por debajo de AA, y los usuarios
+  son administrativos mayores; es el mismo criterio de los chips del desglose del historial
+  (R5 del refinamiento). Descartado: oscurecer los tokens `--warn`, `--danger` e `--info`,
+  que también pintan bordes, íconos y variaciones (y la estética la decide el usuario); y
+  dejarlo como estaba.
+- Las etiquetas van en un PR aparte y chico. Porqué: son núcleo (ADR-0013).
+- Aviso de error con estilo propio. Porqué: hasta ahora un error de carga se veía igual que
+  "no hay datos". Responde la consulta de estética que había dejado el FT #65.
+- El aviso vive en el módulo y no en el núcleo. Porqué: hoy sólo lo usa Preliquidación
+  (ADR-0013); Administración y Terceros tienen sus propios avisos. Si otro módulo lo
+  necesita, se sube al núcleo.
+- La barra se alinea con variables CSS que declara cada pantalla. Porqué: los controles
+  arrancaban 11 px antes del título en Gerencial y 16 px después en Verificación,
+  Mantenimiento y Conceptos; las pantallas tienen márgenes distintos (16 a 32 px) y la barra
+  está puesta de dos maneras, así que ningún valor único en la barra alinea las cinco. Sin
+  las variables, la barra queda como estaba. Descartado: un valor único en la barra, y
+  unificar el padding de todas las pantallas.
+- El plan va en el backend aunque la tarea sea sólo de front. Porqué: lo pide el flujo.
+
+**Estado**
+- Deploy: no; espera el OK del usuario. Sólo el front, un solo deploy con los dos PRs (swap
+  de carpeta); el BK #81 no necesita deploy.
+- Migraciones: ninguna.
+- Verificación:
+  - FT #66: contraste medido en pantalla contra `testing`; warn pasa de 3,89 a 13,22 sobre
+    el fondo de la página, danger da 12,7, info 13,27 y green 12,52, y en uso real queda
+    entre 9,9 y 13,3. Recorridas Inicio, Verificación, Revisión, Conceptos y Administración.
+    En el Tarifario de `testing` no hay ninguna etiqueta "sin confirmar"; no se forzó,
+    porque habría que escribir en la base.
+  - FT #67: en el navegador contra `testing`, sin escribir en la base. Los 8 avisos se ven
+    con el estilo nuevo (texto 12,7:1, 11,6 en los paneles de Gerencial; ícono 4,0:1); los
+    vacíos siguen grises y sin `role="alert"`; con las líneas en error, Plantas vs Jornal
+    sigue mostrando su control (el R1 del FT #65 se mantiene). Título contra primer control
+    de la barra, con el menú expandido y contraído: Verificación 32/32, Mantenimiento 32/32,
+    Conceptos 24/24, Gerencial 28/29 (1 px de borde del conmutador) y Revisión 16/16; sin
+    scroll horizontal.
+  - Los dos: `npm test` 76/76, `npm run build` OK y detector de `impeccable` sin hallazgos
+    (en el FT #67, también `npx eslint` 0). Revisión de dos ejes más `/impeccable critique`
+    y `audit`, con verificador: FT #66 con 0 urgent, 0 high, 3 minor y 5 descartados; FT
+    #67 con 0 urgent, 0 high, 6 minor y 2 descartados.
+- Rollback: revertir el PR y redeployar el front con swap de carpeta. No toca datos ni el
+  backend.
+
+**Pendiente**
+- Deploy del front con los FT #66 y #67, sólo con OK del usuario (en `docs/estado.md`).
+- Avisarle a Pitu que las etiquetas `.badge-*` cambian también en Terceros (Tarifario, "sin
+  confirmar") (en `docs/estado.md`).
+- Minors sin tocar del FT #66:
+  - DUPLICADO y POSIBLE DUPLICADO se parecen más que antes; siguen distinguiéndose por el
+    texto, el tono del fondo y el borde izquierdo de la fila en Revisión. El usuario lo vio
+    y eligió dejarlo así; si molesta, se sube el alfa del borde de `.badge-danger`.
+  - `color: var(--text-primary)` se repite en las cuatro clases y los bordes
+    `rgba(…, 0.35)` están escritos a mano en unos 20 lugares; un token `--*-border` lo
+    resolvería, pero los tokens los decide el usuario.
+  - El comentario nombra "R5 del refinamiento" y habla de "tono de aviso", aunque también
+    cubre el verde.
+- Minors sin tocar del FT #67:
+  - En Verificación, Mantenimiento y Conceptos el padding y las dos variables repiten el
+    mismo número, y en Gerencial el 28 se copia de `.header`: si cambia el padding, la barra
+    se desalinea sin aviso. Se cierra con una variable `--pagina-x` por pantalla.
+  - `--filtros-margen` en realidad guarda un padding (lo explica el comentario de la barra).
+  - En Gerencial, el contenedor de los avisos lleva `marginTop` en línea.
+  - `Revision.module.css` pasa de 20 a 16 sin un comentario del porqué.
+  - En Conceptos, si fallan las quincenas, el aviso queda debajo del recuadro azul de la
+    solapa: dos cajas de color seguidas. Se arregla subiéndolo antes de las solapas.
+  - El ícono queda 1,5 px fuera del centro del texto (usa `enTexto`, como el resto del
+    repo).
+- Deuda previa, igual en `main`, en los cuerpos de los PRs:
+  - Otros textos de tono sobre fondo pálido no llegan a AA (3,3 a 4,0:1) y no son
+    `.badge-*`: `PanelPorConcepto.module.css`, `.badgeAlerta` de Gerencial y `.pjAlto` y
+    `.vhpAviso` de Verificación (FT #66).
+  - A 1440 px, el modal de detalle de Verificación y la tabla de usuarios de Administración
+    tienen scroll horizontal (FT #66).
+  - `.badge-green` se llama por el color y no por lo que significa (FT #66).
+  - Con la pestaña oculta, React Query pausa el reintento y Verificación, Mantenimiento y
+    Conceptos dicen "Todavía no hay quincenas" hasta que la pestaña vuelve a verse; el
+    arreglo es usar `isPending` en la rama de carga, en otro PR (FT #67).
+  - Mantenimiento no tiene `isError` en la lista de operarios, ni Gerencial en la de
+    quincenas (FT #67).
+  - En Revisión, las alertas de la barra arrancan 4 px corridas cuando bajan de línea
+    (`.alertas { margin-left: 4px }`) (FT #67).
+  - Si fallan las líneas, el panel de Filtros se abre sin opciones; el aviso igual informa
+    el error (FT #67).
+
+## 2026-10-09 — Deploy a producción de los estilos de aviso
+
+Entrada de deploy: no anota un merge sino el deploy de FT #66 y FT #67, ya anotados arriba.
+Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuera de git).
+
+**Qué se deployó**
+- Frontend: de `bad5aee` a `5ce44cc` (FT #66 y #67), con build desde el checkout del front en
+  `main`, idéntico a `origin/main`. Autorizado por el usuario.
+- Backend: sin tocar. El BK #81 es sólo el plan.
+
+**Estado**
+- Deploy: sí, sólo frontend, con swap de carpeta; la versión anterior queda como rollback.
+- Migraciones: ninguna. Dependencias nuevas: ninguna.
+- Verificación: build con 49 assets y el mismo bundle en local y en el servidor; el sitio
+  responde 200 y sirve el bundle nuevo; `/health` del backend ok.
+- Rollback: swap inverso de la carpeta del front. No toca datos ni el backend.
+
+**Pendiente**
+- Mirar en el sitio real las etiquetas, el aviso de error y la barra alineada.
+- Las etiquetas cambian también en el Tarifario de Terceros: avisarle a Pitu (en
+  `docs/estado.md`).
+- Queda cerrado el pendiente de deploy de la entrada de estilos de aviso.
+
+## 2026-10-09 — Decisión del esquema de permisos: ADR-0020 y glosario
+
+**Mergeado**
+- PR #82 (backend, merge `8e8e083`) — `docs(permisos)`: ADR-0020 (roles armables con permisos
+  de ver o editar por pantalla) y glosarios de roles, permisos y pantallas. Sólo docs.
+
+**Por frontera**
+- Docs: ADR-0020 nuevo; nota en el ADR-0013 de que su parte de permisos la reemplaza el
+  ADR-0020; `CONTEXT.md` suma Pantalla y Permiso, redefine Rol y Admin, pasa Operador,
+  Gerente y Etiqueta de rol a `_Avoid_`, y Inicio, Tarjeta y Administración hablan de
+  permisos; `CONTEXT-MAP.md` nombra los permisos; el glosario de Preliquidación cambia
+  "Roles en Preliquidación" por sus seis pantallas con qué es ver y editar; el de Terceros
+  suma sus cinco pantallas con el mismo formato.
+- Núcleo, Preliquidación y Terceros: sin código todavía; la implementación cambia la
+  protección de rutas y endpoints de los tres.
+
+**Decisiones**
+- Un Rol es un conjunto de Permisos con nombre que arma el admin desde la Administración; un
+  Permiso es Ver o Editar una Pantalla (Editar incluye Ver); una persona tiene uno o más
+  roles y sus permisos se suman; el admin sigue siendo una marca global aparte. Porqué: el
+  esquema operador/gerente no cubre sin programar que el gerente vea Verificación y los
+  precios de Conceptos, ni los tres niveles con que se diseñó Facturación. Descartado: roles
+  fijos como hasta ahora (cada caso nuevo exige cambiar el código); lector / editor / admin
+  por módulo (no deja que el gerente vea Verificación sin ver Revisión); permisos por botón
+  (la grilla del admin se vuelve ilegible); un solo rol por persona (obliga a un rol por
+  cada combinación). Decidido con el usuario el 2026-10-09, en una entrevista.
+- La migración no cambia el acceso de nadie: copia el de hoy en tres roles, Preliquidador,
+  Gerente y Liquidador de terceros (ADR-0020, "Consecuencias").
+
+**Estado**
+- Deploy: no. Migraciones: ninguna.
+
+**Pendiente**
+- Diseño de las pantallas nuevas de Administración con `impeccable`, plan con el
+  planificador e implementación en PRs hermanos (en `docs/estado.md`).
+- `docs/modulos/GUIA-MODULOS.md` todavía describe `operador`/`gerente`; cambia en el PR de
+  la implementación.
+- Avisarle a Pitu del cambio en el glosario de Terceros (en `docs/estado.md`).

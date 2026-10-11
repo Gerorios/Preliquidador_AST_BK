@@ -6,15 +6,24 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Módulo Facturación (carril completo, sin código): espera el cambio del esquema de
-  permisos (tarea aparte del núcleo, sin empezar; idea del usuario: algo como lector /
-  editor / admin por módulo) y el fin del refinamiento. Después: plan de implementación con
+- Esquema de permisos (tarea del núcleo, carril completo, zona sensible): la decisión está
+  tomada (ADR-0020, BK #82, 2026-10-09): roles armables por el admin con permisos de Ver o
+  Editar por pantalla. Diseño de Administración confirmado (`/impeccable shape`). Plan
+  aprobado el 2026-10-09: `docs/superpowers/plans/2026-10-09-esquema-permisos.md` (en la rama
+  `feature/permisos-pantallas`, worktrees `.claude/worktrees/permisos-pantallas` de los dos
+  repos), con 4 PRs (BK1, BK2, FT1, FT2) y un solo deploy. Fase: etapa 1 (BK1) y etapa 3
+  (FT1) en paralelo. BK1 tiene commiteados los pares 1.1 a 1.8 (hasta la API de roles);
+  la migración `core/002` ya se aplicó en `testing` (2026-10-09). FT1 tiene commiteado todo
+  lo que no necesitaba la API; falta probarlo en el navegador. `docs/modulos/GUIA-MODULOS.md`
+  todavía describe `operador`/`gerente` y la "etiqueta de rol": cambia en el BK2.
+- Módulo Facturación (carril completo, sin código): espera la implementación del esquema de
+  permisos (ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
   el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
   locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
 
 ## Próximo paso
 
-Sin tarea en curso: el FT #65 (avisos de error de Verificación y Gerencial) está deployado desde el 2026-10-09. Las capturas para el mail de cambios ya se entregaron (carpeta local `capturas-refinamiento/`, fuera de los repos).
+Esquema de permisos, retomar en el paso 1.10 (pausa del 2026-10-09): BK1 tiene commiteados los pasos 1.1 a 1.9 y la suite completa da 1107 passed y 1 xfailed. La revisión de código de BK1 quedó en la primera ronda: los dos ejes ya reportaron (copiados en la sección 9 del plan, "Paso 1.10"); falta pasarlos por `verificador-review`, arreglar los urgent y high, hacer la segunda ronda sólo sobre los arreglos y abrir el PR (el merge, con OK del usuario). En el front, FT1 ya se miró en el navegador como admin, en sólo lectura: Administración con sus dos solapas y la validación del editor andan. Falta `/impeccable critique`, `audit` y `polish`, `PRODUCT.md` (3.9) y el smoke 3.10, que crea roles y usuarios de prueba en `testing` y espera el OK del usuario.
 
 ## Pendientes del usuario
 
@@ -29,8 +38,10 @@ Sin tarea en curso: el FT #65 (avisos de error de Verificación y Gerencial) est
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
-- Decidir dos cosas del refinamiento que tocan todo el sistema: los colores de aviso por debajo del contraste AA (`badge-*`; warn, danger e info sobre su fondo pálido, 3,1 a 3,9:1) y el padding de la barra de filtros (`FiltrosBar`, 16 px) contra el de las páginas (24-28 px) (- Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).(FT #65, 2026-10-09).
-- Decidir si los avisos de error llevan un estilo propio (rojo con ícono) en vez del gris de "no hay datos", con el que hoy se confunden: es estética, va con la decisión de colores de aviso (FT #65, 2026-10-09).
+- Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).
+- Mirar en el sitio real las etiquetas con texto oscuro, el aviso de error rojo y la barra de filtros alineada (deploy del 2026-10-09).
+- Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
+- Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82).
 
 ## A futuro
 
