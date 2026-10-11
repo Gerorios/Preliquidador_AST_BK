@@ -16,6 +16,11 @@ lo que existe en Claude Code.
   `/grill-with-docs`, para estresar un plan; `domain-modeling` para el glosario y los ADR;
   `/ponytail-review` para buscar sobre-ingeniería; `flujo-preliquidacion`, la versión de
   este sistema de la skill global `flujo`, que se usa en lugar de la global (no las dos).
+- **Agentes en Haiku 5.5**: `Explore` (búsqueda de sólo lectura; reemplaza al integrado,
+  que corre en el modelo de la sesión) y `corredor-tests` (corre la suite o el build y
+  devuelve sólo el resumen y los fallos), en `.claude/agents/`, idénticos en los dos repos.
+  Cuándo se usa cada uno lo dice `flujo-preliquidacion`. Lo que escribe o juzga código
+  (`planificador`, `ejecutor`, revisores, `verificador-review`) no va en Haiku.
 - **Bitácora**: la escribe el agente `bitacora` con `/bitacora`, que también actualiza
   `docs/estado.md`; quien lo despachó commitea los dos juntos a `main`. Dos respaldos
   recuerdan preguntar después de un merge: un hook PostToolUse sobre `gh pr merge` y el
