@@ -41,6 +41,7 @@ Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK 
 
 ## A futuro
 
+- Modo Ver de Preliquidación (FT2 del esquema de permisos): los botones de escritura desaparecen sin aviso. Se evaluó una etiqueta tenue "Consulta" junto al título de Conceptos, Mantenimiento y el panel de la línea; el usuario decidió mirarlo primero en el sitio real y sumarla en un PR chico si confunde (2026-10-11).
 - Tests e2e con Playwright en el front (dependencia nueva, se aprueba antes): hoy no hay; lo de punta a punta es el smoke manual en el navegador, que sólo prueba lo que tocó la tarea. Pocos flujos críticos (login y que cada rol vea sólo sus pantallas, Revisión, Verificación, exportación), el grueso con la API simulada y uno o dos de sólo lectura contra `testing` (compartida y con datos que cambian: sin números fijos). Correrían en la fase 4 cuando la tarea toca el front y antes de cada deploy. Buen momento para arrancar: el esquema de permisos, por el caso de los roles (2026-10-11).
 - Deuda vista en la revisión del FT #65: los paneles de desvíos e indicadores de Gerencial no avisan si falla la carga (dicen "Ningún cliente con historial comparable"); los mensajes de axios llegan en inglés (`api.js`, núcleo); después de un guardado fallido del valor hora el campo conserva lo tipeado (2026-10-09).
 - 5 warnings `react-hooks/exhaustive-deps` en Terceros (`FiltroMultiple.jsx` y `Grilla.jsx`): deuda del FT #48, no bloquea.
