@@ -24,7 +24,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK del usuario y no se deploya solo (requiere `core/002`; el deploy es uno solo con BK2, FT1 y FT2). BK2 completo y revisado (0 urgent, 0 high, 6 minors en el cuerpo), en el PR #86 con base en la rama del #83; FT1 completo, en el PR #70 del front. Los tres esperan el OK del usuario para el merge, en orden #83, #86, #70. El smoke 3.10 se hizo sólo por API contra `testing` (cada rol llega a lo que dice la tabla; usuarios de prueba borrados); lo visual se mira en el sitio real después del deploy. Después: FT2 (modo Ver en las pantallas de Preliquidación).
+Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK del usuario y no se deploya solo (requiere `core/002`; el deploy es uno solo con BK2, FT1 y FT2). BK2 completo y revisado (0 urgent, 0 high, 6 minors en el cuerpo), en el PR #86 con base en la rama del #83; FT1 completo, en el PR #70 del front. FT2 (modo Ver en Preliquidación) completo y revisado (0 urgent, 0 high, 8 minors en el cuerpo), en el PR #71 del front con base en la rama del #70. Los cuatro esperan el OK del usuario para el merge, en orden #83, #86, #70, #71; después, el deploy único (etapa 5), también con OK. El smoke 3.10 se hizo sólo por API contra `testing` (cada rol llega a lo que dice la tabla; usuarios de prueba borrados); lo visual se mira en el sitio real después del deploy. Lo visual de FT1 y FT2 (cada rol, incluido uno de sólo Ver) se mira en el sitio real después del deploy.
 
 ## Pendientes del usuario
 
