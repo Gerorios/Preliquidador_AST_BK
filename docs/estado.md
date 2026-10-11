@@ -6,14 +6,17 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Módulo Facturación (carril completo, sin código): el esquema de permisos que esperaba
-  ya está deployado (2026-10-11; ADR-0020; su plan cambia las "capacidades" por pantallas), igual que el refinamiento (2026-10-09). Sigue: plan de implementación con
-  el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
-  locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
+- Módulo Facturación, E1 (carril completo, fase 3: ejecución): el módulo con sus seis
+  pantallas, la pantalla Unidad de medida por defecto y la primera carga desde el maestro de
+  tareas. Plan aprobado el 2026-10-11: `docs/superpowers/plans/2026-10-11-facturacion-e1.md`
+  (rama `feature/facturacion-e1` en los dos repos). El plan de la E2 ya está escrito
+  (`2026-10-11-facturacion-e2.md`), con 17 preguntas abiertas que se resuelven al arrancarla.
+  Notas locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
 
 ## Próximo paso
 
-Facturación (2026-10-11): el esquema de permisos está completo (etapas 1 a 6, deployado). Sigue el plan de implementación con el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`.
+Facturación E1 (2026-10-11): ejecutores en paralelo (backend B1 a B8, front F1 a F4). Después,
+con OK: pre-check de tablas, DDL y primera carga en `testing`, revisión, PRs BK-E1 y FT-E1.
 
 ## Pendientes del usuario
 
