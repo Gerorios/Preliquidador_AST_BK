@@ -1015,3 +1015,12 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
   - Las escrituras se probaron con parámetros inválidos: 422 si el permiso pasa y 403 si no. No se escribió nada.
   - `GET /api/terceros/alertas` da 502, a propósito, hasta cargar `TALLER_SHEET_URL`.
   - Al final se borraron el rol y los usuarios de prueba.
+- **Etapa 4 (FT2, rama `feature/permisos-ft2` del front, que sale de FT1), pasos 4.1 a 4.4 hechos (2026-10-11).** Se hicieron en paralelo, con tres ejecutores sobre archivos separados.
+  - 4.1 y 4.3 (`09020ca`):
+    - Sin Editar Inicio se saca el panel de nueva quincena entero, porque el selector sólo sirve para generar. El subtítulo deja de ofrecer generar; el plan no lo pedía.
+    - Sin Ver Revisión, las filas del historial no se abren ni parecen clicables.
+  - 4.2 (`c06b7a6`): `revisionSoloLectura.js` lleva 9 tests.
+    - Ver la nota "Para el FT2": el aviso de valor hora vive en `ControlesJornal.jsx`, que se comparte con la Vista gerencial. Pasó a "Todavía no se cargó este valor para la quincena." en las dos pantallas.
+    - El banner de incompletas ya no dice "el maestro" y ofrece "Ir a Conceptos" sólo a quien ve Conceptos.
+  - 4.4 (`e22cbcd`): `conceptosSoloLectura.js` lleva 7 tests. "Sin Nuevo" se aplica a **todas** las altas de la pantalla: "Sin concepto", "+ Agregar regla" y la celda "falta". Todas hacen `POST /conceptos`.
+  - **Verificación en el navegador con un rol de sólo Ver: no se hace antes del deploy, por decisión del usuario (2026-10-11).** Se mira en el sitio real después, igual que el smoke 3.10.
