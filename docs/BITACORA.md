@@ -3089,3 +3089,85 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 **Estado**
 - Deploy: no aplica (no corre en el servidor).
 - Migraciones: ninguna.
+
+## 2026-10-11 — Esquema de permisos: roles armables con Ver o Editar por pantalla
+
+**Mergeado**
+- PR #83 (backend, merge `4133225`) — BK1: catálogo de pantallas por módulo, tablas `rol`,
+  `rol_permiso` y `usuario_rol` con la migración `core/002`, permisos efectivos,
+  `requiere_pantalla`, `permisos` en el login y `/auth/me`, y la API de roles de
+  Administración.
+- PR #86 (backend, merge `c92a6ad`) — BK2: las 51 rutas de Preliquidación y las 38 de
+  Terceros piden pantalla y nivel; sale el esquema por módulo del código; scripts
+  `asignar_rol.py` y `crear_usuario.py --asignar-rol`.
+- PR #70 (frontend, merge `b0428e9`) — FT1: `puedeVer`, `puedeEditar` y `puedeVerAlguna`
+  en rutas, menú, Inicio y guardas; sesión v3; Administración con solapas Usuarios y Roles.
+- PR #71 (frontend, merge `02eb611`) — FT2: modo Ver en las pantallas de Preliquidación.
+
+**Por frontera**
+- Núcleo: `Pantalla` y `ModuloInfo.pantallas`; `permisos_de` toma el máximo entre los roles
+  de la persona y `puede` responde si alcanza; el admin sigue siendo la marca global, con
+  `permisos: {}` en la sesión. Login y `/me` devuelven `permisos` y ya no `modulos`. API
+  `GET/POST /api/admin/roles`, `PUT/DELETE /api/admin/roles/{id}` y
+  `PUT /api/admin/usuarios/{id}/roles`; sale `PUT /usuarios/{id}/modulos`; el alta en lote
+  recibe `roles: list[int]`. Salen `MODULOS`, `ROLES_MODULO`, `modulos_de`,
+  `tiene_permiso`, `requiere_modulo`, `UsuarioModulo`, `Usuario.modulos` y
+  `etiquetas_rol`. En el front, Administración arma roles con Sin acceso / Ver / Editar por
+  pantalla, con las mismas validaciones que el backend.
+- Preliquidación: declara 6 pantallas; cada ruta pide pantalla y nivel por dependencias con
+  nombre de su `permisos.py`, con test del mapa. En el front, quien sólo tiene Ver ve los
+  mismos datos sin controles de escritura en Inicio, Revisión (y el panel de la línea),
+  Mantenimiento, Conceptos y Por concepto; Exportar sigue. El banner de líneas incompletas
+  y el aviso de valor hora faltante dejan de nombrar un rol; el aviso cambia también en la
+  Vista gerencial, que comparte el componente.
+- Liquidación Terceros: declara 5 pantallas; sus 38 rutas pasan a 12 dependencias con
+  nombre (salen `requiere_operativo` y `requiere_gerencial`); sus tests usan el rol
+  "Liquidador de terceros"; cada ruta de `src/modulos/terceros/rutas.jsx` nombra su
+  pantalla.
+- Prod y Datos: migración `migrations/core/002_roles_y_permisos.sql`, idempotente, con una
+  semilla que copia el acceso de hoy en tres roles (Preliquidador, Gerente y Liquidador de
+  terceros) y no toca `usuario_modulo`, que queda en la base hasta la etapa 6.
+  `refrescar_testing.py` copia las tablas nuevas.
+- Docs: GUIA-MODULOS, `AGENTS.md` ("Comandos"), DOCUMENTACION, AYUDA ("Qué pantallas
+  ves"), la "Tarjeta" de `CONTEXT.md` y `PRODUCT.md` del front; el plan suma las notas de
+  FT1 y FT2.
+
+**Decisiones**
+- Se protege por pantalla y nivel, no por módulo. Porqué: el gerente tiene que poder ver
+  Verificación y los precios de Conceptos sin editar Revisión. Descartado: roles fijos y
+  permisos por botón (ADR-0020).
+- Nadie cambia de acceso con la migración. Porqué: lo garantiza un test de equivalencia que
+  corre las dependencias de verdad contra una matriz del esquema viejo escrita a mano y
+  sólo acepta los cambios aprobados en el plan.
+- Los permisos se validan contra el catálogo de módulos activos que `main.py` deja en
+  `app.state`. Porqué: así el núcleo no importa módulos (ADR-0013).
+- El `PUT` de un rol reemplaza los permisos de los módulos activos y conserva los de los
+  inactivos, que el editor no muestra; un rol en uso no se borra (409, nombrando a quién
+  sacárselo).
+- Los scripts van antes que el borrado del esquema viejo, con OK del usuario. Porqué:
+  borrar `reemplazar_modulos` primero rompía `crear_usuario.py`. `--asignar-rol` reemplaza
+  los roles por coherencia con el `--modulo` anterior; para sumar uno está `asignar_rol.py`.
+- En modo Ver los controles se ocultan, no se deshabilitan. Porqué: lo pide `PRODUCT.md`;
+  quien sólo mira no encuentra botones de cambiar ni campos grises que parezcan editables,
+  y no queda nada que dé 403. "Sin Nuevo" en Conceptos abarca todas las altas de la
+  pantalla, porque todas hacen `POST /conceptos`.
+- La etiqueta "Consulta" del modo Ver no va por ahora: se mira en el sitio real y, si
+  confunde, va en un PR chico. Decisión del usuario.
+- Lo visual de FT1 y FT2 con cada rol se mira en el sitio real después del deploy.
+  Decisión del usuario.
+
+**Estado**
+- Deploy: no. Los cuatro van en un solo deploy (etapa 5 del plan), con OK del usuario.
+- Migraciones: `core/002` aplicada sólo en `testing` (2026-10-09); en producción, no.
+- Pruebas: backend 1136 passed y 1 xfailed; front 156/156. Smoke 3.10 sólo por API contra
+  `testing`: cada rol llega a lo que dice la tabla del plan; usuarios de prueba borrados.
+- Revisión: BK1 1 high arreglado y 10 minor; BK2 0 urgent, 0 high y 6 minor; FT2 0 urgent,
+  0 high y 8 minor. Los minor sin tocar están en los cuerpos de los PRs y en la sección 9
+  del plan (los de FT1).
+
+**Pendiente**
+- El deploy único (etapa 5) y, después, lo visual de cada rol en el sitio real, incluido
+  uno de sólo Ver (en `docs/estado.md`).
+- Etapa 6: un PR aparte que borra `usuario_modulo`, con OK.
+- Facturación espera el deploy.
+- Avisarle a Pitu de los cambios en Terceros (en `docs/estado.md`).

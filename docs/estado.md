@@ -6,25 +6,14 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Esquema de permisos (tarea del núcleo, carril completo, zona sensible): la decisión está
-  tomada (ADR-0020, BK #82, 2026-10-09): roles armables por el admin con permisos de Ver o
-  Editar por pantalla. Diseño de Administración confirmado (`/impeccable shape`). Plan
-  aprobado el 2026-10-09: `docs/superpowers/plans/2026-10-09-esquema-permisos.md` (en la rama
-  `feature/permisos-pantallas`, worktrees `.claude/worktrees/permisos-pantallas` de los dos
-  repos), con 4 PRs (BK1, BK2, FT1, FT2) y un solo deploy. Fase: etapa 1 (BK1) y etapa 3
-  (FT1) en paralelo. BK1 está completo y revisado, en el PR #83 (sin mergear); la migración `core/002` ya se
-  aplicó en `testing` (2026-10-09). BK2 en curso en la rama `feature/permisos-bk2`, que sale
-  de BK1. FT1 tiene commiteado todo lo que no necesitaba la API y se miró
-  en el navegador como admin. `docs/modulos/GUIA-MODULOS.md`
-  todavía describe `operador`/`gerente` y la "etiqueta de rol": cambia en el BK2.
-- Módulo Facturación (carril completo, sin código): espera la implementación del esquema de
-  permisos (ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
+- Módulo Facturación (carril completo, sin código): espera el deploy del esquema de
+  permisos (mergeado el 2026-10-11; ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
   el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
   locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
 
 ## Próximo paso
 
-Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK del usuario y no se deploya solo (requiere `core/002`; el deploy es uno solo con BK2, FT1 y FT2). BK2 completo y revisado (0 urgent, 0 high, 6 minors en el cuerpo), en el PR #86 con base en la rama del #83; FT1 completo, en el PR #70 del front. FT2 (modo Ver en Preliquidación) completo y revisado (0 urgent, 0 high, 8 minors en el cuerpo), en el PR #71 del front con base en la rama del #70. Los cuatro esperan el OK del usuario para el merge, en orden #83, #86, #70, #71; después, el deploy único (etapa 5), también con OK. El smoke 3.10 se hizo sólo por API contra `testing` (cada rol llega a lo que dice la tabla; usuarios de prueba borrados); lo visual se mira en el sitio real después del deploy. Lo visual de FT1 y FT2 (cada rol, incluido uno de sólo Ver) se mira en el sitio real después del deploy.
+Esquema de permisos (2026-10-11): BK #83, BK #86, FT #70 y FT #71 están mergeados y sin deployar. Sigue el deploy único (etapa 5 del plan `docs/superpowers/plans/2026-10-09-esquema-permisos.md`), con OK del usuario y en un momento sin uso (todos vuelven a entrar): respaldo de `usuarios` y `usuario_modulo`, `core/002` en producción, backend y front juntos, smoke. Después, la etapa 6 (PR que borra `usuario_modulo`) y el plan de Facturación.
 
 ## Pendientes del usuario
 
@@ -34,10 +23,11 @@ Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK 
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
+- Después del deploy del esquema de permisos: mirar en el sitio real Administración y cada rol, incluido uno de sólo Ver (BK #83 y #86, FT #70 y #71).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
-- Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82). En el BK1 (rama `feature/permisos-pantallas`), Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py` y `__init__.py`, y en el front cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla. En el BK2 (rama `feature/permisos-bk2`), cada ruta de Terceros pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); las filas 25 y 28 del plan van con el mapeo propuesto y conviene que las confirme, junto con qué pantallas usan `ver_inicio_o_quincena`; sus tests usan el rol "Liquidador de terceros"; si tiene ramas abiertas sobre `terceros.py`, coordinar antes del merge.
+- Avisarle a Pitu que el esquema nuevo de permisos ya está en `main` (BK #83 y #86, FT #70; sin deployar): el glosario de Terceros suma sus cinco pantallas con qué es ver y editar; Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py`; cada ruta pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla; sus tests usan el rol "Liquidador de terceros". Que confirme las filas 25 y 28 del plan y qué pantallas usan `ver_inicio_o_quincena`, y que rebase sus ramas abiertas sobre `terceros.py`.
 
 ## A futuro
 
