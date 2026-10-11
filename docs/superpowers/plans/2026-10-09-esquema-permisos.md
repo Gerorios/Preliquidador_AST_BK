@@ -978,3 +978,12 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
     - `max-width: 1280px` sin centrar en Administración;
     - el ámbar de aviso se usa para "editando";
     - la franja `border-left` en `Inicio.module.css`.
+  - **Pulido hecho (FT `e7e5e22`).** Los 5 puntos están aplicados. En el punto 5 se eligió un `max-width: 640px` en `.columnaEditor` y no la grilla, que desbordaba la tarjeta entre unos 900 y 1070 px de ventana con la barra lateral abierta. `npm test` da 140/140, `lint` igual que antes (6 errores y 5 warnings conocidos) y `build` ok. Se mira en el navegador en el smoke 3.10.
+  - **Una segunda crítica (28/40) suma minors de FT1, sin tocar:**
+    - la confirmación de un rol en uso nombra a las personas pero no qué cambió;
+    - "Volver" y abrir "Cambiar" en otra fila descartan el borrador sin avisar;
+    - con muchos módulos, el pie con Guardar queda debajo del pliegue;
+    - al cerrar una confirmación, el foco no vuelve al botón que la abrió;
+    - el hover de un segmento no elegido es más oscuro que "Sin acceso" elegido, y el anillo de foco del segmentado puede quedar recortado por `overflow: hidden`.
+- **Paso 3.9 hecho (FT `6fe442b`):** `PRODUCT.md`, sección Users, con los roles armables, los tres iniciales y el admin como marca global.
+- **Par 2.1 hecho (`a801f1e`).** Preliquidación pide pantalla y nivel en sus 51 rutas, y el mapa lo fija `tests/preliquidacion/test_mapa_permisos.py`. También cambió `test_operador_no_accede_a_vista_gerencial`, que el plan no nombraba: ahora prueba `/api/gerencial/empresas`, porque `/quincenas` es el acceso nuevo de la pregunta 4. La suite da 1113 passed y 1 xfailed.
