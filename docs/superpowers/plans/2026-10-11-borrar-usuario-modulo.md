@@ -25,8 +25,9 @@ BK2 y `tests/core/test_permisos.py` verifica que no está en `Base.metadata`.
   - desde esta migración, `core/002` ya no se puede volver a correr, porque su semilla lee
     `usuario_modulo` (falla con "Table doesn't exist");
   - en una base nueva sigue andando, porque el orden de `ORDEN.txt` corre 001 → 002 → 003;
-  - la vuelta atrás es el respaldo del deploy, y el código anterior al esquema de permisos deja de
-    ser una vuelta atrás posible.
+  - el código anterior al esquema de permisos deja de ser una vuelta atrás posible; como el
+    respaldo del deploy se borra (pregunta 1), la tabla se recrearía con `core/001` y se llenaría
+    a mano desde `usuario_rol`.
 - Agregar la línea al final de `migrations/ORDEN.txt`. `test_manifiesto_migraciones.py` ya falla
   si el archivo no figura ahí.
 - `docs/DOCUMENTACION.md` ("Base nueva desde cero") nombra `core/001` y no `core/002`: pasa a
@@ -64,3 +65,7 @@ BK2 y `tests/core/test_permisos.py` verifica que no está en `Base.metadata`.
 
 1. ¿Se borra el respaldo del VPS junto con el `DROP`? **Recomiendo que sí**: tiene hashes de
    contraseñas, y `usuario_rol` guarda la misma información de acceso.
+
+## Revisión (2026-10-11)
+
+Una ronda de dos ejes con verificador: 0 urgent, 0 high, 5 minor (en el PR) y 5 descartados. El usuario aprobó la recomendación de la pregunta 1. El minor 5 (esta sección 6.2 decía que la vuelta atrás era el respaldo) quedó corregido arriba.
