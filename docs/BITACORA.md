@@ -3171,3 +3171,22 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Etapa 6: un PR aparte que borra `usuario_modulo`, con OK.
 - Facturación espera el deploy.
 - Avisarle a Pitu de los cambios en Terceros (en `docs/estado.md`).
+
+## 2026-10-11 — Deploy del esquema de permisos
+
+**Estado**
+- Deploy: sí, a producción. Backend de `46e4b2b` a `c92a6ad` (BK #83 y #86); frontend a
+  `02eb611` (FT #70 y #71), con swap de carpeta enseguida del reinicio. Todos vuelven a
+  entrar (sesión v3).
+- Migraciones: `core/002_roles_y_permisos.sql` en producción, después de respaldar
+  `usuarios` y `usuario_modulo` fuera del repo. Pre-check 0.2 igual al del plan; V1 a V4
+  bien: 12 permisos, Preliquidador 4, Gerente 1, Liquidador de terceros 0, sin diferencias
+  con `usuario_modulo`.
+- Smoke sin escribir: arranque con las tablas verificadas, `/health` ok, cada persona con
+  los permisos de su rol y el admin con todo; sitio con el bundle nuevo; journal sin
+  errores. Lo visual de cada rol, en el sitio real, queda para el usuario.
+
+**Pendiente**
+- Mirar en el sitio real Administración y cada rol, incluido uno de sólo Ver (en
+  `docs/estado.md`).
+- Etapa 6: PR aparte que borra `usuario_modulo`, con OK.

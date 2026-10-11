@@ -6,28 +6,28 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Módulo Facturación (carril completo, sin código): espera el deploy del esquema de
-  permisos (mergeado el 2026-10-11; ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
+- Módulo Facturación (carril completo, sin código): el esquema de permisos que esperaba
+  ya está deployado (2026-10-11; ADR-0020; su plan cambia las "capacidades" por pantallas), igual que el refinamiento (2026-10-09). Sigue: plan de implementación con
   el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
   locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
 
 ## Próximo paso
 
-Esquema de permisos (2026-10-11): BK #83, BK #86, FT #70 y FT #71 están mergeados y sin deployar. Sigue el deploy único (etapa 5 del plan `docs/superpowers/plans/2026-10-09-esquema-permisos.md`), con OK del usuario y en un momento sin uso (todos vuelven a entrar): respaldo de `usuarios` y `usuario_modulo`, `core/002` en producción, backend y front juntos, smoke. Después, la etapa 6 (PR que borra `usuario_modulo`) y el plan de Facturación.
+Esquema de permisos deployado el 2026-10-11 (BK #83 y #86, FT #70 y #71, con `core/002`). Sigue la etapa 6 (PR aparte que borra `usuario_modulo` y, con ella, el respaldo `respaldo-permisos-20261011.sql` del VPS), con OK, y el plan de implementación de Facturación.
 
 ## Pendientes del usuario
 
 - Cargar `TALLER_SHEET_URL` en el `.env` del servidor y reiniciar el backend: hasta entonces las alertas de Terceros responden 502 a propósito (deploy del 2026-09-30).
-- Asignar el rol "Liquidador de terceros" desde Administración a quienes liquiden Terceros, después del deploy del esquema de permisos (nace sin personas; deploy del 2026-09-30, BK #83).
+- Asignar el rol "Liquidador de terceros" desde Administración a quienes liquiden Terceros (nace sin personas; BK #83, deploy del 2026-10-11).
 - Actualizar en `docs/DEPLOY.md` (local, fuera de git) la nota de migraciones históricas: `ws17` ya es `historica` (BK #71, 2026-10-05).
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
-- Después del deploy del esquema de permisos: mirar en el sitio real Administración y cada rol, incluido uno de sólo Ver (BK #83 y #86, FT #70 y #71).
+- Esquema de permisos (deploy del 2026-10-11): mirar en el sitio real Administración y cada rol, incluido uno de sólo Ver (BK #83 y #86, FT #70 y #71).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
-- Avisarle a Pitu que el esquema nuevo de permisos ya está en `main` (BK #83 y #86, FT #70; sin deployar): el glosario de Terceros suma sus cinco pantallas con qué es ver y editar; Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py`; cada ruta pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla; sus tests usan el rol "Liquidador de terceros". Que confirme las filas 25 y 28 del plan y qué pantallas usan `ver_inicio_o_quincena`, y que rebase sus ramas abiertas sobre `terceros.py`.
+- Avisarle a Pitu que el esquema nuevo de permisos ya está en producción (BK #83 y #86, FT #70; deploy del 2026-10-11): el glosario de Terceros suma sus cinco pantallas con qué es ver y editar; Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py`; cada ruta pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla; sus tests usan el rol "Liquidador de terceros". Que confirme las filas 25 y 28 del plan y qué pantallas usan `ver_inicio_o_quincena`, y que rebase sus ramas abiertas sobre `terceros.py`.
 
 ## A futuro
 
