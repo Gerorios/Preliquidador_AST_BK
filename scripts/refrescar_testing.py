@@ -47,7 +47,6 @@ load_dotenv()
 # (hoy el módulo es un molde inactivo, sin migraciones propias).
 TABLAS = [
     "usuarios",
-    "usuario_modulo",
     "rol",
     "rol_permiso",
     "usuario_rol",

@@ -99,8 +99,8 @@ responde.
 - **Numeración**: las de Preliquidación siguen `wsN`. No existen `ws4` ni `ws6`, que se
   descartaron en el diseño. Las de un módulo nuevo empiezan en `001_`. `ws9`, `ws10` y
   `ws12` son diferibles, porque son índices y vistas de reporting; el resto no lo es.
-- **Base nueva desde cero**: `core/000_usuarios.sql` → `preliquidacion/000_esquema_base.sql`
-  → `core/001_usuario_modulo.sql` → las `preliquidacion/ws*.sql` que falten.
+- **Base nueva desde cero**: se corren, en el orden de `migrations/ORDEN.txt`, sólo las
+  entradas sin la marca `historica`.
 
 ---
 

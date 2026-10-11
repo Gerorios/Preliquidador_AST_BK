@@ -12,8 +12,8 @@ from app.modulos import REGISTRO
 
 
 def test_esquema_viejo_no_existe():
-    # BK2 borra el esquema por módulo (operador/gerente en usuario_modulo). La
-    # tabla queda en la base hasta un PR posterior, pero el código ya no la conoce.
+    # BK2 borra el esquema por módulo (operador/gerente en usuario_modulo) del
+    # código, y core/003 borra la tabla de la base.
     for nombre in ("MODULOS", "ROLES_MODULO", "modulos_de", "tiene_permiso", "requiere_modulo"):
         assert not hasattr(permisos, nombre), f"app.core.permisos todavía exporta {nombre}"
     assert not hasattr(models, "UsuarioModulo")
