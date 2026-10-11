@@ -1,6 +1,6 @@
 """
 Modelos del núcleo del sistema: lo que comparten todos los módulos.
-Hoy solo el usuario. Los permisos por módulo (usuario_modulo) llegan en el PR 3.
+El usuario y sus roles con permisos por pantalla (ADR-0020).
 """
 from datetime import UTC, datetime
 import enum
@@ -24,8 +24,9 @@ def ahora_utc() -> datetime:
 
 
 class RolUsuario(str, enum.Enum):
-    """Rol GLOBAL del sistema. Los roles por módulo (operador/gerente) viven
-    en usuario_modulo — ver app/core/permisos.py y ADR-0013."""
+    """Rol GLOBAL del sistema: 'admin' pasa todo. Lo que ve y edita cada
+    'usuario' lo dan sus roles (`Usuario.roles`) — ver app/core/permisos.py y
+    ADR-0020."""
     ADMIN = "admin"
     USUARIO = "usuario"
 
@@ -42,34 +43,16 @@ class Usuario(Base):
     activo     = Column(Boolean, default=True)
     creado_en  = Column(DateTime, default=ahora_utc)
 
-    # selectin: se carga en la misma consulta que el usuario, así el objeto
-    # sigue usable después del expunge del cache de get_usuario_actual.
-    modulos = relationship("UsuarioModulo", back_populates="usuario",
-                           cascade="all, delete-orphan", lazy="selectin")
-    # Roles armables (ADR-0020). selectin por lo mismo que `modulos`, y el
-    # expunge en la cascada NO es opcional: sin él, el `db.expunge(usuario)` de
-    # get_usuario_actual deja los Rol en la sesión de la request; si esa request
-    # hace commit quedan vencidos, al cerrarse quedan desligados, y la request
-    # siguiente que lea sus permisos desde el cache revienta con
-    # DetachedInstanceError. Sin delete: borrar a la persona no borra el rol.
+    # Roles armables (ADR-0020). selectin: se cargan junto con el usuario, así
+    # el objeto sigue usable después del expunge del cache de
+    # get_usuario_actual. El expunge en la cascada NO es opcional: sin él, el
+    # `db.expunge(usuario)` de get_usuario_actual deja los Rol en la sesión de
+    # la request; si esa request hace commit quedan vencidos, al cerrarse quedan
+    # desligados, y la request siguiente que lea sus permisos desde el cache
+    # revienta con DetachedInstanceError. Sin delete: borrar a la persona no
+    # borra el rol.
     roles = relationship("Rol", secondary="usuario_rol", lazy="selectin",
                          cascade="save-update, merge, expunge")
-
-
-class UsuarioModulo(Base):
-    """Rol de un usuario dentro de un módulo (ADR-0013). Una fila por usuario y
-    módulo. Por convención no se le cargan filas al admin; el código no lo
-    exige (`tiene_permiso` corta antes por `rol == 'admin'`)."""
-    __tablename__ = "usuario_modulo"
-    __table_args__ = (UniqueConstraint("usuario_id", "modulo", name="uq_usuario_modulo"),)
-
-    id         = Column(Integer, primary_key=True, autoincrement=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
-    modulo     = Column(String(30), nullable=False)   # 'preliquidacion' | 'terceros' | ...
-    rol        = Column(String(20), nullable=False)   # 'operador' | 'gerente'
-    creado_en  = Column(DateTime, default=ahora_utc, nullable=False)
-
-    usuario = relationship("Usuario", back_populates="modulos")
 
 
 class Rol(Base):

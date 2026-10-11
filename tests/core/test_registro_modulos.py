@@ -7,9 +7,8 @@ from types import SimpleNamespace
 
 from app.core.modulos import ModuloInfo
 from app.core.database import Base
-from app.core.permisos import MODULOS
 from app.core.auth import get_usuario_actual
-from app.modulos import REGISTRO, activos, claves
+from app.modulos import REGISTRO, activos
 from app import main as app_main
 from app.main import app
 
@@ -24,13 +23,8 @@ def test_los_dos_modulos_estan_en_el_registro():
     # que es lo que prueban los dos tests de abajo.
 
 
-def test_claves_del_registro_coinciden_con_permisos():
-    assert set(claves()) == set(MODULOS)
-
-
-def test_etiquetas_rol_preliquidacion():
+def test_preliquidacion_tiene_panel_gerencial():
     m = {x.clave: x for x in REGISTRO}["preliquidacion"]
-    assert m.etiquetas_rol == {"operador": "Preliquidador", "gerente": "Gerente"}
     assert m.panel_gerencial is True
 
 
@@ -56,7 +50,6 @@ def test_endpoint_modulos_devuelve_solo_activos():
     assert claves_resp == [m.clave for m in activos()]
     assert all(m.clave in claves_resp for m in REGISTRO if m.activo)
     assert all(m.clave not in claves_resp for m in REGISTRO if not m.activo)
-    assert r.json()[0]["etiquetas_rol"]["operador"] == "Preliquidador"
 
 
 # ── Catálogo de pantallas (ADR-0020) ────────────────────────────────────────

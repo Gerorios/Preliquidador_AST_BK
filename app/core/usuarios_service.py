@@ -1,8 +1,6 @@
 """Alta y mantenimiento de usuarios del Sistema (PR 5 de la etapa 0).
 
-Lo usan la API de Administración (`app/core/administracion.py`) y los scripts
-de consola, que se mantienen como puerta de entrada de emergencia si el admin
-quedara sin acceso a la pantalla.
+Lo usa la API de Administración (`app/core/administracion.py`).
 
 Las validaciones devuelven el motivo del rechazo como texto (o None), no
 excepciones HTTP: el service no conoce el transporte.

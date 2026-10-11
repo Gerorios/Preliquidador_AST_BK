@@ -13,7 +13,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.core.models import Rol, Usuario, UsuarioModulo, UsuarioRol, ahora_utc
+from app.core.models import Rol, Usuario, UsuarioRol, ahora_utc
 
 TOLERANCIA = timedelta(seconds=5)
 
@@ -43,16 +43,13 @@ def test_ahora_utc_es_naive_y_en_utc():
 
 
 @pytest.mark.filterwarnings("error::DeprecationWarning")
-def test_usuario_y_usuario_modulo_nacen_con_creado_en_naive_utc(db):
+def test_usuario_nace_con_creado_en_naive_utc(db):
     u = Usuario(nombre="Liq", email="liq@t.com", password="x", rol="admin", activo=True)
     db.add(u)
-    db.commit()
-    db.add(UsuarioModulo(usuario_id=u.id, modulo="preliquidacion", rol="operador"))
     db.commit()
     db.expire_all()
 
     _es_naive_utc_de_ahora(db.query(Usuario).one().creado_en)
-    _es_naive_utc_de_ahora(db.query(UsuarioModulo).one().creado_en)
 
 
 @pytest.mark.filterwarnings("error::DeprecationWarning")

@@ -112,7 +112,7 @@ def get_usuario_actual(
         raise credenciales_exc
 
     # Se desliga de la sesión para que sobreviva al cierre de esta request
-    # (id/nombre/email/rol/modulos/roles y los permisos de cada rol, cargados
+    # (id/nombre/email/rol/roles y los permisos de cada rol, cargados
     # por selectin; `roles` se desliga junto con la persona por el expunge de
     # su cascada, ver Usuario.roles).
     db.expunge(usuario)

@@ -1,110 +1,37 @@
-"""Permisos por módulo (ADR-0013): admin global; por módulo, operador o gerente."""
+"""Permisos del núcleo que no dependen de los roles: el esquema por módulo
+(ADR-0013) ya no existe y `requiere_admin` sigue igual. Los permisos por
+pantalla (ADR-0020) se prueban en test_permisos_pantalla.py."""
 from types import SimpleNamespace
 
-import pytest
-from fastapi import FastAPI, Depends
-from fastapi.testclient import TestClient
+from fastapi import HTTPException
 
-from app.core.auth import get_usuario_actual
-from app.core.permisos import tiene_permiso, modulos_de, requiere_modulo, MODULOS, ROLES_MODULO
-
-
-def _u(rol="usuario", **modulos):
-    """Usuario simulado: modulos como {'preliquidacion': 'operador'}."""
-    return SimpleNamespace(
-        id=1, nombre="T", email="t@t.com", rol=rol, activo=True,
-        modulos=[SimpleNamespace(modulo=m, rol=r) for m, r in modulos.items()],
-    )
+import app.core.models as models
+import app.core.permisos as permisos
+from app.core.database import Base
+from app.modulos import REGISTRO
 
 
-def test_constantes():
-    assert "preliquidacion" in MODULOS
-    assert ROLES_MODULO == ("operador", "gerente")
-
-
-def test_modulos_de_devuelve_mapa():
-    assert modulos_de(_u(preliquidacion="operador")) == {"preliquidacion": "operador"}
-    assert modulos_de(_u()) == {}
-
-
-def test_admin_pasa_siempre():
-    assert tiene_permiso(_u(rol="admin"), "preliquidacion", "operador")
-    assert tiene_permiso(_u(rol="admin"), "terceros", "gerente")
-
-
-def test_operador_pasa_solo_donde_es_operador():
-    u = _u(preliquidacion="operador")
-    assert tiene_permiso(u, "preliquidacion", "operador")
-    assert tiene_permiso(u, "preliquidacion", "operador", "gerente")
-    assert not tiene_permiso(u, "preliquidacion", "gerente")
-    assert not tiene_permiso(u, "terceros", "operador")
-
-
-def test_gerente_no_es_operador():
-    u = _u(preliquidacion="gerente")
-    assert tiene_permiso(u, "preliquidacion", "gerente")
-    assert not tiene_permiso(u, "preliquidacion", "operador")
-
-
-def test_usuario_sin_modulos_no_pasa():
-    assert not tiene_permiso(_u(), "preliquidacion", "operador", "gerente")
-
-
-@pytest.fixture()
-def cliente():
-    app = FastAPI()
-
-    @app.get("/operativo", dependencies=[Depends(requiere_modulo("preliquidacion", "operador"))])
-    def operativo():
-        return {"ok": True}
-
-    @app.get("/gerencial", dependencies=[Depends(requiere_modulo("preliquidacion", "gerente"))])
-    def gerencial():
-        return {"ok": True}
-
-    def con(usuario):
-        app.dependency_overrides[get_usuario_actual] = lambda: usuario
-        return TestClient(app)
-    yield con
-    app.dependency_overrides.clear()
-
-
-def test_requiere_modulo_operador(cliente):
-    c = cliente(_u(preliquidacion="operador"))
-    assert c.get("/operativo").status_code == 200
-    assert c.get("/gerencial").status_code == 403   # decisión 2026-09-08: el operador no ve Gerencial
-
-
-def test_requiere_modulo_gerente(cliente):
-    c = cliente(_u(preliquidacion="gerente"))
-    assert c.get("/operativo").status_code == 403
-    assert c.get("/gerencial").status_code == 200
-
-
-def test_requiere_modulo_admin(cliente):
-    c = cliente(_u(rol="admin"))
-    assert c.get("/operativo").status_code == 200
-    assert c.get("/gerencial").status_code == 200
-
-
-def test_requiere_modulo_sin_permiso_mensaje(cliente):
-    r = cliente(_u()).get("/operativo")
-    assert r.status_code == 403
-    assert r.json()["detail"] == "No tenés permiso para esta operación"
+def test_esquema_viejo_no_existe():
+    # BK2 borra el esquema por módulo (operador/gerente en usuario_modulo). La
+    # tabla queda en la base hasta un PR posterior, pero el código ya no la conoce.
+    for nombre in ("MODULOS", "ROLES_MODULO", "modulos_de", "tiene_permiso", "requiere_modulo"):
+        assert not hasattr(permisos, nombre), f"app.core.permisos todavía exporta {nombre}"
+    assert not hasattr(models, "UsuarioModulo")
+    assert not hasattr(models.Usuario, "modulos")
+    assert "usuario_modulo" not in Base.metadata.tables
+    for m in REGISTRO:
+        assert not hasattr(m, "etiquetas_rol"), f"{m.clave} todavía declara etiquetas_rol"
+        assert "etiquetas_rol" not in m.publico()
 
 
 def test_requiere_admin_deja_pasar_al_admin_y_rechaza_al_resto():
-    from fastapi import HTTPException
-    from types import SimpleNamespace
-    from app.core.permisos import requiere_admin
+    dependencia = permisos.requiere_admin()
 
-    dependencia = requiere_admin()
-
-    admin = SimpleNamespace(rol="admin", modulos=[])
+    admin = SimpleNamespace(rol="admin")
     assert dependencia(usuario=admin) is admin
 
     for rol in ("usuario", None):
-        comun = SimpleNamespace(rol=rol, modulos=[])
+        comun = SimpleNamespace(rol=rol)
         try:
             dependencia(usuario=comun)
         except HTTPException as e:
