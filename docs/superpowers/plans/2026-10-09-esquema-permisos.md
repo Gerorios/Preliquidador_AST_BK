@@ -952,3 +952,11 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
 - Escenario: el admin hace doble clic en "Crear rol". Los dos POST validan antes de que exista el rol, y el segundo responde 500 en lugar del 409 que pide el plan. No se corrompe nada.
 - Arreglo mínimo: atrapar `IntegrityError` en esas dos operaciones, hacer rollback y responder 409 con el texto de nombre repetido. Es el mismo patrón que `_es_duplicado` de `precios.py` (ADR-0018).
 - Par: un test que reproduce el choque contra la UNIQUE da rojo (500 o excepción), y después de arreglar da verde con 409.
+- **Paso R1 hecho (`e0150f5`).** El servicio atrapa el choque con `uq_rol_nombre` en el commit, hace rollback y devuelve el motivo de nombre repetido. El endpoint distingue 409 de 400 por el motivo, sin volver a consultar, y con eso se resuelve también el minor "el motivo es un `str`". Hay 4 tests nuevos, y la suite completa da 1111 passed y 1 xfailed.
+- **Ronda 2, sólo sobre `e0150f5`:** 0 urgent, 0 high, 4 minor y 2 descartados.
+  - Minors, sin tocar:
+    - `_choca_con_el_nombre` acepta `rol.nombre` también para un NOT NULL en SQLite, cosa que no puede pasar;
+    - 409 o 400 se decide por el prefijo del motivo;
+    - el mensaje del choque muestra el nombre pedido;
+    - el monkeypatch está repetido en los tests, y no hay un test de `uq_rol_permiso` que dé 500.
+  - Revisión cerrada: 1 high arreglado y 10 minor sin tocar, 6 de la ronda 1 y 4 de la ronda 2.
