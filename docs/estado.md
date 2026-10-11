@@ -41,6 +41,7 @@ Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK 
 
 ## A futuro
 
+- Tests e2e con Playwright en el front (dependencia nueva, se aprueba antes): hoy no hay; lo de punta a punta es el smoke manual en el navegador, que sólo prueba lo que tocó la tarea. Pocos flujos críticos (login y que cada rol vea sólo sus pantallas, Revisión, Verificación, exportación), el grueso con la API simulada y uno o dos de sólo lectura contra `testing` (compartida y con datos que cambian: sin números fijos). Correrían en la fase 4 cuando la tarea toca el front y antes de cada deploy. Buen momento para arrancar: el esquema de permisos, por el caso de los roles (2026-10-11).
 - Deuda vista en la revisión del FT #65: los paneles de desvíos e indicadores de Gerencial no avisan si falla la carga (dicen "Ningún cliente con historial comparable"); los mensajes de axios llegan en inglés (`api.js`, núcleo); después de un guardado fallido del valor hora el campo conserva lo tipeado (2026-10-09).
 - 5 warnings `react-hooks/exhaustive-deps` en Terceros (`FiltroMultiple.jsx` y `Grilla.jsx`): deuda del FT #48, no bloquea.
 - `app/core/asistente.py` le da al modelo de ejemplo el botón "▶ Generar / Actualizar", con un símbolo que la interfaz ya no tiene; y `/gerencial` no está en las `pantallas` de `rutas.jsx` del front, así que el asistente no sabe en qué pantalla está el gerente. Código, fuera del BK #79 (2026-10-08).
