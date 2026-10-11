@@ -31,9 +31,12 @@ import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_usuario_actual
 from app.core.database import get_db_externa, get_db_propia, get_db_sueldos
-from app.modulos.terceros.permisos import requiere_operativo
+from app.modulos.terceros.permisos import (
+    editar_estaciones, editar_inicio, editar_quincena, editar_tarifario,
+    ver_alguna_pantalla, ver_bienes, ver_estaciones, ver_inicio,
+    ver_inicio_o_quincena, ver_quincena, ver_tarifario, ver_verificaciones,
+)
 from app.modulos.terceros.schemas import (
     AlertasResponse,
     BienResponse,
@@ -102,10 +105,12 @@ from app.modulos.terceros.services.consulta_taller import (
 # "el origen no anda".
 FALLAS_DE_ORIGEN = (TallerNoConfigurado, httpx.HTTPError, ValueError)
 
+# Permisos por pantalla (ADR-0020): cada endpoint declara la suya, y el router
+# no tiene dependencia propia. Los que usan a la persona la reciben de la
+# dependencia de permiso. El mapa lo fija tests/terceros/test_mapa_permisos.py.
 router = APIRouter(
     prefix="/api/terceros",
     tags=["Liquidación Terceros"],
-    dependencies=[Depends(requiere_operativo)],
 )
 
 
@@ -269,12 +274,13 @@ def get_liquidacion(
     return LiquidacionService(db_propia, externa, taller)
 
 
-@router.get("/")
+@router.get("/", dependencies=[Depends(ver_alguna_pantalla)])
 def estado():
     return {"modulo": "terceros", "estado": "en construcción"}
 
 
-@router.get("/liquidaciones", response_model=list[LiquidacionResponse])
+@router.get("/liquidaciones", response_model=list[LiquidacionResponse],
+            dependencies=[Depends(ver_inicio)])
 def listar_liquidaciones(
     servicio: LiquidacionService = Depends(get_liquidacion),
     calculo: CalculoService = Depends(get_calculo),
@@ -293,7 +299,7 @@ def listar_liquidaciones(
 @router.post("/liquidaciones/generar", response_model=GenerarResponse)
 def generar_liquidacion(
     req: GenerarRequest,
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_inicio),
     servicio: LiquidacionService = Depends(get_liquidacion),
     calculo: CalculoService = Depends(get_calculo),
 ):
@@ -324,7 +330,8 @@ def generar_liquidacion(
     return salida
 
 
-@router.post("/liquidaciones/calcular", response_model=CalcularResponse)
+@router.post("/liquidaciones/calcular", response_model=CalcularResponse,
+             dependencies=[Depends(editar_inicio)])
 def calcular_liquidacion(
     req: GenerarRequest,
     servicio: CalculoService = Depends(get_calculo),
@@ -347,7 +354,8 @@ def calcular_liquidacion(
             "conjuntos": conjuntos}
 
 
-@router.get("/liquidaciones/lineas", response_model=list[LineaGrillaResponse])
+@router.get("/liquidaciones/lineas", response_model=list[LineaGrillaResponse],
+            dependencies=[Depends(ver_quincena)])
 def lineas_de_la_quincena(
     quincena: date = Depends(quincena_param),
     servicio: GrillaService = Depends(get_grilla),
@@ -364,7 +372,8 @@ def lineas_de_la_quincena(
     return servicio.lineas(quincena)
 
 
-@router.patch("/hechos/{concepto}/{id_}/quincena", response_model=MovidoResponse)
+@router.patch("/hechos/{concepto}/{id_}/quincena", response_model=MovidoResponse,
+              dependencies=[Depends(editar_quincena)])
 def mover_de_quincena(
     concepto: str,
     id_: int,
@@ -385,7 +394,8 @@ def mover_de_quincena(
             "quincena_efectiva": h.quincena_efectiva, "motivo": h.motivo_efectiva}
 
 
-@router.get("/repuestos/{id_}/cuotas", response_model=list[CuotaResponse])
+@router.get("/repuestos/{id_}/cuotas", response_model=list[CuotaResponse],
+            dependencies=[Depends(ver_quincena)])
 def cuotas_de_un_repuesto(
     id_: int,
     servicio: DestinoService = Depends(get_destino),
@@ -398,7 +408,7 @@ def cuotas_de_un_repuesto(
 def repartir_en_cuotas(
     id_: int,
     req: CuotasRequest,
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_quincena),
     servicio: DestinoService = Depends(get_destino),
 ):
     """Reparte un repuesto en cuotas quincenales iguales.
@@ -414,7 +424,7 @@ def repartir_en_cuotas(
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.delete("/repuestos/{id_}/cuotas", status_code=204)
+@router.delete("/repuestos/{id_}/cuotas", status_code=204, dependencies=[Depends(editar_quincena)])
 def quitar_cuotas(
     id_: int,
     servicio: DestinoService = Depends(get_destino),
@@ -423,7 +433,8 @@ def quitar_cuotas(
     servicio.quitar_cuotas(id_)
 
 
-@router.get("/liquidaciones/totales", response_model=list[TotalTerceroResponse])
+@router.get("/liquidaciones/totales", response_model=list[TotalTerceroResponse],
+            dependencies=[Depends(ver_inicio_o_quincena)])
 def totales_de_la_quincena(
     quincena: date = Depends(quincena_param),
     servicio: CalculoService = Depends(get_calculo),
@@ -436,7 +447,8 @@ def totales_de_la_quincena(
     return servicio.totales(quincena)
 
 
-@router.get("/liquidaciones/pendientes", response_model=dict[str, dict[str, int]])
+@router.get("/liquidaciones/pendientes", response_model=dict[str, dict[str, int]],
+            dependencies=[Depends(ver_inicio_o_quincena)])
 def pendientes_de_la_quincena(
     quincena: date = Depends(quincena_param),
     servicio: CalculoService = Depends(get_calculo),
@@ -450,7 +462,7 @@ def pendientes_de_la_quincena(
     return servicio.pendientes(quincena)
 
 
-@router.get("/bienes", response_model=list[BienResponse])
+@router.get("/bienes", response_model=list[BienResponse], dependencies=[Depends(ver_bienes)])
 def listar_bienes(
     servicio: ConsultaExternaService = Depends(get_consulta_externa),
 ):
@@ -470,7 +482,8 @@ def listar_bienes(
 # cargar, editar, confirmar, borrar y copiar de otra quincena—, así que cinco
 # juegos de endpoints iguales serían cinco lugares donde arreglar el mismo bug.
 
-@router.get("/tarifario/resumen", response_model=dict[str, TarifarioResumen])
+@router.get("/tarifario/resumen", response_model=dict[str, TarifarioResumen],
+            dependencies=[Depends(ver_tarifario)])
 def resumen_tarifario(
     quincena: date = Depends(quincena_param),
     servicio: TarifarioService = Depends(get_tarifario),
@@ -479,7 +492,8 @@ def resumen_tarifario(
     return servicio.resumen(quincena)
 
 
-@router.post("/tarifario/copiar", response_model=dict[str, CopiadoConjunto])
+@router.post("/tarifario/copiar", response_model=dict[str, CopiadoConjunto],
+             dependencies=[Depends(editar_tarifario)])
 def copiar_tarifario(
     req: CopiarRequest,
     servicio: TarifarioService = Depends(get_tarifario),
@@ -510,7 +524,7 @@ def crear_tarifas_en_lote(
     tipo: str,
     req: TarifasEnLoteRequest,
     quincena: date = Depends(quincena_param),
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_tarifario),
     servicio: TarifarioService = Depends(get_tarifario),
     db_propia: Session = Depends(get_db_propia),
 ):
@@ -537,7 +551,8 @@ def crear_tarifas_en_lote(
     return {"cargadas": cargadas, "rechazadas": rechazadas}
 
 
-@router.get("/tarifario/{tipo}/combinaciones", response_model=list[CombinacionResponse])
+@router.get("/tarifario/{tipo}/combinaciones", response_model=list[CombinacionResponse],
+            dependencies=[Depends(ver_tarifario)])
 def combinaciones_de_la_quincena(
     tipo: str,
     quincena: date = Depends(quincena_param),
@@ -556,7 +571,8 @@ def combinaciones_de_la_quincena(
     return servicio.combinaciones(tipo, quincena)
 
 
-@router.get("/tarifario/{tipo}", response_model=list[TarifaResponse])
+@router.get("/tarifario/{tipo}", response_model=list[TarifaResponse],
+            dependencies=[Depends(ver_tarifario)])
 def listar_tarifas(
     tipo: str,
     quincena: date = Depends(quincena_param),
@@ -574,7 +590,7 @@ def crear_tarifa(
     tipo: str,
     req: TarifaRequest,
     quincena: date = Depends(quincena_param),
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_tarifario),
     servicio: TarifarioService = Depends(get_tarifario),
     db_propia: Session = Depends(get_db_propia),
 ):
@@ -587,7 +603,8 @@ def crear_tarifa(
     return _tarifa_a_dict(fila)
 
 
-@router.patch("/tarifario/{tipo}/lote", response_model=TarifasEnLoteResponse)
+@router.patch("/tarifario/{tipo}/lote", response_model=TarifasEnLoteResponse,
+              dependencies=[Depends(editar_tarifario)])
 def actualizar_tarifas_en_lote(
     tipo: str,
     req: ActualizarEnLoteRequest,
@@ -611,7 +628,8 @@ def actualizar_tarifas_en_lote(
     return {"cargadas": actualizadas, "rechazadas": rechazadas}
 
 
-@router.patch("/tarifario/{tipo}/{id_}", response_model=TarifaResponse)
+@router.patch("/tarifario/{tipo}/{id_}", response_model=TarifaResponse,
+              dependencies=[Depends(editar_tarifario)])
 def actualizar_tarifa(
     tipo: str,
     id_: int,
@@ -629,7 +647,8 @@ def actualizar_tarifa(
     return _tarifa_a_dict(fila)
 
 
-@router.post("/tarifario/{tipo}/confirmar-lote", response_model=TarifasEnLoteResponse)
+@router.post("/tarifario/{tipo}/confirmar-lote", response_model=TarifasEnLoteResponse,
+             dependencies=[Depends(editar_tarifario)])
 def confirmar_tarifas_en_lote(
     tipo: str,
     req: ConfirmarEnLoteRequest,
@@ -654,7 +673,8 @@ def confirmar_tarifas_en_lote(
     return {"cargadas": confirmadas, "rechazadas": rechazadas}
 
 
-@router.post("/tarifario/{tipo}/{id_}/confirmar", response_model=TarifaResponse)
+@router.post("/tarifario/{tipo}/{id_}/confirmar", response_model=TarifaResponse,
+             dependencies=[Depends(editar_tarifario)])
 def confirmar_tarifa(
     tipo: str,
     id_: int,
@@ -669,7 +689,7 @@ def confirmar_tarifa(
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.delete("/tarifario/{tipo}/{id_}", status_code=204)
+@router.delete("/tarifario/{tipo}/{id_}", status_code=204, dependencies=[Depends(editar_tarifario)])
 def eliminar_tarifa(
     tipo: str,
     id_: int,
@@ -687,7 +707,8 @@ def eliminar_tarifa(
     recalcular_tras_el_precio(db_propia, tipo, quincena)
 
 
-@router.get("/quincenas", response_model=list[QuincenaResponse])
+@router.get("/quincenas", response_model=list[QuincenaResponse],
+            dependencies=[Depends(ver_alguna_pantalla)])
 def listar_quincenas(
     cantidad: int = Query(24, ge=1, le=48, description="Cuántas traer, de la más nueva a la más vieja"),
     adelante: int = Query(0, ge=0, le=24, description="Cuántas quincenas futuras sumar arriba"),
@@ -708,7 +729,7 @@ def listar_quincenas(
     ]
 
 
-@router.get("/viajes", response_model=list[ViajeResponse])
+@router.get("/viajes", response_model=list[ViajeResponse], dependencies=[Depends(ver_quincena)])
 def listar_viajes(
     quincena: date = Depends(quincena_param),
     servicio: ConsultaExternaService = Depends(get_consulta_externa),
@@ -716,7 +737,8 @@ def listar_viajes(
     return servicio.viajes(quincena)
 
 
-@router.get("/combustible", response_model=list[CargaCombustibleResponse])
+@router.get("/combustible", response_model=list[CargaCombustibleResponse],
+            dependencies=[Depends(ver_quincena)])
 def listar_combustible(
     quincena: date = Depends(quincena_param),
     servicio: ConsultaExternaService = Depends(get_consulta_externa),
@@ -724,7 +746,8 @@ def listar_combustible(
     return servicio.cargas_combustible(quincena)
 
 
-@router.get("/repuestos", response_model=list[RepuestoResponse])
+@router.get("/repuestos", response_model=list[RepuestoResponse],
+            dependencies=[Depends(ver_quincena)])
 def listar_repuestos(
     quincena: date = Depends(quincena_param),
     servicio: ConsultaExternaService = Depends(get_consulta_externa),
@@ -732,7 +755,8 @@ def listar_repuestos(
     return servicio.repuestos(quincena)
 
 
-@router.get("/horas-servicio", response_model=list[HoraServicioResponse])
+@router.get("/horas-servicio", response_model=list[HoraServicioResponse],
+            dependencies=[Depends(ver_quincena)])
 def listar_horas_servicio(
     quincena: date = Depends(quincena_param),
     servicio: ConsultaExternaService = Depends(get_consulta_externa),
@@ -748,7 +772,8 @@ def listar_horas_servicio(
     return servicio.horas_servicio(quincena)
 
 
-@router.get("/horas-reparacion", response_model=HorasReparacionResponse)
+@router.get("/horas-reparacion", response_model=HorasReparacionResponse,
+            dependencies=[Depends(ver_quincena)])
 def listar_horas_reparacion(
     quincena: date = Depends(quincena_param),
     servicio: ConsultaTallerService = Depends(get_consulta_taller),
@@ -776,7 +801,8 @@ def listar_horas_reparacion(
         raise HTTPException(status_code=502, detail=_mensaje_origen(e))
 
 
-@router.get("/estaciones", response_model=list[EstacionResponse])
+@router.get("/estaciones", response_model=list[EstacionResponse],
+            dependencies=[Depends(ver_estaciones)])
 def listar_estaciones(
     quincena: date = Depends(quincena_param),
     servicio: EstacionesService = Depends(get_estaciones),
@@ -795,7 +821,7 @@ def subir_archivo_de_estacion(
     id_: int,
     quincena: date = Form(...),
     archivo: UploadFile = File(...),
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_estaciones),
     servicio: EstacionesService = Depends(get_estaciones),
 ):
     """Carga lo que facturó una estación.
@@ -819,7 +845,8 @@ def subir_archivo_de_estacion(
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.get("/estaciones/{id_}/lineas", response_model=list[LineaFacturada])
+@router.get("/estaciones/{id_}/lineas", response_model=list[LineaFacturada],
+            dependencies=[Depends(ver_estaciones)])
 def lineas_de_una_estacion(
     id_: int,
     quincena: date = Depends(quincena_param),
@@ -833,7 +860,7 @@ def lineas_de_una_estacion(
 def cargar_lineas_a_mano(
     id_: int,
     req: LineasAManoRequest,
-    usuario=Depends(get_usuario_actual),
+    usuario=Depends(editar_estaciones),
     servicio: EstacionesService = Depends(get_estaciones),
 ):
     """Carga remitos tipeados, para la estación que no manda archivo.
@@ -851,7 +878,8 @@ def cargar_lineas_a_mano(
     return {"cargadas": n}
 
 
-@router.delete("/estaciones/lineas/{id_}", status_code=204)
+@router.delete("/estaciones/lineas/{id_}", status_code=204,
+               dependencies=[Depends(editar_estaciones)])
 def borrar_linea_facturada(
     id_: int,
     servicio: EstacionesService = Depends(get_estaciones),
@@ -864,7 +892,8 @@ def borrar_linea_facturada(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.patch("/estaciones/{id_}", response_model=EstacionResponse)
+@router.patch("/estaciones/{id_}", response_model=EstacionResponse,
+              dependencies=[Depends(editar_estaciones)])
 def definir_origen_de_estacion(
     id_: int,
     req: OrigenRequest,
@@ -885,7 +914,8 @@ def definir_origen_de_estacion(
             "lineas": 0}
 
 
-@router.get("/estaciones/cruce", response_model=CruceResponse)
+@router.get("/estaciones/cruce", response_model=CruceResponse,
+            dependencies=[Depends(ver_estaciones)])
 def cruce_con_las_estaciones(
     quincena: date = Depends(quincena_param),
     servicio: EstacionesService = Depends(get_estaciones),
@@ -915,7 +945,8 @@ def cruce_con_las_estaciones(
     }
 
 
-@router.get("/verificaciones", response_model=list[FuenteVerificada])
+@router.get("/verificaciones", response_model=list[FuenteVerificada],
+            dependencies=[Depends(ver_verificaciones)])
 def verificaciones_de_la_quincena(
     quincena: date = Depends(quincena_param),
     servicio: VerificacionesService = Depends(get_verificaciones),
@@ -933,7 +964,7 @@ def verificaciones_de_la_quincena(
     return servicio.por_fuente(quincena)
 
 
-@router.get("/alertas", response_model=AlertasResponse)
+@router.get("/alertas", response_model=AlertasResponse, dependencies=[Depends(ver_verificaciones)])
 def alertas_de_cruce(
     anio: int = Query(default_factory=lambda: date.today().year, ge=2020, le=2100,
                       description="Año sobre el que se mide si una máquina tuvo movimiento"),

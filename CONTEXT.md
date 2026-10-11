@@ -28,7 +28,7 @@ La pantalla a la que llega toda persona al entrar al Sistema: la saluda por su n
 _Avoid_: confundir con el "Inicio" del módulo Preliquidación (el Dashboard de quincenas, otra pantalla).
 
 **Tarjeta**:
-La entrada a un Módulo (o a Gerencial, o a la Administración) desde el Inicio: ícono, nombre y una línea de descripción. Solo se muestra si el módulo está activo y la persona tiene permiso en alguna de sus pantallas (el admin las ve todas). No muestra los roles de la persona.
+La entrada a un Módulo (o a Gerencial, o a la Administración) desde el Inicio: ícono, nombre y una línea de descripción. Solo se muestra si el módulo está activo y la persona tiene permiso en alguna de las pantallas de su menú (el admin las ve todas): quien solo ve la Vista gerencial tiene la tarjeta de Gerencial, no la del módulo. No muestra los roles de la persona.
 
 **Administración**:
 La pantalla del Sistema, visible solo para el Admin, donde se da de alta a una persona buscándola en el Padrón de empleados, se le asignan sus roles y la marca de admin, se gestionan los usuarios existentes (activar/desactivar, cambiar roles, reiniciar contraseña) y se arman los Roles con sus Permisos. El identificador de la persona es su CUIL: el alta le genera un email sintético derivado del CUIL, y la contraseña inicial es el CUIL, que cada persona puede cambiar cuando quiera desde su propia sesión. Los usuarios no se borran: se desactivan.

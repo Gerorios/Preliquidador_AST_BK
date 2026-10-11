@@ -1,8 +1,6 @@
 """Alta y mantenimiento de usuarios del Sistema (PR 5 de la etapa 0).
 
-Lo usan la API de Administración (`app/core/administracion.py`) y los scripts
-de consola, que se mantienen como puerta de entrada de emergencia si el admin
-quedara sin acceso a la pantalla.
+Lo usa la API de Administración (`app/core/administracion.py`).
 
 Las validaciones devuelven el motivo del rechazo como texto (o None), no
 excepciones HTTP: el service no conoce el transporte.
@@ -11,32 +9,26 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import pwd_context
 from app.core.identidad import cuil_de_email, email_de_cuil, normalizar_cuil
-from app.core.models import Usuario, UsuarioModulo
-
-
-def reemplazar_modulos(db: Session, usuario: Usuario, pares: list[tuple[str, str]]) -> None:
-    """Reemplaza los módulos del usuario por `pares` (modulo, rol).
-
-    Borra los viejos y hace flush antes de asignar los nuevos: si se reasigna
-    `usuario.modulos = [...]` directamente, SQLAlchemy intenta insertar las
-    filas nuevas antes de borrar las huérfanas y choca contra la UNIQUE
-    (usuario_id, modulo) con un IntegrityError.
-    """
-    for m in list(usuario.modulos):
-        db.delete(m)
-    db.flush()
-    usuario.modulos = [UsuarioModulo(modulo=m, rol=r) for m, r in pares]
+from app.core.models import Usuario
+from app.core.roles_service import buscar_roles
 
 
 def crear_usuarios_lote(db: Session, personas: list[dict], rol_global: str,
-                        modulos: dict[str, str]) -> dict:
-    """Crea un usuario por persona del padrón. No aborta el lote por una que
+                        roles: list[int]) -> dict:
+    """Crea un usuario por persona del padrón, todas con los mismos `roles`
+    (ids de roles armables, ADR-0020). No aborta el lote por una persona que
     falle: informa los omitidos con su motivo.
+
+    Si algún id de rol no existe no crea a nadie y levanta ValueError con el
+    motivo de `roles_service.buscar_roles` (el mismo texto que
+    PUT /usuarios/{id}/roles), como `resetear_password` con un dato inválido.
 
     personas: [{'cuil': str, 'apellido_nombre': str}]
     """
+    roles_del_lote, motivo = buscar_roles(db, roles)
+    if motivo:
+        raise ValueError(motivo)
     creados, omitidos = [], []
-    pares = list(modulos.items())
 
     for persona in personas:
         cuil_crudo = persona.get("cuil")
@@ -56,11 +48,10 @@ def crear_usuarios_lote(db: Session, personas: list[dict], rol_global: str,
             password=pwd_context.hash(cuil),   # contraseña inicial = el CUIL
             rol=rol_global,
             activo=True,
+            roles=list(roles_del_lote),
         )
         db.add(usuario)
-        db.flush()                             # necesita el id para usuario_modulo
-        if pares:
-            reemplazar_modulos(db, usuario, pares)
+        db.flush()                             # el id para la respuesta
         creados.append({"id": usuario.id, "cuil": cuil,
                         "nombre": usuario.nombre, "email": email})
 

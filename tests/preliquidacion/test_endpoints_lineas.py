@@ -7,10 +7,9 @@
 Fijan el comportamiento actual, sin base real (SQLite en memoria). Todos los
 datos de personas son ficticios.
 
-Roles: el router de preliquidación exige `requiere_operativo` (admin u
-operador del módulo); el de precios sólo exige sesión (`get_usuario_actual`)
-y este GET no agrega nada, así que lo ve cualquier usuario logueado. Se usa
-admin para los dos.
+Permisos (ADR-0020): legajos-por-cuil pide Ver en Revisión, y el combo de
+búsqueda, Ver en Revisión o en Conceptos (tests/preliquidacion/test_mapa_permisos.py).
+El admin pasa los dos sin roles, y es el que se usa acá.
 """
 from datetime import date
 from decimal import Decimal

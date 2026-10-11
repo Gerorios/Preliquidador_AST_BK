@@ -18,6 +18,7 @@ from app.main import app
 from app.modulos.terceros.api import terceros as api
 from app.modulos.terceros.services.calculo_service import LiquidacionInexistente
 from app.modulos.terceros.services.consulta_taller import TallerNoConfigurado
+from tests.roles_de_prueba import rol_de_semilla
 
 Q = "2026-08-01"
 
@@ -141,7 +142,7 @@ class TallerFalso:
 
 LIQUIDADOR = SimpleNamespace(
     id=1, nombre="Lorena", email="l@t.com", rol="usuario", activo=True,
-    modulos=[SimpleNamespace(modulo="terceros", rol="operador")],
+    roles=[rol_de_semilla("Liquidador de terceros")],
 )
 
 
@@ -194,7 +195,7 @@ def test_sin_quincena_no_se_adivina_ninguna(cliente):
 @pytest.mark.parametrize("ruta", ["viajes", "combustible", "repuestos", "horas-reparacion", "horas-servicio", "alertas"])
 def test_un_operador_de_otro_modulo_no_entra(ruta):
     otro = SimpleNamespace(id=2, nombre="X", email="x@t.com", rol="usuario", activo=True,
-                           modulos=[SimpleNamespace(modulo="preliquidacion", rol="operador")])
+                           roles=[rol_de_semilla("Preliquidador")])
     app.dependency_overrides[get_usuario_actual] = lambda: otro
     app.dependency_overrides[api.get_consulta_externa] = lambda: ExternaFalsa()
     app.dependency_overrides[api.get_consulta_taller] = lambda: TallerFalso()

@@ -16,7 +16,6 @@ MODULO = ModuloInfo(
     descripcion="Sueldos por quincena: generar, revisar, verificar y exportar.",
     activo=True,
     routers=tuple(routers),
-    etiquetas_rol={"operador": "Preliquidador", "gerente": "Gerente"},
     panel_gerencial=True,
     modelos="app.modulos.preliquidacion.models",
     pantallas=PANTALLAS,

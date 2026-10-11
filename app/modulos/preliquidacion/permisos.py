@@ -1,7 +1,9 @@
 """Dependencias de autorización del módulo Preliquidación sobre el núcleo
-(app/core/permisos.py). Quién pasa: ver CONTEXT-preliquidacion.md "Roles en Preliquidación" y ADR-0013."""
+(app/core/permisos.py): cada endpoint exige Ver o Editar en una pantalla
+(ADR-0020). El mapa endpoint → pantalla lo fija
+tests/preliquidacion/test_mapa_permisos.py."""
 from app.core.modulos import Pantalla
-from app.core.permisos import requiere_modulo
+from app.core.permisos import requiere_pantalla
 
 MODULO = "preliquidacion"
 
@@ -17,12 +19,44 @@ PANTALLAS = (
     Pantalla("gerencial", "Vista gerencial", editable=False),
 )
 
-# Opera la preliquidación completa: admin y operador (liquidador).
-requiere_operativo = requiere_modulo(MODULO, "operador")
+# Dependencias con nombre, definidas una sola vez: FastAPI cachea por objeto.
+# Con varias pantallas alcanza una; Editar incluye Ver; el admin pasa todo.
 
-# El gerente opera el maestro de Conceptos completo porque es quien muchas
-# veces decide un cambio de precios; el resto de lo operativo le sigue vedado.
-requiere_conceptos = requiere_modulo(MODULO, "operador", "gerente")
+# Inicio: generar o actualizar la quincena.
+editar_inicio = requiere_pantalla(MODULO, "inicio", nivel="editar")
 
-# Panel gerencial: gerente y admin. El operador NO (decisión 2026-09-08).
-requiere_gerencial = requiere_modulo(MODULO, "gerente")
+# El listado de quincenas es el selector de Inicio, Revisión, Verificación y
+# Mantenimiento. Conceptos lo usa si la persona ve alguna de ellas; si no, usa
+# `ver_quincenas_gerencial`. El front (Conceptos.jsx, `usaListado`) mira estas
+# mismas cuatro pantallas: si cambian, cambian en los dos lados.
+ver_quincenas = requiere_pantalla(MODULO, "inicio", "revision", "verificacion", "mantenimiento")
+
+# Revisión.
+ver_revision = requiere_pantalla(MODULO, "revision")
+editar_revision = requiere_pantalla(MODULO, "revision", nivel="editar")
+
+# Las líneas de la quincena las leen Revisión y Verificación.
+ver_lineas = requiere_pantalla(MODULO, "revision", "verificacion")
+
+# Verificación.
+ver_verificacion = requiere_pantalla(MODULO, "verificacion")
+editar_verificacion = requiere_pantalla(MODULO, "verificacion", nivel="editar")
+
+# Mantenimiento (categorías de operarios de taller).
+ver_mantenimiento = requiere_pantalla(MODULO, "mantenimiento")
+editar_mantenimiento = requiere_pantalla(MODULO, "mantenimiento", nivel="editar")
+
+# Conceptos (maestro de precios).
+ver_conceptos = requiere_pantalla(MODULO, "conceptos")
+editar_conceptos = requiere_pantalla(MODULO, "conceptos", nivel="editar")
+
+# El combo de códigos de concepto lo usan Revisión (masiva y panel de la línea)
+# y Conceptos.
+ver_buscar_conceptos = requiere_pantalla(MODULO, "revision", "conceptos")
+
+# Vista gerencial (sólo Ver).
+ver_gerencial = requiere_pantalla(MODULO, "gerencial")
+
+# Las quincenas generadas, para el selector de la Vista gerencial y de
+# Conceptos cuando la persona no ve ninguna pantalla de `ver_quincenas`.
+ver_quincenas_gerencial = requiere_pantalla(MODULO, "gerencial", "conceptos")

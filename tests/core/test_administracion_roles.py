@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app.core import roles_service
 from app.core.auth import invalidar_cache_usuarios, pwd_context
 from app.core.database import Base, get_db_propia
-from app.core.models import Rol, RolPermiso, Usuario, UsuarioModulo, UsuarioRol
+from app.core.models import Rol, RolPermiso, Usuario, UsuarioRol
 from app.main import app
 
 CONCEPTOS_VER = {"preliquidacion": {"conceptos": "ver"}}
@@ -30,7 +30,6 @@ def db():
     adm = Usuario(nombre="Adm", email="adm@t.com", password=pwd_context.hash("x"), rol="admin", activo=True)
     ana = Usuario(nombre="Ana", email="ana@t.com", password=pwd_context.hash("x"), rol="usuario", activo=True)
     beto = Usuario(nombre="Beto", email="beto@t.com", password=pwd_context.hash("x"), rol="usuario", activo=False)
-    ana.modulos.append(UsuarioModulo(modulo="preliquidacion", rol="operador"))
     s.add_all([adm, ana, beto]); s.commit()
 
     app.dependency_overrides[get_db_propia] = lambda: s
@@ -285,7 +284,7 @@ def test_put_roles_de_una_persona(db):
     cuerpo = r.json()
     assert cuerpo["id"] == ana_id
     assert sorted(x["nombre"] for x in cuerpo["roles"]) == ["Auditor", "Gerente"]
-    assert cuerpo["modulos"] == {"preliquidacion": "operador"}  # BK1 es aditivo
+    assert "modulos" not in cuerpo  # el esquema anterior salió en BK2
     db.expire_all()
     assert {fila.rol_id for fila in db.query(UsuarioRol).filter(UsuarioRol.usuario_id == ana_id)} == {
         gerente["id"], auditor["id"]}
@@ -322,7 +321,7 @@ def test_put_roles_de_una_persona_inexistente_responde_404(db):
     assert r.json()["detail"] == "El usuario no existe"
 
 
-def test_la_lista_de_usuarios_suma_los_roles_sin_sacar_los_modulos(db):
+def test_la_lista_de_usuarios_trae_los_roles_y_no_los_modulos(db):
     c = TestClient(app)
     h = _token(c, "adm@t.com")
     gerente = _crear(c, h, "Gerente", CONCEPTOS_VER)
@@ -332,7 +331,7 @@ def test_la_lista_de_usuarios_suma_los_roles_sin_sacar_los_modulos(db):
     assert r.status_code == 200
     por_email = {u["email"]: u for u in r.json()}
     assert por_email["ana@t.com"]["roles"] == [{"id": gerente["id"], "nombre": "Gerente"}]
-    assert por_email["ana@t.com"]["modulos"] == {"preliquidacion": "operador"}
+    assert "modulos" not in por_email["ana@t.com"]
     assert por_email["adm@t.com"]["roles"] == []
 
 

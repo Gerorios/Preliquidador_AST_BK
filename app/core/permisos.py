@@ -1,64 +1,27 @@
 """
-Permisos por pantalla (ADR-0020) y, hasta que BK2 lo borre, el esquema anterior
-por módulo (ADR-0013).
+Permisos por pantalla (ADR-0020).
 
-Esquema nuevo:
-- `usuarios.rol` sigue siendo GLOBAL: 'admin' pasa todo sin necesitar permisos.
+- `usuarios.rol` es GLOBAL: 'admin' pasa todo sin necesitar permisos.
 - Cada persona tiene roles (`Usuario.roles`); cada rol da Ver o Editar por
   pantalla de un módulo. El permiso efectivo es el máximo entre sus roles, y
   Editar incluye Ver. "Sin acceso" es que no haya permiso.
-- Cada módulo declara sus dependencias con `requiere_pantalla`, una vez por
-  archivo; cada dependencia expone `.requisito` para que los tests lean el mapa
-  de permisos desde `app.routes`.
-
-Esquema anterior (sale en BK2):
-
-- `usuarios.rol` es GLOBAL: 'admin' ve y opera todo; 'usuario' depende de usuario_modulo.
-- `usuario_modulo` da, por módulo, 'operador' (opera el circuito) o 'gerente' (panel
-  gerencial y lo que el módulo le abra). Ver CONTEXT.md, "Sistema y módulos".
-
-Cada módulo define sus dependencias concretas sobre `requiere_modulo`
-(p. ej. app/modulos/preliquidacion/permisos.py). El núcleo no conoce módulos
-por nombre salvo esta lista, que crece cuando se registra uno nuevo.
+- Cada módulo declara sus pantallas (`ModuloInfo.pantallas`) y sus
+  dependencias con `requiere_pantalla`, una vez por archivo (p. ej.
+  app/modulos/preliquidacion/permisos.py); cada dependencia expone
+  `.requisito` para que los tests lean el mapa de permisos desde `app.routes`.
+  El núcleo no conoce módulos ni pantallas por nombre.
+- La restricción vive en el backend; el frontend sólo esconde lo que no
+  corresponde.
 
 Nota de import: este módulo importa `get_usuario_actual` de `app.core.auth` a
 nivel de módulo. Por eso `auth.py` NO debe importar `permisos` a nivel de
-módulo (para evitar el ciclo) — en Task 2, `auth.py` importa `modulos_de`
-dentro de las funciones (`login`/`me`), no arriba del archivo; lo mismo con
-`permisos_de` (ADR-0020), que importa dentro de `_permisos_de_sesion`.
+módulo (para evitar el ciclo): importa `permisos_de` dentro de
+`_permisos_de_sesion`, no arriba del archivo.
 """
 from fastapi import Depends, HTTPException, status
 
 from app.core.auth import get_usuario_actual
 from app.core.models import Usuario
-
-MODULOS = ("preliquidacion", "terceros")  # debe coincidir con app/modulos/__init__.py (test_registro_modulos)
-ROLES_MODULO = ("operador", "gerente")
-
-
-def modulos_de(usuario) -> dict[str, str]:
-    """{'preliquidacion': 'operador', ...} a partir de usuario.modulos."""
-    return {um.modulo: um.rol for um in (getattr(usuario, "modulos", None) or [])}
-
-
-def tiene_permiso(usuario, modulo: str, *roles: str) -> bool:
-    if getattr(usuario, "rol", None) == "admin":
-        return True
-    return modulos_de(usuario).get(modulo) in roles
-
-
-def requiere_modulo(modulo: str, *roles: str):
-    """Dependency de autorización: exige rol en el módulo (o admin). La
-    restricción vive en el backend; el frontend solo esconde lo que no corresponde."""
-    def dependencia(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
-        if not tiene_permiso(usuario, modulo, *roles):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tenés permiso para esta operación",
-            )
-        return usuario
-    return dependencia
-
 
 NIVELES = ("ver", "editar")  # de menor a mayor: Editar incluye Ver
 
@@ -113,8 +76,8 @@ def requiere_pantalla(modulo: str, *pantallas: str, nivel: str = "ver"):
 
 def requiere_admin():
     """Dependency de autorización para lo que administra el Sistema (usuarios,
-    permisos): exige el rol GLOBAL 'admin'. A diferencia de `requiere_modulo`,
-    no hay rol de módulo que alcance — ver CONTEXT.md, "Admin"."""
+    roles): exige el rol GLOBAL 'admin'. A diferencia de `requiere_pantalla`,
+    no hay rol ni permiso de pantalla que alcance — ver CONTEXT.md, "Admin"."""
     def dependencia(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
         if getattr(usuario, "rol", None) != "admin":
             raise HTTPException(

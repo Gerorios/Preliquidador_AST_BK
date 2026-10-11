@@ -960,3 +960,82 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
     - el mensaje del choque muestra el nombre pedido;
     - el monkeypatch está repetido en los tests, y no hay un test de `uq_rol_permiso` que dé 500.
   - Revisión cerrada: 1 high arreglado y 10 minor sin tocar, 6 de la ronda 1 y 4 de la ronda 2.
+- **Paso 3.8, `/impeccable critique` y `audit` (2026-10-11, sólo lectura).** La crítica da unos 29/40 y la auditoría 17/20, y el brief del shape está cubierto entero. El detector no encuentra nada en `src/core/administracion`.
+  - **Pulido de FT1 (`/impeccable polish`)**, en este orden:
+    1. Foco a la confirmación: `autoFocus` en "Sí, guardar" y en el "Cancelar" de borrar.
+    2. El "Sin acceso" elegido deja de ir relleno oscuro y pasa a un tono neutro, para que lo que más se vea sea lo que el rol da.
+    3. Ayudas de pantalla y cuenta de personas: de 11 px a 12 px.
+    4. La tabla de usuarios con unos 800 px de ancho: `.acciones` corta línea, el select toma ancho automático con un mínimo, y `.celdaRoles` tiene un ancho máximo.
+    5. Filas del editor en grilla (nombre y opciones cerca) o con un ancho máximo para el editor.
+  - **Sin tocar en FT1** (minors):
+    - el motivo que impide guardar no marca la fila culpable;
+    - las solapas no se recorren con flechas;
+    - las opciones van con `aria-pressed` y no como `radiogroup`.
+  - **Deuda previa del núcleo, fuera de FT1:**
+    - "Tipo de usuario" y "Desactivar" se guardan sin confirmar;
+    - `.btn` y `.input` no tienen `:focus-visible`;
+    - `.btn-sm` va en 11 px;
+    - `max-width: 1280px` sin centrar en Administración;
+    - el ámbar de aviso se usa para "editando";
+    - la franja `border-left` en `Inicio.module.css`.
+  - **Pulido hecho (FT `e7e5e22`).** Los 5 puntos están aplicados. En el punto 5 se eligió un `max-width: 640px` en `.columnaEditor` y no la grilla, que desbordaba la tarjeta entre unos 900 y 1070 px de ventana con la barra lateral abierta. `npm test` da 140/140, `lint` igual que antes (6 errores y 5 warnings conocidos) y `build` ok. Se mira en el navegador en el smoke 3.10.
+  - **Una segunda crítica (28/40) suma minors de FT1, sin tocar:**
+    - la confirmación de un rol en uso nombra a las personas pero no qué cambió;
+    - "Volver" y abrir "Cambiar" en otra fila descartan el borrador sin avisar;
+    - con muchos módulos, el pie con Guardar queda debajo del pliegue;
+    - al cerrar una confirmación, el foco no vuelve al botón que la abrió;
+    - el hover de un segmento no elegido es más oscuro que "Sin acceso" elegido, y el anillo de foco del segmentado puede quedar recortado por `overflow: hidden`.
+- **Paso 3.9 hecho (FT `6fe442b`):** `PRODUCT.md`, sección Users, con los roles armables, los tres iniciales y el admin como marca global.
+- **Par 2.1 hecho (`a801f1e`).** Preliquidación pide pantalla y nivel en sus 51 rutas, y el mapa lo fija `tests/preliquidacion/test_mapa_permisos.py`. También cambió `test_operador_no_accede_a_vista_gerencial`, que el plan no nombraba: ahora prueba `/api/gerencial/empresas`, porque `/quincenas` es el acceso nuevo de la pregunta 4. La suite da 1113 passed y 1 xfailed.
+- **Paso 3.11, revisión de FT1, ronda 1 (2026-10-11):** 0 urgent, 0 high, 7 minor y 6 descartados. Sin arreglos, así que no hay ronda 2. Falta el smoke 3.10; si deja arreglos, se revisan sólo esos.
+  - Minors, sin tocar:
+    - `authStore.actualizarUsuario` fusiona `{...s.usuario, ...datos}` y no cumple lo que prometen el comentario de `sesion.js` y `sesion.test.js:42` (que los campos viejos salen). Hoy no falla: login y `/me` devuelven las mismas claves.
+    - "Cargando roles…" con un spinner dentro del formulario y no con `CargandoContenido` (GUIA-MODULOS, regla 21).
+    - `rol === 'admin'` y los niveles `'ver'`/`'editar'` están repetidos como literales.
+    - `enumerar` está duplicada, igual que las casillas de roles y el filtro de marcados.
+    - `delCatalogo` no tiene test.
+    - `terceros/rutas.jsx` perdió la alineación en columnas.
+    - `PRODUCT.md` dice que quien sólo ve "no encuentra los botones de cambiar", y eso todavía no vale en Terceros (riesgo 9) ni en Preliquidación hasta FT2.
+  - Para el smoke 3.10: esperar más de un minuto (`staleTime`) antes de volver a la pestaña del Gerente.
+- **Par 2.2 hecho (`c3a98d8`).** Terceros pide pantalla y nivel en sus 38 rutas. Las filas 25 y 28 van con el mapeo propuesto, a confirmar con Pitu.
+- **Par 2.3 hecho (`4315c62`).** La red general y la equivalencia pasan sin tocar la app. La matriz de hoy se escribió a mano desde los routers anteriores a BK2. Como el código ya estaba commiteado, el rojo se mostró con rutas mutantes en memoria (un plugin de pytest fuera del repo).
+- **Par 2.4 hecho (`3f667c6`).** La sesión y la Administración ya no usan módulos; el alta recibe `roles`. `reemplazar_modulos` pasó al 2.6, porque `crear_usuario.py` la usaba.
+- **Orden 2.5/2.6 invertido, con OK del usuario (2026-10-11):** los scripts usaban el esquema viejo. El 2.6 se hizo primero (`2feb83b`) y el 2.5 después (`4181b4b`). La búsqueda del 2.5 también admite `scripts/refrescar_testing.py`, que copia `usuario_modulo` hasta la etapa 6, y la regex de `test_scripts_usuarios.py`.
+- **Paso 2.7 hecho (`18674b3`).** GUIA-MODULOS, AGENTS.md, DOCUMENTACION, AYUDA y la definición de "Tarjeta" en CONTEXT.md.
+- **Smoke 3.10 (2026-10-11, con OK), sólo por API.**
+  - Por qué sólo API: el clasificador no deja leer las contraseñas de prueba. Por decisión del usuario, la parte visual se mira en el sitio real después del deploy.
+  - Datos: con `crear_usuario.py --asignar-rol` se crearon 5 usuarios de prueba (admin, los tres roles de la semilla y Gerente + Verificación Ver). El rol de prueba se creó con `POST /api/admin/roles` (201) y se asignó con `PUT .../roles` (200).
+  - `/auth/me` trae `permisos` sin `modulos`.
+  - Acceso por rol:
+    - el admin llega a 88 de 88 rutas;
+    - el Preliquidador, a Preliquidación, a Precios y a `GET /api/gerencial/quincenas`;
+    - el Gerente, a Gerencial y a Precios;
+    - el Liquidador de terceros, sólo a Terceros;
+    - Gerente + Verificación suma los 5 GET de Verificación, sin escrituras.
+  - Las escrituras se probaron con parámetros inválidos: 422 si el permiso pasa y 403 si no. No se escribió nada.
+  - `GET /api/terceros/alertas` da 502, a propósito, hasta cargar `TALLER_SHEET_URL`.
+  - Al final se borraron el rol y los usuarios de prueba.
+- **Etapa 4 (FT2, rama `feature/permisos-ft2` del front, que sale de FT1), pasos 4.1 a 4.4 hechos (2026-10-11).** Se hicieron en paralelo, con tres ejecutores sobre archivos separados.
+  - 4.1 y 4.3 (`09020ca`):
+    - Sin Editar Inicio se saca el panel de nueva quincena entero, porque el selector sólo sirve para generar. El subtítulo deja de ofrecer generar; el plan no lo pedía.
+    - Sin Ver Revisión, las filas del historial no se abren ni parecen clicables.
+  - 4.2 (`c06b7a6`): `revisionSoloLectura.js` lleva 9 tests.
+    - Ver la nota "Para el FT2": el aviso de valor hora vive en `ControlesJornal.jsx`, que se comparte con la Vista gerencial. Pasó a "Todavía no se cargó este valor para la quincena." en las dos pantallas.
+    - El banner de incompletas ya no dice "el maestro" y ofrece "Ir a Conceptos" sólo a quien ve Conceptos.
+  - 4.4 (`e22cbcd`): `conceptosSoloLectura.js` lleva 7 tests. "Sin Nuevo" se aplica a **todas** las altas de la pantalla: "Sin concepto", "+ Agregar regla" y la celda "falta". Todas hacen `POST /conceptos`.
+  - **Verificación en el navegador con un rol de sólo Ver: no se hace antes del deploy, por decisión del usuario (2026-10-11).** Se mira en el sitio real después, igual que el smoke 3.10.
+- **Etapa 4, `/impeccable critique` y `audit` (2026-10-11, desde el código y sin navegador).** Crítica: 27/40 en la primera pasada y 28/40 con la revisión de diseño completa. Auditoría: 14/20. El detector no encuentra nada.
+  - **Pulido** (FT `1104b86` y `d3cbb8a`):
+    - las filas que no se abren en modo Ver van sin puntero ni fondo al pasar el mouse: "Sin concepto", Por regla, Mantenimiento y Por concepto;
+    - el Inicio sin ningún permiso muestra el subtítulo "Historial de quincenas generadas";
+    - el aviso de incompletas dice "Cargá lo que falta en Conceptos.";
+    - sale `exportar` de `accionesRevision`.
+  - **Etiqueta "Consulta" en modo Ver:** el usuario decidió no ponerla por ahora y mirarlo en el sitio real. Queda en "A futuro" de `estado.md`.
+  - **Minors de diseño, sin tocar:**
+    - la lista de conceptos repetida en el panel de la línea en modo Ver;
+    - el verde de `.precioValor` en las solapas Comunes a Por supervisor;
+    - "sin precio" se ve distinto en Por concepto y en Por regla.
+  - **Deuda previa:**
+    - la regla global `tbody tr { cursor: pointer }`;
+    - las filas de Revisión no se abren con el teclado;
+    - estilos en línea y 11 px en `DataRow` de `PanelLinea`.

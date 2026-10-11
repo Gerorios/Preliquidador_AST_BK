@@ -120,13 +120,13 @@ def test_arranque_con_columna_faltante_avisa_y_no_aborta(base_propia, capsys):
 
 def test_arranque_con_tabla_faltante_avisa_y_no_aborta(base_propia, capsys):
     with base_propia.begin() as con:
-        con.execute(text("DROP TABLE usuario_modulo"))
+        con.execute(text("DROP TABLE usuario_rol"))
 
     _correr_lifespan()
 
     salida = capsys.readouterr().out
     assert ("ERROR: faltan tablas en la base propia (migraciones sin aplicar): "
-            "usuario_modulo") in salida
+            "usuario_rol") in salida
     assert "faltan columnas" not in salida
     assert app.state.esquema_incompleto is True
 

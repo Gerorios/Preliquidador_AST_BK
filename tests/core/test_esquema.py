@@ -32,13 +32,13 @@ def test_esquema_completo_no_reporta_nada(engine):
 
 def test_reporta_tabla_y_columna_faltantes_ordenadas(engine):
     with engine.begin() as con:
-        con.execute(text("DROP TABLE usuario_modulo"))
+        con.execute(text("DROP TABLE usuario_rol"))
         con.execute(text("ALTER TABLE usuarios DROP COLUMN nombre"))
         con.execute(text("ALTER TABLE usuarios DROP COLUMN creado_en"))
 
     diferencias = comparar_esquema(Base.metadata, inspect(engine))
 
-    assert diferencias.tablas_faltantes == ["usuario_modulo"]
+    assert diferencias.tablas_faltantes == ["usuario_rol"]
     assert diferencias.columnas_faltantes == ["usuarios.creado_en", "usuarios.nombre"]
 
 
