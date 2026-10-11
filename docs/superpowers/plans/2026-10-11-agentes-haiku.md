@@ -38,3 +38,13 @@ Con Claude Code 2.1.296, en sesiones nuevas (`claude -p`) desde la carpeta de lo
   existe, frenó con exit 127 y pidió la ruta, sin improvisar ni instalar nada.
 - Una sesión ya abierta no ve agentes nuevos hasta que se reabre (el Explore integrado
   sigue en el modelo de la sesión); por eso la copia en la carpeta de los dos repos.
+
+## Revertido (2026-10-11)
+
+Después del merge (BK #84, FT #68) se midió el `Explore` contra un agente en Opus con la
+misma pregunta ("qué archivos intervienen en la alerta Posible duplicado"), una corrida cada
+uno: Haiku 272 s y 41 archivos, con ruido (exportación, precios, un backup SQL, tests de
+"concepto duplicado") y sin `claves.js`; Opus 230 s y 28 archivos, sin ruido. El costo bajaba
+(USD 0,41 contra 1,30), pero al usuario le importan el tiempo y la precisión, no los tokens.
+El `corredor-tests` no cambia el tiempo (lo pone pytest). Decisión del usuario: todo en Opus,
+se sacan los dos agentes y la sección de la skill. Este plan queda como registro.

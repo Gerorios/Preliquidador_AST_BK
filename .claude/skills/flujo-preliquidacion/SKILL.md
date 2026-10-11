@@ -85,21 +85,6 @@ variables (ruta del `.env` ficticio o variables en línea).
 
 Anotá la **ruta absoluta** de cada worktree: va en cada briefing.
 
-**Agentes en Haiku 5.5** (`.claude/agents/`, en los dos repos). Sirven para lo
-que no necesita juicio; lo que escribe o juzga código no va en Haiku.
-
-- **`Explore`**: para ubicar dónde se define o se usa algo cuando hay que
-  recorrer varios archivos, en cualquier fase. Devuelve rutas y líneas: **es un
-  índice, no una conclusión**. Antes de decidir algo con lo que trajo, abrí
-  esas líneas. Nunca borres ni declares sin uso algo sólo porque `Explore` no
-  lo encontró.
-- **`corredor-tests`**: corre la suite o el build y devuelve la línea de
-  resumen literal, el exit code y los fallos, re-corridos aislados. Briefing:
-  ruta absoluta del worktree, comando y cómo se cargan las variables.
-- `planificador`, `ejecutor`, los revisores y `verificador-review` no cambian
-  de modelo. El par rojo + verde lo sigue corriendo quien implementa (el
-  `ejecutor` o vos), no el `corredor-tests`.
-
 ---
 
 ## Tareas con interfaz (`impeccable`)
@@ -245,11 +230,9 @@ te bloquea. No intentes lo mismo cinco veces.
 
 En los dos carriles, **en este orden y una sola pasada**:
 
-1. **Suite completa y build, UNA vez**, cuando terminaron todos los pasos,
-   con el **`corredor-tests`** (uno por repo, en paralelo si son dos). Pegá
-   su línea de resumen literal y el exit code. **Distinguí regresión de
-   flaky**: un test que falla se corre aislado (el `corredor-tests` ya lo
-   hace y lo marca); si pasa solo y es de un área ajena, es flaky y se
+1. **Suite completa y build, UNA vez**, cuando terminaron todos los pasos.
+   Pegá los números reales. **Distinguí regresión de flaky**: un test que
+   falla se corre aislado; si pasa solo y es de un área ajena, es flaky y se
    anota, no se persigue.
 2. **`revision-codigo`** (no el `code-review` incluido en Claude Code) sobre el diff contra el punto de partida. La skill lanza
    los revisores (completo: dos ejes en paralelo; corto: un solo agente con
@@ -295,10 +278,8 @@ En los dos carriles, **en este orden y una sola pasada**:
    Los controles de lectura y las pantallas, con **una** ronda.
 6. **Evidencia antes de afirmar.** No digas "pasa", "arreglado" ni "listo"
    sin haber corrido en esta misma fase el comando que lo prueba y leído su
-   salida completa: conteo de tests, exit code, build. El reporte del
-   `corredor-tests` cuenta, porque trae la línea de resumen literal y el exit
-   code; si falta alguno de los dos, no está verificado. Si no lo corriste,
-   decí que no está verificado.
+   salida completa: conteo de tests, exit code, build. Si no lo corriste, decí
+   que no está verificado.
 
 Mostrá el resultado en una línea: "revisión: N urgent, N high arreglados, N
 minor sin tocar". Mandá aviso si algo necesita su decisión (completo).
