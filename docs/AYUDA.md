@@ -1,4 +1,4 @@
-# Guía de ayuda del sistema — para el liquidador y el gerente
+# Guía de ayuda del sistema
 
 > **Qué es este documento.** Es la base de conocimiento del **asistente de ayuda de uso** del
 > sistema de preliquidación. Explica **cómo se usa el sistema**, paso a paso, con los nombres
@@ -18,16 +18,29 @@
 ### El Inicio y el menú
 
 - Al entrar se ve el **Inicio** del sistema (*"Elegí dónde trabajar"*), con una tarjeta por
-  módulo. La tarjeta **Preliquidación** lleva al liquidador al inicio del módulo (la pantalla
-  **"Preliquidaciones"**) y al gerente a **Conceptos**. El gerente tiene además la tarjeta
-  **Gerencial**.
-- Dentro del módulo, el **menú de la izquierda** tiene **Inicio**, **Conceptos**,
-  **Verificación** y **Mantenimiento** (el gerente ve solo **Conceptos**). Arriba de todo,
+  cada módulo donde tenés alguna pantalla. La tarjeta **Preliquidación** lleva a la primera
+  pantalla del menú que podés ver: el inicio del módulo (la pantalla **"Preliquidaciones"**)
+  o, si no lo ves, la que sigue, por ejemplo **Conceptos**. Si podés ver la Vista gerencial,
+  tenés además la tarjeta **Gerencial**.
+- Dentro del módulo, el **menú de la izquierda** muestra solo las pantallas que podés ver, entre
+  **Inicio**, **Conceptos**, **Verificación** y **Mantenimiento**. Arriba de todo,
   **Módulos** vuelve al Inicio del sistema; abajo está **Cerrar sesión**.
 - El botón **"« Contraer"** del pie achica el menú a solo íconos (pasando el mouse por cada ícono
   se ve su nombre); para volver a abrirlo se toca **"»"**. El sistema **recuerda** si dejaste el
   menú contraído, en ese navegador, también la próxima vez que entres.
 - El botón **"Ayuda"**, abajo a la derecha, abre este asistente.
+
+### Qué pantallas ves
+
+- Lo que ve cada persona depende de los permisos que le dio el administrador. En cada pantalla
+  se puede tener permiso para **ver** o para **editar**. Editar incluye ver.
+- **Si no ves una pantalla, pedísela al administrador.**
+- Si tu usuario no tiene ninguna pantalla, al entrar el sistema avisa *"Tu usuario todavía no
+  tiene acceso a ninguna pantalla. Pedile al administrador las que necesitás."*
+- Si el administrador te cambia los permisos, no hace falta volver a entrar: el cambio aparece
+  solo al cambiar de pantalla o al volver a la pestaña, y puede tardar un par de minutos.
+- Quien puede ver **Verificación** ve todas las líneas de la quincena con sus importes, igual que
+  en Revisión.
 
 ### La barra de filtros (igual en todas las pantallas)
 
@@ -613,10 +626,10 @@ operarios: *"No hay operarios de mantenimiento para esta quincena."*
 
 ---
 
-## Vista gerencial (para el gerente)
+## Vista gerencial
 
 Es un tablero de **solo lectura** con la **mano de obra gastada**: cuánto se pagó, cómo viene
-evolucionando y dónde hay desvíos. Solo la ve el gerente.
+evolucionando y dónde hay desvíos. La ve quien tiene permiso para la Vista gerencial.
 
 ### Dónde está
 
@@ -652,7 +665,7 @@ sesión).
 - **DESVÍOS POR CLIENTE**: lo mismo por cliente, con el mismo umbral.
 - **Control Plantas vs Jornal** y **Control Tancadas vs Jornal**: se despliegan con su botón y
   muestran las mismas tablas que Verificación, **solo para mirar** (las columnas se ordenan con un
-  click en el encabezado). El valor hora lo carga el liquidador; si todavía no lo cargó, dice
+  click en el encabezado). El valor hora se carga en Verificación; si todavía no se cargó, dice
   *"El liquidador todavía no cargó este valor para la quincena."* Estos controles son por
   quincena: en modo Mes avisan *"Elegí una quincena para ver este control (no aplica al mes
   completo)."*
@@ -660,9 +673,6 @@ sesión).
 Al pie, una nota recuerda que *"La quincena en curso sigue en revisión: sus importes pueden
 cambiar hasta que el liquidador la cierre."* Si todavía no hay ninguna: *"Todavía no hay
 preliquidaciones generadas."*
-
-El gerente también puede operar **Conceptos** completo (precios, reglas, precio masivo, copiar
-quincena), igual que el liquidador: ver "Carga de precios".
 
 ---
 

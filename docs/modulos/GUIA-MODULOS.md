@@ -133,29 +133,31 @@ backend_preliquidacion/
 │   ├── core/                         # NÚCLEO COMPARTIDO
 │   │   ├── config.py                 # settings
 │   │   ├── database.py               # las 3 conexiones y los get_db_*
-│   │   ├── models.py                 # Usuario, RolUsuario, UsuarioModulo
+│   │   ├── models.py                 # Usuario, RolUsuario, Rol, RolPermiso, UsuarioRol (ADR-0020)
 │   │   ├── auth.py                   # usuario actual, login/me/logout/password
 │   │   ├── identidad.py              # CUIL como identidad (PR 5): normalizar_cuil, email_de_cuil, cuil_de_email
-│   │   ├── administracion.py         # router /api/admin: alta desde el padrón, roles, reset (PR 5)
-│   │   ├── usuarios_service.py       # lógica de alta/roles que usa administracion.py (PR 5)
+│   │   ├── administracion.py         # router /api/admin: alta desde el padrón, usuarios, roles, reset
+│   │   ├── usuarios_service.py       # lógica de alta de usuarios que usa administracion.py (PR 5)
+│   │   ├── roles_service.py          # alta, cambio y borrado de roles; roles de cada persona (ADR-0020)
 │   │   ├── sueldos_service.py        # padrón de empleados — mudado desde preliquidacion (PR 5)
-│   │   ├── permisos.py               # MODULOS, ROLES_MODULO, requiere_modulo, requiere_admin
-│   │   ├── modulos.py                # ModuloInfo (clave, nombre, descripcion, activo,
-│   │   │                             #   routers, etiquetas_rol, panel_gerencial, modelos) — ADR-0013
+│   │   ├── permisos.py               # NIVELES, permisos_de, puede, requiere_pantalla, requiere_admin
+│   │   ├── modulos.py                # Pantalla; ModuloInfo (clave, nombre, descripcion, activo,
+│   │   │                             #   routers, panel_gerencial, modelos, pantallas); catalogo_activo
+│   │   │                             #   — ADR-0013 y ADR-0020
 │   │   ├── asistente.py              # chat de ayuda, transversal
 │   │   └── quincena.py               # calcular_rango_quincena y afines
 │   └── modulos/
 │       ├── __init__.py               # REGISTRO = (PRELIQUIDACION, TERCEROS); activos(); claves()
 │       ├── preliquidacion/           # MÓDULO Preliquidación de sueldos (activo=True)
-│       │   ├── __init__.py           # arma MODULO: ModuloInfo(...)
-│       │   ├── permisos.py
+│       │   ├── __init__.py           # arma MODULO: ModuloInfo(..., pantallas=PANTALLAS)
+│       │   ├── permisos.py           # PANTALLAS y las dependencias por pantalla y nivel
 │       │   ├── api/                  # preliquidacion, precios, export, gerencial
 │       │   ├── models.py
 │       │   ├── schemas.py
 │       │   └── services/             # consulta_externa.py y el resto de la lógica del módulo
 │       └── terceros/                 # MÓDULO Liquidación Terceros (molde, inactivo — activo=False)
-│           ├── __init__.py           # arma MODULO: ModuloInfo(...)
-│           ├── permisos.py
+│           ├── __init__.py           # arma MODULO: ModuloInfo(..., pantallas=PANTALLAS)
+│           ├── permisos.py           # PANTALLAS y las dependencias por pantalla y nivel
 │           ├── api/terceros.py       # APIRouter(prefix="/api/terceros", tags=["Liquidación Terceros"])
 │           ├── models.py             # tablas terceros_* (aún sin ninguna)
 │           ├── schemas.py
@@ -166,7 +168,7 @@ backend_preliquidacion/
 │   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
 │   └── terceros/                     # (molde, inactivo) LEEME.md; 001_crear_tablas.sql cuando arranque
 ├── tests/
-│   ├── core/                         # autorización por rol, arranque
+│   ├── core/                         # autorización por pantalla, arranque
 │   ├── preliquidacion/               # el resto (22 archivos)
 │   └── terceros/                     # (molde, inactivo) test_molde.py
 └── docs/
@@ -184,7 +186,8 @@ frontend_preliquidacion/
     ├── core/                    # NÚCLEO COMPARTIDO (ADR-0013)
     │   ├── api.js               # Axios: baseURL /api, Bearer automático, logout en 401
     │   ├── authStore.js         # Sesión (Zustand + persist, clave "auth-asturiana")
-    │   ├── permisos.js          # helpers de rol por módulo sobre la sesión
+    │   ├── permisos.js          # puedeVer, puedeEditar, puedeVerAlguna: permisos por pantalla de la sesión
+    │   ├── accesos.js           # tarjetas del Inicio, menú y aterrizaje según los permisos
     │   ├── registroContext.js   # React.Context + useRegistro(); App.jsx le inyecta el registro estático
     │   ├── layout/               # Layout (sidebar, compone el menú de cada módulo), ProtectedRoute
     │   ├── inicio/                # Inicio.jsx — pantalla de Tarjetas (ver CONTEXT.md, "Inicio")
@@ -222,17 +225,17 @@ El molde ya existe en los dos repos, registrado pero inactivo (ver "Módulo acti
 
 - `src/modulos/terceros/rutas.jsx`: cambiar `activo: false` a `activo: true`.
 - Agregar páginas en `src/modulos/terceros/pages/` (hoy solo `Inicio.jsx`, la pantalla del molde) y sus rutas.
-- `etiquetasRol` del módulo en `src/modulos/terceros/rutas.jsx` (ver "Etiqueta de rol" en `CONTEXT.md`; el molde ya trae `{operador: "Liquidador de terceros", gerente: "Gerente"}`, ajustar si corresponde).
+- Cada ruta de `src/modulos/terceros/rutas.jsx` lleva `pantalla` con la misma clave que declara el backend en `PANTALLAS` (ver la sección 5, "Cómo declara un módulo sus pantallas").
 - Íconos disponibles para la Tarjeta en `src/core/ui/iconos.jsx`.
 
-Activar el módulo = `activo: True`/`true` en los dos repos; el Inicio no consulta al backend para decidir las tarjetas — lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra `usuario.modulos` de la sesión.
+Activar el módulo = `activo: True`/`true` en los dos repos; el Inicio no consulta al backend para decidir las tarjetas — lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra los `permisos` de la sesión (`src/core/accesos.js`).
 
 **3. Registro — ya está hecho.** `app/modulos/__init__.py` ya tiene `TERCEROS` en `REGISTRO` y `src/modulos/registro.js` ya tiene su entrada; no hace falta tocarlos. Para el **tercer módulo** (y siguientes), agregarlo es una línea en cada uno de esos dos archivos y nada más — el resto de esta sección aplica igual.
 
-**4. Permisos.** `app/core/permisos.py` → `MODULOS = ("preliquidacion", "terceros")` ya lo incluye. Para dar de alta a una persona en el módulo:
+**4. Permisos.** Las pantallas de Terceros ya están declaradas (`PANTALLAS` en `app/modulos/terceros/permisos.py`) y cada endpoint pide la suya. Para que una persona use el módulo, el admin le asigna en la Administración un rol con permisos en esas pantallas; la migración `core/002` crea "Liquidador de terceros". Por consola:
 
 ```bash
-python scripts/asignar_modulo.py --email liq@x.com --modulo terceros --rol operador
+python scripts/asignar_rol.py --email liq@x.com --rol "Liquidador de terceros"
 ```
 
 **Recordatorio**: nunca importar de `app.modulos.preliquidacion` (ni desde el frontend, de `src/modulos/preliquidacion/`); nunca escribir en las bases Externa o Sueldos.
@@ -267,13 +270,13 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 ### 4.4 Endpoints y permisos
 
 13. **Router propio con prefijo `/api/<modulo>`** y su tag. Los endpoints se nombran en español, en minúsculas y con guiones, como los actuales (`/api/terceros/viajes`, `/api/terceros/liquidaciones/{id}/exportar`).
-14. **Cada endpoint declara qué rol de módulo necesita** con la dependencia del núcleo: `Depends(requiere_modulo("terceros", "operador"))` o `"gerente"`. La restricción vive en el backend; el frontend solo esconde lo que no corresponde, no es la seguridad.
+14. **Cada endpoint declara qué pantalla y qué nivel (Ver o Editar) necesita** con una dependencia del `permisos.py` del módulo, hecha con `requiere_pantalla` del núcleo: `Depends(ver_quincena)`, `Depends(editar_tarifario)` (ver la sección 5). Lo verifican el test de mapa del módulo (`tests/<modulo>/test_mapa_permisos.py`), que fija pantalla y nivel de cada ruta, y `tests/core/test_endpoints_con_permiso.py`, que falla si una ruta `/api/*` queda sin permiso. Las lecturas también piden permiso: todo dato pide Ver en alguna pantalla que lo usa. La restricción vive en el backend; el frontend solo esconde lo que no corresponde, no es la seguridad.
 15. **Errores estructurados**: `HTTPException` con `detail` en español, legible para el usuario. Si la UI tiene que reaccionar a un caso (como hoy el 409 de solapamiento), `detail` es un objeto `{tipo, mensaje, ...}` y el `tipo` está documentado.
 16. **Todo lo que devuelve o recibe un endpoint tiene schema Pydantic** en `schemas.py` del módulo, con validaciones de rango donde el dominio las tenga.
 
 ### 4.5 Frontend
 
-17. **Pantallas con `lazy` en `rutas.jsx` del módulo**, protegidas con `ProtectedRoute` indicando módulo y rol.
+17. **Pantallas con `lazy` en `rutas.jsx` del módulo**, protegidas con `ProtectedRoute` indicando módulo y pantalla (`pantalla`, la misma clave que declara el backend).
 18. **Toda llamada al backend pasa por `src/core/api.js`** (que pone el token y maneja el 401) y vive en `src/modulos/<modulo>/services/`. Ningún `fetch` ni `axios` directo desde un componente.
 19. **Datos de servidor con React Query**: `useQuery` para leer, `useMutation` para escribir, invalidando las queries que corresponda. Nada de `useEffect` con fetch.
 20. **Estilos con CSS Modules** (`Pantalla.module.css`) usando **los tokens de `index.css`** (`var(--accent)`, `var(--bg-surface)`, `var(--danger)`, etc.). No se inventan colores fuera de los tokens: la paleta la fija `src/index.css` (y `DESIGN.md` del front cuando exista), verificada para contraste, y sólo cambia con la skill `impeccable` y OK del usuario. Sin CSS global nuevo. Toda pantalla nueva o cambio visual se hace con `impeccable` (`AGENTS.md`, "Cambios de interfaz"); estas reglas valen por encima de lo que proponga.
@@ -296,54 +299,67 @@ Estas reglas son lo que se revisa en cada PR. No son sugerencias.
 
 ## 5. Usuarios, roles y permisos
 
-### Cómo funciona (desde el PR 3 de la etapa 0)
+### Cómo funciona (roles armables, ADR-0020)
 
-- El rol **global** puede ser `admin` o `usuario`: `admin` ve y opera todo, en todos los módulos, y administra usuarios y permisos; `usuario` depende de sus módulos.
-- Por cada módulo, un usuario puede tener rol `operador` o `gerente`, uno por usuario y módulo; el admin no tiene roles de módulo porque es global.
-- El **operador** de un módulo opera ese circuito completo y no ve las pantallas operativas de otro módulo. El liquidador de terceros no ve la preliquidación de sueldos, y el de sueldos no ve la de terceros. En Preliquidación, el operador (liquidador) no ve el panel Gerencial.
-- El **gerente** de un módulo ve el panel gerencial de ese módulo y lo que el módulo decida abrirle (en Preliquidación, además, el maestro de Conceptos completo). Una persona gerente de los dos módulos ve el analítico de ambos.
-- El menú muestra solo los módulos a los que el usuario tiene acceso. Si tiene uno solo, entra directo ahí.
-- El login (`POST /api/auth/login`) y `GET /api/auth/me` devuelven, junto con `id`/`nombre`/`email`/`rol`, el campo `modulos` con el rol por módulo:
+- La marca **global** puede ser `admin` o `usuario`. `admin` ve y edita todo, en todos los módulos, y es quien administra usuarios y roles; no se arma con permisos. Lo que puede un `usuario` depende de sus roles.
+- Un **Rol** es un conjunto de **Permisos** con nombre, que el admin arma en la Administración (solapa Roles) sin programar. Un Permiso es **Ver** o **Editar** una **Pantalla** de un módulo: Editar incluye Ver, y una pantalla sin acción propia sólo tiene Ver. Un rol puede reunir pantallas de varios módulos. Los términos están en `CONTEXT.md`.
+- Una persona tiene uno o más roles y sus permisos se suman: en cada pantalla vale el nivel más alto entre sus roles. Cambiar un rol vale enseguida para todas las personas que lo tienen. A la persona no se le muestra qué roles tiene.
+- La migración `core/002` creó tres roles que copian el acceso del esquema anterior: "Preliquidador", "Gerente" y "Liquidador de terceros".
+- El Inicio muestra la tarjeta de un módulo si la persona ve alguna pantalla de su menú, la de Gerencial si ve la Vista gerencial de algún módulo, y la de Administración si es admin. Al entrar a un módulo, la persona llega a la primera entrada del menú que puede ver.
+- El login (`POST /api/auth/login`) y `GET /api/auth/me` devuelven, junto con `id`/`nombre`/`email`/`rol`, el campo `permisos` con el nivel por pantalla de cada módulo:
 
 ```json
 {
   "id": 5, "nombre": "Ana Pérez", "email": "ana@x.com", "rol": "usuario",
-  "modulos": {"preliquidacion": "operador"}
+  "permisos": {"preliquidacion": {"conceptos": "editar", "gerencial": "ver"}}
 }
 ```
 
-- Cada módulo define sus dependencias concretas sobre `requiere_modulo` del núcleo (`app/core/permisos.py`). Ejemplo real, `app/modulos/preliquidacion/permisos.py`:
+Una pantalla que no aparece es "sin acceso". El admin recibe `"permisos": {}`, y el frontend lo trata como "todo" por `rol === "admin"`. Los roles de la persona no se devuelven.
+
+### Cómo declara un módulo sus pantallas
+
+La clave de cada pantalla es la misma en los dos repos, se guarda en la base (en los permisos de cada rol) y **no cambia**: renombrarla deja sin ese permiso a quien lo tenía.
+
+**Backend**
+
+1. `PANTALLAS` en `app/modulos/<modulo>/permisos.py`: una tupla de `Pantalla(clave, nombre, editable=True, requiere=())` del núcleo (`app/core/modulos.py`), en el orden en que las muestra el editor de roles. `editable=False` es una pantalla de sólo Ver. `requiere` lista las pantallas del mismo módulo que hay que poder ver para llegar a esta (en Preliquidación, Revisión se abre desde el Inicio del módulo y por eso requiere `inicio`); la regla la valida el núcleo al guardar un rol.
+2. `app/modulos/<modulo>/__init__.py` pasa `pantallas=PANTALLAS` a su `ModuloInfo`. `GET /api/auth/modulos` las publica y la Administración arma el editor de roles con eso. El núcleo no conoce las pantallas por nombre: las lee de los módulos activos (`catalogo_activo`).
+3. En el mismo `permisos.py`, las dependencias con nombre, hechas con `requiere_pantalla(MODULO, *pantallas, nivel="ver")` y definidas una sola vez a nivel de archivo, porque FastAPI cachea por objeto. Con varias pantallas alcanza con una; sin permiso responde 403 "No tenés permiso para esta operación". Ejemplo real, de `app/modulos/preliquidacion/permisos.py`:
 
 ```python
-from app.core.permisos import requiere_modulo
+from app.core.modulos import Pantalla
+from app.core.permisos import requiere_pantalla
 
 MODULO = "preliquidacion"
 
-# Opera la preliquidación completa: admin y operador (liquidador).
-requiere_operativo = requiere_modulo(MODULO, "operador")
+PANTALLAS = (
+    Pantalla("inicio", "Inicio"),
+    Pantalla("revision", "Revisión", requiere=("inicio",)),
+    # ...
+    Pantalla("gerencial", "Vista gerencial", editable=False),
+)
 
-# El gerente opera el maestro de Conceptos completo; el resto de lo
-# operativo le sigue vedado.
-requiere_conceptos = requiere_modulo(MODULO, "operador", "gerente")
-
-# Panel gerencial: gerente y admin. El operador NO.
-requiere_gerencial = requiere_modulo(MODULO, "gerente")
+editar_inicio = requiere_pantalla(MODULO, "inicio", nivel="editar")
+ver_revision = requiere_pantalla(MODULO, "revision")
+# Las líneas de la quincena las leen Revisión y Verificación: alcanza con ver una.
+ver_lineas = requiere_pantalla(MODULO, "revision", "verificacion")
 ```
 
-Lo que el módulo tiene que hacer: definir su propio `app/modulos/terceros/permisos.py` con `requiere_modulo("terceros", ...)` sobre las dependencias que necesite, usarlas en cada endpoint y declarar módulo y rol en cada ruta del frontend. Nada más. Si el circuito necesita más granularidad (por ejemplo alguien que solo consulta), se conversa; la recomendación es no agregar roles hasta que un usuario real lo pida.
+4. Cada endpoint usa una: `usuario=Depends(editar_inicio)` si necesita a la persona, o `dependencies=[Depends(ver_revision)]` si no (regla 14).
+5. Tests: `tests/<modulo>/test_mapa_permisos.py` fija la pantalla y el nivel de cada ruta del módulo, con la cantidad exacta de rutas; `tests/core/test_endpoints_con_permiso.py` falla si una ruta `/api/*` no tiene exactamente un requisito (pantalla o admin), salvo su lista blanca, o si nombra un módulo o una pantalla que no está en el catálogo.
+
+**Frontend**
+
+- Cada ruta de `src/modulos/<modulo>/rutas.jsx` lleva `modulo` y `pantalla`, con la misma clave del backend. `ProtectedRoute` manda al Inicio a quien no puede ver esa pantalla, y el menú (`nav`) sale de las mismas rutas. Si el módulo tiene vista gerencial, el descriptor lleva `gerencial: { ruta, pantalla }`.
+- Para esconder acciones dentro de una pantalla se usa `puedeEditar(usuario, modulo, pantalla)` de `src/core/permisos.js`.
+- No confundir `pantalla` (el permiso de la ruta) con `pantallas` del descriptor, que es el mapa de nombres para el asistente.
+
+Una pantalla nueva se suma a `PANTALLAS`, a su ruta y al glosario del módulo, con qué es ver y qué es editar en ella. Los roles que ya existen no la incluyen: el admin la agrega editando los roles. Los permisos más finos que la pantalla (por acción) se descartaron en el ADR-0020.
 
 Alta y gestión de usuarios (desde el PR 5 de la etapa 0): se hace **desde la pantalla de Administración** (solo rol global `admin`), que busca a la persona en el padrón de empleados (solo lectura) y la da de alta con los roles elegidos. La identidad de la persona es su **CUIL**: como la columna `email` de `usuarios` es `UNIQUE NOT NULL` y esta etapa no migra el esquema, el alta guarda un email sintético `<cuil>@usuarios.laasturianasrl.com.ar` (`app/core/identidad.py`), y la **contraseña inicial es el CUIL**. Nadie tipea ese email: el login acepta el CUIL pelado (con o sin guiones) además del email real de los usuarios anteriores al PR 5. Cambiarla es voluntario — la persona puede seguir usando el CUIL indefinidamente — y el propio usuario la cambia desde su sesión con `POST /api/auth/password` (pide la contraseña actual).
 
-`scripts/crear_usuario.py` (crea o actualiza un usuario y opcionalmente sus módulos) y `scripts/asignar_modulo.py` (asigna, cambia, quita o lista el rol de un usuario en un módulo puntual) siguen existiendo como alternativa de consola y como **salida de emergencia** si el admin pierde su propio acceso.
-
-### Etiquetas de rol
-
-El código interno de un rol de módulo siempre es `operador` o `gerente` (ver arriba); lo que se muestra en pantalla es otra cosa (ver "Etiqueta de rol" en `CONTEXT.md`). Cada módulo define su propio mapeo:
-
-- Backend: `etiquetas_rol` en el `ModuloInfo` del módulo (`app/modulos/<modulo>/__init__.py`), expuesto en `GET /api/auth/modulos` (para la Administración del PR 5).
-- Frontend: `etiquetasRol` en el `modulo` exportado por `src/modulos/<modulo>/rutas.jsx` — es la copia que hoy usa el Inicio, definida independientemente del backend (`src/modulos/registro.js`, función `etiquetaRol`, contra el registro estático de módulos).
-
-Hoy: Preliquidación muestra `operador` como **Preliquidador** y `gerente` como **Gerente**; el molde de Liquidación Terceros ya trae `operador` como **Liquidador de terceros** y `gerente` como **Gerente** (a confirmar cuando el módulo tenga usuarios reales).
+`scripts/crear_usuario.py` (crea o actualiza un usuario; `--asignar-rol "<nombre>"`, repetible, le asigna roles que ya existen) y `scripts/asignar_rol.py` (`--email <mail> --rol "<nombre>"` le suma un rol, con `--quitar` se lo saca; `--listar` muestra sus roles y permisos efectivos, y `--roles` los roles que existen) siguen existiendo como alternativa de consola y como **salida de emergencia** si el admin pierde su propio acceso. Los roles se arman en la Administración, no por consola.
 
 ---
 
@@ -501,7 +517,7 @@ Resumen de las decisiones del grilling del 2026-09-07, con el porqué. El detall
 | Datos | Misma base, prefijo `terceros_`, migraciones por carpeta de módulo | Una conexión, un backup, joins con usuarios posibles. Las tablas actuales no se renombran: producción con datos reales. |
 | Qué comparte el núcleo | Solo lectura: auth, conexiones, cliente/finca/persona/legajo/empresa, quincena, UI común | Compartir lectura es barato y seguro. Compartir escritura acopla los módulos para siempre. |
 | Fuente externa | Cada módulo su `consulta_externa.py`, SQL crudo parametrizado, solo lectura | Es como funciona hoy y las consultas de Pitu ya existen en Power Query. |
-| Permisos | `admin` global; por módulo `operador` y `gerente` | Operadores no se ven entre módulos; gerente ve el analítico de los suyos. Escala al tercer módulo. |
+| Permisos | `admin` global; roles que arma el admin, con Ver o Editar por pantalla (reemplazó a `operador`/`gerente` por módulo, ADR-0020) | Cada caso nuevo, como el gerente que mira Verificación, se resuelve en la Administración sin programar. Un módulo nuevo suma sus pantallas al editor de roles. |
 | Gerencial | Panel por módulo, solapa por módulo, sin consolidar. Última etapa | No exige coordinar modelos antes de que el módulo funcione. Consolidar se agrega después si hace falta. |
 | Nombre | Renombrar solo lo visible (título, login, menú). URL quizás después. Internos nunca | Renombrar repos, base o servicio es riesgo en producción sin beneficio para el usuario. |
 | Ambiente | Desarrollo en `testing`, producción en `preliquidacion` | Hoy desarrollar en local pega contra datos reales; esto lo corrige. |

@@ -169,6 +169,6 @@ Por ADR-0013 las tablas en producción **no se renombran**. Cada módulo usa su 
 uvicorn app.main:app --reload     # desarrollo (con el .env apuntando a testing)
 pytest                            # toda la suite
 python verificar_conexion.py      # chequear las tres conexiones (necesita PYTHONUTF8=1)
-python scripts/asignar_modulo.py --email <mail> --modulo <preliquidacion|terceros> --rol <operador|gerente>
+python scripts/asignar_rol.py --email <mail> --rol "<nombre>"   # suma un rol; --quitar lo saca, --listar, --roles
 sh scripts/hooks/instalar.sh      # una vez por clon: instala post-merge y pre-commit
 ```

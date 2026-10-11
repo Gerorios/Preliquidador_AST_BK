@@ -31,13 +31,13 @@ de negocio en `app/modulos/`.
 
 - `core/` — **núcleo compartido**:
   - `config.py` (settings desde `.env`) y `database.py` (las tres conexiones y la `Base` del ORM).
-  - `models.py` (usuario y rol por módulo), `auth.py` (login, sesión, `get_usuario_actual`), `identidad.py` (login por CUIL o por mail).
-  - `permisos.py` (`MODULOS`, `ROLES_MODULO`, `tiene_permiso`, `requiere_modulo`) y `modulos.py` (`ModuloInfo`: clave, nombre, activo, routers, etiquetas de rol, panel gerencial).
-  - `administracion.py` y `usuarios_service.py` (la pantalla de Administración), `sueldos_service.py` (lectura del padrón de empleados, servida a todos los módulos).
+  - `models.py` (usuario, rol, permiso por pantalla y roles de cada persona; ADR-0020), `auth.py` (login, sesión, `get_usuario_actual`), `identidad.py` (login por CUIL o por mail).
+  - `permisos.py` (`permisos_de`, `puede`, `requiere_pantalla`, `requiere_admin`) y `modulos.py` (`Pantalla` y `ModuloInfo`: clave, nombre, activo, routers, panel gerencial, pantallas; y `catalogo_activo`).
+  - `administracion.py`, `usuarios_service.py` y `roles_service.py` (la pantalla de Administración: usuarios y roles), `sueldos_service.py` (lectura del padrón de empleados, servida a todos los módulos).
   - `asistente.py` (chat de ayuda; arma su conocimiento con los documentos de `_DOCS`) y `quincena.py` (la Quincena y su validación).
 - `modulos/__init__.py` — el registro de módulos: `REGISTRO`, `activos()`, `claves()`. Agregar un módulo nuevo es una línea acá.
 - `modulos/preliquidacion/` — el módulo activo:
-  - `api/` (`preliquidacion.py`, `precios.py`, `export.py`, `gerencial.py`) y `permisos.py` (`requiere_operativo`, `requiere_conceptos`, `requiere_gerencial`, sobre `requiere_modulo` del núcleo).
+  - `api/` (`preliquidacion.py`, `precios.py`, `export.py`, `gerencial.py`) y `permisos.py` (`PANTALLAS`, las pantallas del módulo, y las dependencias por pantalla y nivel, como `ver_revision` o `editar_conceptos`, sobre `requiere_pantalla` del núcleo).
   - `services/`: `preliquidacion_service.py` es el motor (matching de conceptos, recálculo reactivo, controles); `motor_reglas.py` calcula la cantidad por unidad, la empresa y el legajo, y los duplicados; `gerencial_service.py` calcula los indicadores de mano de obra; `consulta_externa.py` extrae las tareas de la base de campo; además, `export_service.py` y `solapamiento_service.py`.
   - `models.py` y `schemas.py`.
 - `modulos/terceros/` — el molde del segundo módulo, registrado pero **inactivo** (ver "Módulo activo" en `CONTEXT.md`). Se completa siguiendo [`modulos/GUIA-MODULOS.md`](modulos/GUIA-MODULOS.md).
@@ -47,7 +47,7 @@ de negocio en `app/modulos/`.
 
 Espejo de la estructura del backend.
 
-- `core/` — **núcleo compartido**: `inicio/` (la pantalla de Inicio con sus Tarjetas), `administracion/`, `layout/`, `asistente/`, `ui/` (íconos y componentes comunes), `api.js` (cliente axios con base `/api`), `authStore.js`, `permisos.js`, `mensajeError.js`.
+- `core/` — **núcleo compartido**: `inicio/` (la pantalla de Inicio con sus Tarjetas), `administracion/`, `layout/`, `asistente/`, `ui/` (íconos y componentes comunes), `api.js` (cliente axios con base `/api`), `authStore.js`, `permisos.js` y `accesos.js` (qué pantallas, menú y tarjetas ve cada persona), `mensajeError.js`.
 - `modulos/registro.js` — el registro de módulos del front.
 - `modulos/preliquidacion/` — `rutas.jsx` (todas las rutas del módulo, con el prefijo `/preliquidacion/...`), `pages/`, `components/`, `services/`.
 - `modulos/terceros/` — el molde, inactivo.
@@ -86,7 +86,7 @@ No hay un registro de empleados propio. Una persona se identifica por su **CUIL*
 registro laboral por el par **(legajo, empresa)**, que se lee del maestro de sueldos. Los
 usuarios del Sistema se dan de alta desde la pantalla de Administración, buscando a la
 persona en el Padrón de empleados; los scripts de consola (`scripts/crear_usuario.py`,
-`scripts/asignar_modulo.py`) quedan como alternativa y salida de emergencia.
+`scripts/asignar_rol.py`) quedan como alternativa y salida de emergencia.
 
 ### Migraciones
 
