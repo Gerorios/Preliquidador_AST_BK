@@ -997,3 +997,21 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
     - `terceros/rutas.jsx` perdió la alineación en columnas.
     - `PRODUCT.md` dice que quien sólo ve "no encuentra los botones de cambiar", y eso todavía no vale en Terceros (riesgo 9) ni en Preliquidación hasta FT2.
   - Para el smoke 3.10: esperar más de un minuto (`staleTime`) antes de volver a la pestaña del Gerente.
+- **Par 2.2 hecho (`c3a98d8`).** Terceros pide pantalla y nivel en sus 38 rutas. Las filas 25 y 28 van con el mapeo propuesto, a confirmar con Pitu.
+- **Par 2.3 hecho (`4315c62`).** La red general y la equivalencia pasan sin tocar la app. La matriz de hoy se escribió a mano desde los routers anteriores a BK2. Como el código ya estaba commiteado, el rojo se mostró con rutas mutantes en memoria (un plugin de pytest fuera del repo).
+- **Par 2.4 hecho (`3f667c6`).** La sesión y la Administración ya no usan módulos; el alta recibe `roles`. `reemplazar_modulos` pasó al 2.6, porque `crear_usuario.py` la usaba.
+- **Orden 2.5/2.6 invertido, con OK del usuario (2026-10-11):** los scripts usaban el esquema viejo. El 2.6 se hizo primero (`2feb83b`) y el 2.5 después (`4181b4b`). La búsqueda del 2.5 también admite `scripts/refrescar_testing.py`, que copia `usuario_modulo` hasta la etapa 6, y la regex de `test_scripts_usuarios.py`.
+- **Paso 2.7 hecho (`18674b3`).** GUIA-MODULOS, AGENTS.md, DOCUMENTACION, AYUDA y la definición de "Tarjeta" en CONTEXT.md.
+- **Smoke 3.10 (2026-10-11, con OK), sólo por API.**
+  - Por qué sólo API: el clasificador no deja leer las contraseñas de prueba. Por decisión del usuario, la parte visual se mira en el sitio real después del deploy.
+  - Datos: con `crear_usuario.py --asignar-rol` se crearon 5 usuarios de prueba (admin, los tres roles de la semilla y Gerente + Verificación Ver). El rol de prueba se creó con `POST /api/admin/roles` (201) y se asignó con `PUT .../roles` (200).
+  - `/auth/me` trae `permisos` sin `modulos`.
+  - Acceso por rol:
+    - el admin llega a 88 de 88 rutas;
+    - el Preliquidador, a Preliquidación, a Precios y a `GET /api/gerencial/quincenas`;
+    - el Gerente, a Gerencial y a Precios;
+    - el Liquidador de terceros, sólo a Terceros;
+    - Gerente + Verificación suma los 5 GET de Verificación, sin escrituras.
+  - Las escrituras se probaron con parámetros inválidos: 422 si el permiso pasa y 403 si no. No se escribió nada.
+  - `GET /api/terceros/alertas` da 502, a propósito, hasta cargar `TALLER_SHEET_URL`.
+  - Al final se borraron el rol y los usuarios de prueba.
