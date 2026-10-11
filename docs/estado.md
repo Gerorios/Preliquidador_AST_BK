@@ -18,7 +18,7 @@ Esquema de permisos (2026-10-11): BK #83, BK #86, FT #70 y FT #71 están mergead
 ## Pendientes del usuario
 
 - Cargar `TALLER_SHEET_URL` en el `.env` del servidor y reiniciar el backend: hasta entonces las alertas de Terceros responden 502 a propósito (deploy del 2026-09-30).
-- Asignar el módulo Terceros desde Administración a los usuarios que corresponda (deploy del 2026-09-30).
+- Asignar el rol "Liquidador de terceros" desde Administración a quienes liquiden Terceros, después del deploy del esquema de permisos (nace sin personas; deploy del 2026-09-30, BK #83).
 - Actualizar en `docs/DEPLOY.md` (local, fuera de git) la nota de migraciones históricas: `ws17` ya es `historica` (BK #71, 2026-10-05).
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
