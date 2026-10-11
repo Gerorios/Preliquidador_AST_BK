@@ -11,22 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import pwd_context
 from app.core.identidad import cuil_de_email, email_de_cuil, normalizar_cuil
-from app.core.models import Usuario, UsuarioModulo
+from app.core.models import Usuario
 from app.core.roles_service import buscar_roles
-
-
-def reemplazar_modulos(db: Session, usuario: Usuario, pares: list[tuple[str, str]]) -> None:
-    """Reemplaza los módulos del usuario por `pares` (modulo, rol).
-
-    Borra los viejos y hace flush antes de asignar los nuevos: si se reasigna
-    `usuario.modulos = [...]` directamente, SQLAlchemy intenta insertar las
-    filas nuevas antes de borrar las huérfanas y choca contra la UNIQUE
-    (usuario_id, modulo) con un IntegrityError.
-    """
-    for m in list(usuario.modulos):
-        db.delete(m)
-    db.flush()
-    usuario.modulos = [UsuarioModulo(modulo=m, rol=r) for m, r in pares]
 
 
 def crear_usuarios_lote(db: Session, personas: list[dict], rol_global: str,

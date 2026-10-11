@@ -1,16 +1,17 @@
-# Alta manual de usuarios (no hay ABM de usuarios en la app — decisión de la
-# vista gerencial: los gerentes se crean a mano). Usa la misma config y hash
-# bcrypt que el login.
+# Alta manual de usuarios por consola: la alternativa a Administración y la
+# salida de emergencia si el admin pierde su propio acceso. Usa la misma config
+# y hash bcrypt que el login.
 #
 # Uso:
 #   python scripts/crear_usuario.py --nombre "Nombre Apellido" --email liq@x.com --password "..." \
-#       --modulo preliquidacion:operador
+#       --asignar-rol "Preliquidador"
 #   python scripts/crear_usuario.py --nombre "Nombre Apellido" --email admin@x.com --password "..." --rol admin
 #
 # Si el email ya existe, actualiza contraseña/rol/nombre en vez de duplicar.
-# Con --modulo (repetible, formato modulo:rol) reemplaza los módulos del
-# usuario por los pasados. Si no se pasa --modulo y el usuario ya existe, sus
-# módulos no se tocan.
+# Con --asignar-rol (repetible, el nombre de un rol armable, ADR-0020) reemplaza
+# los roles del usuario por los pasados. Si no se pasa --asignar-rol y el
+# usuario ya existe, sus roles no se tocan. Si algún rol no existe, no escribe
+# nada. Para sumar o quitar un rol sin tocar los otros: scripts/asignar_rol.py.
 
 import argparse
 import sys
@@ -19,43 +20,53 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.database import SessionPropia  # noqa: E402
-from app.core.models import Usuario, RolUsuario  # noqa: E402
+from app.core.models import Rol, Usuario, RolUsuario  # noqa: E402
 from app.core.auth import pwd_context  # noqa: E402
-from app.core.permisos import MODULOS, ROLES_MODULO  # noqa: E402
-from app.core.usuarios_service import reemplazar_modulos  # noqa: E402
+from app.core.roles_service import reemplazar_roles, rol_con_el_nombre  # noqa: E402
 
 
-def _parse_modulo(valor: str) -> tuple[str, str]:
-    if ":" not in valor:
-        raise argparse.ArgumentTypeError(
-            f"--modulo debe tener formato modulo:rol (recibido {valor!r})"
-        )
-    modulo, rol = valor.split(":", 1)
-    if modulo not in MODULOS:
-        raise argparse.ArgumentTypeError(
-            f"módulo inválido {modulo!r} (válidos: {', '.join(MODULOS)})"
-        )
-    if rol not in ROLES_MODULO:
-        raise argparse.ArgumentTypeError(
-            f"rol inválido {rol!r} para el módulo {modulo!r} (válidos: {', '.join(ROLES_MODULO)})"
-        )
-    return modulo, rol
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Crea o actualiza un usuario del preliquidador")
+def construir_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Crea o actualiza un usuario del Sistema")
     parser.add_argument("--nombre", required=True)
     parser.add_argument("--email", required=True)
     parser.add_argument("--password", required=True)
     parser.add_argument("--rol", default=RolUsuario.USUARIO.value,
-                        choices=["admin", "usuario"])
-    parser.add_argument("--modulo", action="append", type=_parse_modulo, default=[],
-                        metavar="modulo:rol",
-                        help="repetible, p. ej. --modulo preliquidacion:operador")
-    args = parser.parse_args()
+                        choices=["admin", "usuario"],
+                        help="marca global: admin ve todo sin necesitar roles")
+    parser.add_argument("--asignar-rol", action="append", default=[], metavar="NOMBRE",
+                        help='repetible, p. ej. --asignar-rol "Preliquidador" '
+                             "(los que existen: scripts/asignar_rol.py --roles)")
+    return parser
+
+
+def _roles_por_nombre(db, nombres: list[str]) -> tuple[list[Rol], list[str]]:
+    """(roles encontrados, nombres que no existen). Compara como la base: sin
+    distinguir mayúsculas ni acentos."""
+    roles, faltan = [], []
+    for nombre in nombres:
+        rol = rol_con_el_nombre(db, nombre)
+        if rol is None:
+            faltan.append(nombre)
+        else:
+            roles.append(rol)
+    return roles, faltan
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = construir_parser().parse_args(argv)
 
     db = SessionPropia()
     try:
+        roles, faltan = _roles_por_nombre(db, args.asignar_rol)
+        if faltan:
+            existentes = ", ".join(r.nombre for r in db.query(Rol).order_by(Rol.nombre)) or "ninguno"
+            print(
+                f"No existe el rol {', '.join(repr(n) for n in faltan)}. "
+                f"Roles: {existentes}. No se escribió nada.",
+                file=sys.stderr,
+            )
+            return 1
+
         hash_ = pwd_context.hash(args.password)
         usuario = db.query(Usuario).filter(Usuario.email == args.email).first()
         if usuario:
@@ -72,15 +83,19 @@ def main() -> int:
             db.add(usuario)
             accion = "creado"
 
-        if args.modulo:
-            reemplazar_modulos(db, usuario, args.modulo)
+        if args.asignar_rol:
+            motivo = reemplazar_roles(db, usuario, [r.id for r in roles])
+            if motivo:
+                db.rollback()
+                print(f"{motivo} No se escribió nada.", file=sys.stderr)
+                return 1
 
         db.commit()
 
-        modulos_txt = ", ".join(f"{m.modulo}={m.rol}" for m in usuario.modulos) or "ninguno"
+        roles_txt = ", ".join(r.nombre for r in usuario.roles) or "ninguno"
         print(
             f"Usuario {accion}: {args.email} (rol {args.rol}; "
-            f"módulos: {modulos_txt}, id {usuario.id})"
+            f"roles: {roles_txt}, id {usuario.id})"
         )
         return 0
     finally:

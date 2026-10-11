@@ -17,9 +17,9 @@ diferencia entre `_norm` y la collation la pasan, del choque contra la UNIQUE
 ADR-0018).
 
 `crear_rol`, `actualizar_rol` y `borrar_rol` son operaciones completas y hacen
-commit. `reemplazar_roles` sólo deja el cambio en la sesión, como
-`reemplazar_modulos`, para poder usarse dentro de otra operación (el alta en
-lote); el commit es de quien la llama.
+commit. `reemplazar_roles` sólo deja el cambio en la sesión, para poder usarse
+dentro de otra operación (el alta en lote, los scripts de consola); el commit
+es de quien la llama.
 """
 import unicodedata
 from collections.abc import Iterable
@@ -179,8 +179,7 @@ def actualizar_rol(db: Session, rol: Rol, nombre: str | None, permisos: Permisos
 
     Borra los permisos que se reemplazan y hace flush antes de insertar los
     nuevos: si no, SQLAlchemy inserta antes de borrar y una pantalla que queda
-    choca contra la UNIQUE (rol_id, modulo, pantalla), como en
-    `reemplazar_modulos`."""
+    choca contra la UNIQUE (rol_id, modulo, pantalla)."""
     catalogo = tuple(catalogo)
     motivo = motivo_para_no_guardar(db, nombre, permisos, catalogo, rol_id=rol.id)
     if motivo:
