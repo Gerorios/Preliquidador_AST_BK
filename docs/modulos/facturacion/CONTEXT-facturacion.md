@@ -103,9 +103,11 @@ _Avoid_: traducir por parecido de nombre.
 
 **Unidad de facturación**:
 La medida con que se le factura al Cliente una Línea de comprobante: horas de peón, horas de
-tractor, plantas, hectáreas o tancadas. La elige quien carga la Línea, y decide cuál de las
-cantidades que se cargan en el campo se compara contra lo facturado. Una misma tarea se puede
-facturar en una unidad un mes y en otra el siguiente.
+tractor, plantas, hectáreas o tancadas, y las de cosecha (bins, bins C, bins M y viajes). La
+elige quien carga la Línea, y decide cuál de las cantidades que se cargan en el campo se compara
+contra lo facturado. Una misma tarea se puede facturar en una unidad un mes y en otra el
+siguiente. Lo facturado en una unidad de cosecha queda fuera del Cruce y de las Alertas de
+facturación, porque la cosecha no es parte del módulo.
 _Avoid_: "grupo de facturación" (el nombre del diseño anterior, cuando la unidad era fija por
 tarea); confundirla con el Grupo de pago de Preliquidación (cómo se le paga al trabajador) o con
 el Grupo de tareas (el agrupador funcional).

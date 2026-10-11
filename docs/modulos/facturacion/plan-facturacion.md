@@ -98,8 +98,11 @@ facturado.
   | Plantas | unidades |
   | Hectáreas | unidades |
   | Tancadas | tancadas |
+  | Bins, Bins C, Bins M, Viajes (cosecha) | no entra al Cruce |
 
-  Así una misma tarea se puede facturar por planta un mes y por hora otro, y el Cruce compara
+  Las unidades de cosecha existen para que sus tareas y sus líneas históricas queden con la
+  unidad que usa la planilla; quedan fuera del Cruce y de las Alertas hasta el submódulo de
+  cosecha (decidido el 2026-10-11). Así una misma tarea se puede facturar por planta un mes y por hora otro, y el Cruce compara
   cada vez contra la medida correcta.
 - **Unidad sugerida y No facturable por tarea.** Cada tarea del sistema de campo tiene una
   Unidad sugerida, que precarga la Línea y que el Cruce usa cuando la tarea todavía no tiene
