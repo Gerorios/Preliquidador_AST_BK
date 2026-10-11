@@ -987,3 +987,13 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
     - el hover de un segmento no elegido es más oscuro que "Sin acceso" elegido, y el anillo de foco del segmentado puede quedar recortado por `overflow: hidden`.
 - **Paso 3.9 hecho (FT `6fe442b`):** `PRODUCT.md`, sección Users, con los roles armables, los tres iniciales y el admin como marca global.
 - **Par 2.1 hecho (`a801f1e`).** Preliquidación pide pantalla y nivel en sus 51 rutas, y el mapa lo fija `tests/preliquidacion/test_mapa_permisos.py`. También cambió `test_operador_no_accede_a_vista_gerencial`, que el plan no nombraba: ahora prueba `/api/gerencial/empresas`, porque `/quincenas` es el acceso nuevo de la pregunta 4. La suite da 1113 passed y 1 xfailed.
+- **Paso 3.11, revisión de FT1, ronda 1 (2026-10-11):** 0 urgent, 0 high, 7 minor y 6 descartados. Sin arreglos, así que no hay ronda 2. Falta el smoke 3.10; si deja arreglos, se revisan sólo esos.
+  - Minors, sin tocar:
+    - `authStore.actualizarUsuario` fusiona `{...s.usuario, ...datos}` y no cumple lo que prometen el comentario de `sesion.js` y `sesion.test.js:42` (que los campos viejos salen). Hoy no falla: login y `/me` devuelven las mismas claves.
+    - "Cargando roles…" con un spinner dentro del formulario y no con `CargandoContenido` (GUIA-MODULOS, regla 21).
+    - `rol === 'admin'` y los niveles `'ver'`/`'editar'` están repetidos como literales.
+    - `enumerar` está duplicada, igual que las casillas de roles y el filtro de marcados.
+    - `delCatalogo` no tiene test.
+    - `terceros/rutas.jsx` perdió la alineación en columnas.
+    - `PRODUCT.md` dice que quien sólo ve "no encuentra los botones de cambiar", y eso todavía no vale en Terceros (riesgo 9) ni en Preliquidación hasta FT2.
+  - Para el smoke 3.10: esperar más de un minuto (`staleTime`) antes de volver a la pestaña del Gerente.
