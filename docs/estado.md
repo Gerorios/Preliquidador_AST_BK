@@ -24,7 +24,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK del usuario y no se deploya solo (requiere `core/002`; el deploy es uno solo con BK2, FT1 y FT2). En el backend, BK2 par 2.1 (los endpoints de Preliquidación pasan a pantallas) en la rama `feature/permisos-bk2`; siguen 2.2 (Terceros, con aviso a Pitu) a 2.8. En el front, FT1 tiene hecha la crítica y la auditoría (29/40 y 17/20) y está en el pulido; después `PRODUCT.md` (3.9) y el smoke 3.10, que crea roles y usuarios de prueba en `testing` y espera el OK del usuario.
+Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK del usuario y no se deploya solo (requiere `core/002`; el deploy es uno solo con BK2, FT1 y FT2). BK2 (rama `feature/permisos-bk2`): pasos 2.1 a 2.7 hechos (2.6 antes que 2.5, con OK); en 2.8, la revisión de dos ejes (Spec sin faltantes) pasa por el verificador, y después se abre el PR. FT1 terminado: pulido, `PRODUCT.md` y revisión; falta abrir su PR. El smoke 3.10 se hizo sólo por API contra `testing` (cada rol llega a lo que dice la tabla; usuarios de prueba borrados); lo visual se mira en el sitio real después del deploy. Después: FT2 (modo Ver en las pantallas de Preliquidación).
 
 ## Pendientes del usuario
 
@@ -37,7 +37,7 @@ Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK 
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
-- Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82). En el BK1 (rama `feature/permisos-pantallas`), Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py` y `__init__.py`, y en el front cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla.
+- Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82). En el BK1 (rama `feature/permisos-pantallas`), Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py` y `__init__.py`, y en el front cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla. En el BK2 (rama `feature/permisos-bk2`), cada ruta de Terceros pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); las filas 25 y 28 del plan van con el mapeo propuesto y conviene que las confirme; sus tests usan el rol "Liquidador de terceros"; si tiene ramas abiertas sobre `terceros.py`, coordinar antes del merge.
 
 ## A futuro
 
