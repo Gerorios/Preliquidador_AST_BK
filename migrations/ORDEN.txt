@@ -49,3 +49,4 @@ terceros/007_cuotas_repuesto.sql
 
 # Núcleo: roles armables con permisos por pantalla (ADR-0020).
 core/002_roles_y_permisos.sql
+core/003_borrar_usuario_modulo.sql
