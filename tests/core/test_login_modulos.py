@@ -1,5 +1,5 @@
-"""El login y /me devuelven rol global + modulos + permisos (ADR-0020; `modulos`
-sale en BK2); usuario inactivo no entra."""
+"""El login y /me devuelven rol global + permisos por pantalla (ADR-0020), sin
+el esquema anterior por módulo; usuario inactivo no entra."""
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,7 +8,7 @@ import pytest
 
 from app.core.database import Base, get_db_propia
 from app.core.auth import pwd_context
-from app.core.models import Rol, RolPermiso, Usuario, UsuarioModulo
+from app.core.models import Rol, RolPermiso, Usuario
 from app.main import app
 from tests.roles_de_prueba import SEMILLA
 
@@ -26,7 +26,6 @@ def db():
     Base.metadata.create_all(engine)
     s = sessionmaker(bind=engine)()
     u = Usuario(nombre="Liq", email="liq@t.com", password=pwd_context.hash("x"), rol="usuario", activo=True)
-    u.modulos.append(UsuarioModulo(modulo="preliquidacion", rol="operador"))
     # Dos roles que se pisan en Conceptos: los permisos se suman en la persona.
     preliquidador, gerente = _rol_de_semilla("Preliquidador"), _rol_de_semilla("Gerente")
     u.roles.extend([preliquidador, gerente])
@@ -46,25 +45,20 @@ def _login(c, email):
     return r.json()
 
 
-def test_login_devuelve_modulos(db):
+def test_login_devuelve_el_rol_global(db):
+    assert _login(TestClient(app), "liq@t.com")["usuario"]["rol"] == "usuario"
+    assert _login(TestClient(app), "adm@t.com")["usuario"]["rol"] == "admin"
+
+
+def test_login_y_me_no_devuelven_modulos(db):
+    """El esquema anterior por módulo salió del contrato de sesión (BK2)."""
     c = TestClient(app)
-    body = _login(c, "liq@t.com")
-    assert body["usuario"]["rol"] == "usuario"
-    assert body["usuario"]["modulos"] == {"preliquidacion": "operador"}
-
-
-def test_login_admin_sin_modulos(db):
-    body = _login(TestClient(app), "adm@t.com")
-    assert body["usuario"]["rol"] == "admin"
-    assert body["usuario"]["modulos"] == {}
-
-
-def test_me_devuelve_modulos(db):
-    c = TestClient(app)
-    token = _login(c, "liq@t.com")["access_token"]
-    r = c.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert r.status_code == 200
-    assert r.json()["modulos"] == {"preliquidacion": "operador"}
+    for email in ("liq@t.com", "adm@t.com"):
+        login = _login(c, email)
+        assert "modulos" not in login["usuario"]
+        r = c.get("/api/auth/me", headers={"Authorization": f"Bearer {login['access_token']}"})
+        assert r.status_code == 200
+        assert "modulos" not in r.json()
 
 
 PERMISOS_LIQ = {
@@ -82,8 +76,7 @@ PERMISOS_LIQ = {
 def test_login_devuelve_permisos(db):
     usuario = _login(TestClient(app), "liq@t.com")["usuario"]
     assert usuario["permisos"] == PERMISOS_LIQ
-    # BK1 es aditivo: `modulos` sigue. Los roles de la persona no se devuelven.
-    assert usuario["modulos"] == {"preliquidacion": "operador"}
+    # Los roles de la persona no se devuelven.
     assert "roles" not in usuario
 
 
@@ -94,7 +87,6 @@ def test_me_devuelve_permisos(db):
     assert r.status_code == 200
     body = r.json()
     assert body["permisos"] == PERMISOS_LIQ
-    assert body["modulos"] == {"preliquidacion": "operador"}
     assert "roles" not in body
 
 

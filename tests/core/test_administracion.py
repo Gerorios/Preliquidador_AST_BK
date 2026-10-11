@@ -1,5 +1,6 @@
 """API de Administración: solo admin, alta desde el padrón, roles, reset y
-protecciones (PR 5 etapa 0)."""
+protecciones (PR 5 etapa 0). El alta asigna roles armables (ADR-0020); el
+esquema anterior por módulo ya no está en la API."""
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -9,8 +10,9 @@ from sqlalchemy.pool import StaticPool
 from app.core.auth import invalidar_cache_usuarios, pwd_context
 from app.core.database import Base, get_db_propia, get_db_sueldos
 from app.core.identidad import email_de_cuil
-from app.core.models import Usuario, UsuarioModulo
+from app.core.models import Rol, RolPermiso, Usuario, UsuarioRol
 from app.main import app
+from tests.roles_de_prueba import SEMILLA
 
 CUIL_A = "20111111119"
 CUIL_B = "27222222224"
@@ -24,6 +26,13 @@ PADRON = {
     ],
     "total": 2,
 }
+
+
+def _rol_de_semilla(nombre):
+    """Rol real con los permisos que le da la migración core/002."""
+    return Rol(nombre=nombre, permisos=[
+        RolPermiso(modulo=m, pantalla=p, nivel=n) for r, m, p, n in SEMILLA if r == nombre
+    ])
 
 
 class PadronFalso:
@@ -48,8 +57,8 @@ def db(monkeypatch):
     s = sessionmaker(bind=engine)()
     adm = Usuario(nombre="Adm", email="adm@t.com", password=pwd_context.hash("x"), rol="admin", activo=True)
     op = Usuario(nombre="Op", email="op@t.com", password=pwd_context.hash("x"), rol="usuario", activo=True)
-    op.modulos.append(UsuarioModulo(modulo="preliquidacion", rol="operador"))
-    s.add_all([adm, op]); s.commit()
+    op.roles.append(_rol_de_semilla("Preliquidador"))
+    s.add_all([adm, op, _rol_de_semilla("Liquidador de terceros")]); s.commit()
 
     app.dependency_overrides[get_db_propia] = lambda: s
     app.dependency_overrides[get_db_sueldos] = lambda: None
@@ -59,6 +68,17 @@ def db(monkeypatch):
     # sin esto, el cache de proceso de get_usuario_actual (60s de TTL) puede
     # devolverle a otro archivo de test un Usuario de esta base ya cerrada.
     invalidar_cache_usuarios()
+
+
+def _rol_id(db, nombre):
+    return db.query(Rol).filter(Rol.nombre == nombre).one().id
+
+
+def _roles_en_la_base(db, email):
+    db.expire_all()
+    u = db.query(Usuario).filter(Usuario.email == email).one()
+    return sorted(r.nombre for r in db.query(Rol).join(UsuarioRol, UsuarioRol.rol_id == Rol.id)
+                  .filter(UsuarioRol.usuario_id == u.id))
 
 
 def _token(c, email):
@@ -74,20 +94,34 @@ def test_un_no_admin_recibe_403_en_todos_los_endpoints(db):
     llamadas = [
         c.get("/api/admin/usuarios", headers=h),
         c.get("/api/admin/padron", params={"q": "gomez"}, headers=h),
-        c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario", "modulos": {}}, headers=h),
+        c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario", "roles": []}, headers=h),
         c.patch(f"/api/admin/usuarios/{op_id}", json={"nombre": "X"}, headers=h),
-        c.put(f"/api/admin/usuarios/{op_id}/modulos", json={"modulos": {}}, headers=h),
+        c.put(f"/api/admin/usuarios/{op_id}/roles", json={"roles": []}, headers=h),
         c.post(f"/api/admin/usuarios/{op_id}/password", json={}, headers=h),
     ]
     assert [r.status_code for r in llamadas] == [403] * 6
 
 
-def test_lista_usuarios_con_sus_modulos(db):
+def test_la_ruta_de_modulos_ya_no_existe(db):
+    """El esquema por módulo salió de la API (ADR-0020): los roles de una
+    persona se cambian con PUT /usuarios/{id}/roles."""
+    c = TestClient(app)
+    op_id = db.query(Usuario).filter(Usuario.email == "op@t.com").one().id
+    r = c.put(f"/api/admin/usuarios/{op_id}/modulos",
+              json={"modulos": {"terceros": "operador"}},
+              headers=_token(c, "adm@t.com"))
+    assert r.status_code == 404
+
+
+def test_lista_usuarios_con_sus_roles(db):
     c = TestClient(app)
     r = c.get("/api/admin/usuarios", headers=_token(c, "adm@t.com"))
     assert r.status_code == 200
     por_email = {u["email"]: u for u in r.json()}
-    assert por_email["op@t.com"]["modulos"] == {"preliquidacion": "operador"}
+    assert por_email["op@t.com"]["roles"] == [
+        {"id": _rol_id(db, "Preliquidador"), "nombre": "Preliquidador"}]
+    assert por_email["adm@t.com"]["roles"] == []
+    assert all("modulos" not in u for u in r.json())
     assert por_email["adm@t.com"]["rol"] == "admin"
     assert por_email["adm@t.com"]["cuil"] is None      # mail real
 
@@ -95,7 +129,7 @@ def test_lista_usuarios_con_sus_modulos(db):
 def test_padron_marca_a_quien_ya_tiene_usuario(db):
     c = TestClient(app)
     h = _token(c, "adm@t.com")
-    c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario", "modulos": {}}, headers=h)
+    c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario", "roles": []}, headers=h)
 
     r = c.get("/api/admin/padron", params={"q": "gomez"}, headers=h)
     assert r.status_code == 200
@@ -106,48 +140,55 @@ def test_padron_marca_a_quien_ya_tiene_usuario(db):
 
 def test_alta_en_lote_crea_los_dos_con_los_mismos_roles(db):
     c = TestClient(app)
+    roles = [_rol_id(db, "Liquidador de terceros"), _rol_id(db, "Preliquidador")]
     r = c.post("/api/admin/usuarios",
-               json={"cuils": [CUIL_A, CUIL_B], "rol_global": "usuario",
-                     "modulos": {"terceros": "operador"}},
+               json={"cuils": [CUIL_A, CUIL_B], "rol_global": "usuario", "roles": roles},
                headers=_token(c, "adm@t.com"))
     assert r.status_code == 200, r.text
     assert len(r.json()["creados"]) == 2
     assert r.json()["omitidos"] == []
     for cuil in (CUIL_A, CUIL_B):
-        u = db.query(Usuario).filter(Usuario.email == email_de_cuil(cuil)).one()
-        assert {m.modulo: m.rol for m in u.modulos} == {"terceros": "operador"}
+        assert _roles_en_la_base(db, email_de_cuil(cuil)) == ["Liquidador de terceros", "Preliquidador"]
 
 
-def test_alta_rechaza_modulo_o_rol_inexistente(db):
+def test_alta_sin_roles_crea_a_la_persona_sin_roles(db):
     c = TestClient(app)
-    h = _token(c, "adm@t.com")
-    r1 = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario",
-                                             "modulos": {"inventado": "operador"}}, headers=h)
-    r2 = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario",
-                                             "modulos": {"terceros": "jefe"}}, headers=h)
-    r3 = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "rey",
-                                             "modulos": {}}, headers=h)
-    assert [r1.status_code, r2.status_code, r3.status_code] == [400, 400, 400]
+    r = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario"},
+               headers=_token(c, "adm@t.com"))
+    assert r.status_code == 200, r.text
+    assert len(r.json()["creados"]) == 1
+    assert _roles_en_la_base(db, email_de_cuil(CUIL_A)) == []
+
+
+def test_alta_con_un_rol_inexistente_responde_400_sin_crear_a_nadie(db):
+    """Mismo criterio y texto que PUT /usuarios/{id}/roles."""
+    c = TestClient(app)
+    r = c.post("/api/admin/usuarios",
+               json={"cuils": [CUIL_A, CUIL_B], "rol_global": "usuario",
+                     "roles": [_rol_id(db, "Preliquidador"), 999]},
+               headers=_token(c, "adm@t.com"))
+    assert r.status_code == 400
+    assert r.json()["detail"] == "No existe el rol con id 999."
+    db.expire_all()
+    emails = [email_de_cuil(CUIL_A), email_de_cuil(CUIL_B)]
+    assert db.query(Usuario).filter(Usuario.email.in_(emails)).count() == 0
+
+
+def test_alta_rechaza_rol_global_inexistente(db):
+    c = TestClient(app)
+    r = c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "rey", "roles": []},
+               headers=_token(c, "adm@t.com"))
+    assert r.status_code == 400
 
 
 def test_alta_omite_a_quien_no_esta_en_el_padron(db):
     c = TestClient(app)
     r = c.post("/api/admin/usuarios",
-               json={"cuils": ["20999999997"], "rol_global": "usuario", "modulos": {}},
+               json={"cuils": ["20999999997"], "rol_global": "usuario", "roles": []},
                headers=_token(c, "adm@t.com"))
     assert r.status_code == 200
     assert r.json()["creados"] == []
     assert r.json()["omitidos"] == [{"cuil": "20999999997", "motivo": "no está en el padrón"}]
-
-
-def test_cambiar_roles_por_modulo(db):
-    c = TestClient(app)
-    op_id = db.query(Usuario).filter(Usuario.email == "op@t.com").one().id
-    r = c.put(f"/api/admin/usuarios/{op_id}/modulos",
-              json={"modulos": {"terceros": "gerente"}},
-              headers=_token(c, "adm@t.com"))
-    assert r.status_code == 200, r.text
-    assert r.json()["modulos"] == {"terceros": "gerente"}
 
 
 def test_desactivar_a_otro_y_que_no_pueda_loguearse(db):
@@ -174,7 +215,7 @@ def test_las_protecciones_de_admin_devuelven_400(db):
 def test_reset_de_password_devuelve_el_cuil(db):
     c = TestClient(app)
     h = _token(c, "adm@t.com")
-    c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario", "modulos": {}}, headers=h)
+    c.post("/api/admin/usuarios", json={"cuils": [CUIL_A], "rol_global": "usuario", "roles": []}, headers=h)
     nuevo_id = db.query(Usuario).filter(Usuario.email == email_de_cuil(CUIL_A)).one().id
 
     r = c.post(f"/api/admin/usuarios/{nuevo_id}/password", json={}, headers=h)

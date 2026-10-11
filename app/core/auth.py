@@ -37,7 +37,6 @@ class UsuarioMe(BaseModel):
     nombre: str
     email: str
     rol: str
-    modulos: dict[str, str]  # esquema anterior (ADR-0013); sale en BK2
     permisos: dict[str, dict[str, str]]  # {modulo: {pantalla: 'ver' | 'editar'}}
 
 
@@ -201,11 +200,6 @@ def login(
     limitador_login.exito(clave)
     token = crear_token({"sub": usuario.id})
 
-    # Import local: app.core.permisos importa get_usuario_actual de este
-    # módulo a nivel de módulo, así que un import arriba de auth.py crearía
-    # un ciclo.
-    from app.core.permisos import modulos_de
-
     return TokenResponse(
         access_token=token,
         usuario={
@@ -213,7 +207,6 @@ def login(
             "nombre": usuario.nombre,
             "email": usuario.email,
             "rol": usuario.rol,
-            "modulos": modulos_de(usuario),
             "permisos": _permisos_de_sesion(usuario),
             "password_inicial": _password_es_la_inicial(usuario),
         }
@@ -222,15 +215,11 @@ def login(
 
 @router.get("/me", response_model=UsuarioMe)
 def me(usuario: Usuario = Depends(get_usuario_actual)):
-    # Import local: ver comentario en login().
-    from app.core.permisos import modulos_de
-
     return UsuarioMe(
         id=usuario.id,
         nombre=usuario.nombre,
         email=usuario.email,
         rol=usuario.rol,
-        modulos=modulos_de(usuario),
         permisos=_permisos_de_sesion(usuario),
     )
 

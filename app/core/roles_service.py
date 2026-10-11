@@ -221,15 +221,25 @@ def borrar_rol(db: Session, rol: Rol) -> str | None:
     return None
 
 
-def reemplazar_roles(db: Session, usuario: Usuario, rol_ids: Iterable[int]) -> str | None:
-    """Deja a la persona con exactamente esos roles. Un id repetido cuenta una
-    vez. Si algún id no existe no cambia nada y devuelve el motivo. No hace
-    commit (ver la cabecera)."""
+def buscar_roles(db: Session, rol_ids: Iterable[int]) -> tuple[list[Rol], str | None]:
+    """(roles, None) con esos ids, en ese orden y sin repetir, o ([], motivo) si
+    alguno no existe. Es el criterio y el texto de `reemplazar_roles` y del
+    alta en lote (`usuarios_service.crear_usuarios_lote`)."""
     ids = list(dict.fromkeys(rol_ids))
     por_id = {r.id: r for r in db.query(Rol).filter(Rol.id.in_(ids)).all()} if ids else {}
     for rol_id in ids:
         if rol_id not in por_id:
-            return f"No existe el rol con id {rol_id}."
-    usuario.roles = [por_id[i] for i in ids]
+            return [], f"No existe el rol con id {rol_id}."
+    return [por_id[i] for i in ids], None
+
+
+def reemplazar_roles(db: Session, usuario: Usuario, rol_ids: Iterable[int]) -> str | None:
+    """Deja a la persona con exactamente esos roles. Un id repetido cuenta una
+    vez. Si algún id no existe no cambia nada y devuelve el motivo. No hace
+    commit (ver la cabecera)."""
+    roles, motivo = buscar_roles(db, rol_ids)
+    if motivo:
+        return motivo
+    usuario.roles = roles
     db.flush()
     return None
