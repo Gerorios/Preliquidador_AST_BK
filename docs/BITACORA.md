@@ -3053,3 +3053,39 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - `docs/modulos/GUIA-MODULOS.md` todavía describe `operador`/`gerente`; cambia en el PR de
   la implementación.
 - Avisarle a Pitu del cambio en el glosario de Terceros (en `docs/estado.md`).
+
+## 2026-10-11 — Agentes en Haiku 5.5: entran y se revierten el mismo día
+
+**Mergeado**
+- PR #84 (backend, merge `a03fc6a`) — agentes `Explore` y `corredor-tests` en Haiku 5.5,
+  sección de cuándo usarlos en `flujo-preliquidacion`, línea en `CLAUDE.md` y el plan
+  `docs/superpowers/plans/2026-10-11-agentes-haiku.md`.
+- PR #68 (frontend, merge `e31b9e9`) — hermano: copia idéntica de los dos agentes y línea en
+  `CLAUDE.md`.
+- PR #85 (backend, merge `41b521e`) — revierte el BK #84: saca los dos agentes, la sección
+  de la skill y la línea de `CLAUDE.md`. El plan queda, con una sección "Revertido" con la
+  medición.
+- PR #69 (frontend, merge `003f569`) — revierte el FT #68.
+
+**Por frontera**
+- Docs: al final del día, sin cambios netos en agentes, skill ni `CLAUDE.md` de los dos
+  repos (la skill queda igual a la de antes del BK #84); queda el plan con su nota de
+  revertido. Vuelven el Explore integrado y la suite corrida por la sesión.
+- Docs: el BK #84 salió del `main` local y llevó a `origin/main` 11 commits de bitácora y
+  estado que estaban sólo en el `main` local; el revert no los tocó.
+
+**Decisiones**
+- Pasar a Haiku 5.5 sólo las tareas sin juicio (buscar y correr tests); `planificador`,
+  `ejecutor`, revisores y `verificador-review` quedaban como estaban. Porqué: el Explore
+  integrado corre en el modelo de la sesión y Haiku cuesta una fracción. Descartado:
+  `CLAUDE_CODE_SUBAGENT_MODEL=haiku` global, que movería también a los revisores.
+- Revertir y dejar todo en Opus. Porqué: medido después del merge (una corrida cada uno), la
+  misma búsqueda con `Explore` en Haiku tardó 272 s y trajo 41 archivos con ruido y sin
+  `claves.js`, contra 230 s y 28 archivos sin ruido en Opus; bajaba el costo (USD 0,41
+  contra 1,30), pero al usuario le importan el tiempo y la precisión, y `corredor-tests` no
+  cambia el tiempo, que lo pone pytest. Decisión del usuario. Descartado: probar `Explore`
+  en Sonnet 5.5.
+
+**Estado**
+- Deploy: no aplica (no corre en el servidor).
+- Migraciones: ninguna.

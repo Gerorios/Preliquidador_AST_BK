@@ -21,9 +21,6 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
   permisos (ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
   el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
   locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
-- Agentes en Haiku 5.5, `Explore` y `corredor-tests` (carril corto, los dos repos). Plan
-  aprobado el 2026-10-11: `docs/superpowers/plans/2026-10-11-agentes-haiku.md` (rama
-  `chore/agentes-haiku`, worktrees `.claude/worktrees/agentes-haiku`). Fase: ejecución.
 
 ## Próximo paso
 
