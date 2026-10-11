@@ -25,7 +25,7 @@ Las Pantallas del módulo y qué es ver y qué es editar en cada una (Pantalla y
 - **Cruce**: solo ver.
 - **Comprobantes**: ver los Comprobantes y sus Adjuntos; editar es cargarlos, editarlos,
   adjuntar e importar Órdenes de facturación.
-- **Unidad de facturación**: ver la Unidad sugerida de cada tarea, su marca No facturable y el
+- **Unidad de medida por defecto**: ver la Unidad sugerida de cada tarea, su marca No facturable y el
   Umbral de diferencia; editar es cambiarlos.
 - **Equivalencias**: ver las Equivalencias de cada Cliente; editar es crearlas y cambiarlas.
 - **Panel**: solo ver.

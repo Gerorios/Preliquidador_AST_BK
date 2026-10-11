@@ -49,7 +49,7 @@ En el orden de las etapas del módulo.
     sugerida de la tarea y editable, finca opcional, cantidad, precio, importe calculado),
     pensada para copiar mirando el PDF con Tab. Lo típico es de 1 a 15 líneas.
   - Adjuntos: subir, ver y quitar. La Nota de crédito se muestra con importe negativo.
-- **Unidad de facturación**: la lista de tareas del sistema de campo con su Unidad sugerida y
+- **Unidad de medida por defecto**: la lista de tareas del sistema de campo con su Unidad sugerida y
   su marca No facturable, editables. Las tareas facturables sin Unidad sugerida aparecen
   primero. Desde la etapa 3, también el Umbral de diferencia (en Pendientes sólo se ve).
 - **Equivalencias**: por Cliente, el texto con que el cliente nombra la tarea → tarea del

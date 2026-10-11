@@ -170,13 +170,13 @@ ellas. Reemplazan a las tres capacidades del diseño original (consultar, cargar
 | **Pendientes** | las Alertas de facturación | marcarlas como revisadas |
 | **Cruce** | sí | — (sólo Ver) |
 | **Comprobantes** | los Comprobantes y sus Adjuntos | cargar y editar, adjuntar e importar Órdenes de facturación |
-| **Unidad de facturación** | la Unidad sugerida, No facturable y el Umbral de diferencia | cambiarlos |
+| **Unidad de medida por defecto** | la Unidad sugerida, No facturable y el Umbral de diferencia | cambiarlos |
 | **Equivalencias** | las Equivalencias por Cliente | crearlas y cambiarlas |
 | **Panel** | sí | — (sólo Ver) |
 
 - **Importar orden va dentro de Comprobantes**, no como pantalla propia: importar es otra
   forma de crear Comprobantes, y separarlas permitiría importar sin poder cargar a mano.
-- **El Umbral se edita en Unidad de facturación**, no en Pendientes: quien marca Alertas
+- **El Umbral se edita en Unidad de medida por defecto**, no en Pendientes: quien marca Alertas
   revisadas no puede subir el Umbral para hacerlas desaparecer.
 - **El Mes de corte es fijo** (octubre de 2026), no un dato editable.
 - **El módulo no crea roles.** Al activarlo, el admin arma desde la Administración el rol de
@@ -198,9 +198,9 @@ Cada etapa es un par de PRs hermanos (backend y frontend). Deploy sólo con OK.
 
 | Etapa | Qué entra | Se da por buena cuando |
 |---|---|---|
-| **1** | El módulo registrado y activo, con sus pantallas. La **Unidad sugerida** y la marca **No facturable** de cada tarea, con su primera carga y la pantalla Unidad de facturación. `PRODUCT.md` del front con las contadoras y el módulo. | Cada tarea tiene Unidad sugerida o es No facturable, y las que no tienen nada se ven primero. |
+| **1** | El módulo registrado y activo, con sus pantallas. La **Unidad sugerida** y la marca **No facturable** de cada tarea, con su primera carga y la pantalla Unidad de medida por defecto. `PRODUCT.md` del front con las contadoras y el módulo. | Cada tarea tiene Unidad sugerida o es No facturable, y las que no tienen nada se ven primero. |
 | **2** | **Comprobantes** (Factura y Nota de crédito, cabecera y líneas), **Adjuntos** en la carpeta del VPS y la **migración del histórico**, re-ejecutable. | El histórico migrado suma lo mismo que la planilla, por Cliente y mes. |
-| **3** | **Cruce** (con el detalle hasta el parte de campo) y **Alertas de facturación** con Alerta revisada, Umbral (editable en Unidad de facturación) y Mes de corte. Pantallas Pendientes y Cruce. | El Cruce da los mismos números que el informe de Power BI para los meses ya cerrados, salvo las diferencias explicadas en la sección 4. |
+| **3** | **Cruce** (con el detalle hasta el parte de campo) y **Alertas de facturación** con Alerta revisada, Umbral (editable en Unidad de medida por defecto) y Mes de corte. Pantallas Pendientes y Cruce. | El Cruce da los mismos números que el informe de Power BI para los meses ya cerrados, salvo las diferencias explicadas en la sección 4. |
 | **4** | **Importador del primer cliente con portal** (formato nuevo) y **Equivalencias** por Cliente, con su primera carga. **Las contadoras dejan la planilla.** | Una orden real se importa completa, y cada renglón sin Equivalencia frena hasta definirla. |
 | **5** | **Importador del segundo cliente con portal** y **Panel** de lo facturado por Cliente y grupo de tareas. | Lo mismo que la etapa 4 para el segundo formato. |
 
