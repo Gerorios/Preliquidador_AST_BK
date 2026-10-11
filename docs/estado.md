@@ -12,9 +12,9 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
   aprobado el 2026-10-09: `docs/superpowers/plans/2026-10-09-esquema-permisos.md` (en la rama
   `feature/permisos-pantallas`, worktrees `.claude/worktrees/permisos-pantallas` de los dos
   repos), con 4 PRs (BK1, BK2, FT1, FT2) y un solo deploy. Fase: etapa 1 (BK1) y etapa 3
-  (FT1) en paralelo. BK1 tiene commiteados los pares 1.1 a 1.8 (hasta la API de roles);
-  la migración `core/002` ya se aplicó en `testing` (2026-10-09). FT1 tiene commiteado todo
-  lo que no necesitaba la API; falta probarlo en el navegador. `docs/modulos/GUIA-MODULOS.md`
+  (FT1) en paralelo. BK1 está completo y revisado; la migración `core/002` ya se aplicó en
+  `testing` (2026-10-09). FT1 tiene commiteado todo lo que no necesitaba la API y se miró
+  en el navegador como admin. `docs/modulos/GUIA-MODULOS.md`
   todavía describe `operador`/`gerente` y la "etiqueta de rol": cambia en el BK2.
 - Módulo Facturación (carril completo, sin código): espera la implementación del esquema de
   permisos (ADR-0020; su plan cambia las "capacidades" por pantallas); el refinamiento, que también esperaba, ya se entregó y deployó (2026-10-09). Después: plan de implementación con
@@ -26,7 +26,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Esquema de permisos, retomar en el paso 1.10 (pausa del 2026-10-09): BK1 tiene commiteados los pasos 1.1 a 1.9 y la suite completa da 1107 passed y 1 xfailed. La revisión de código de BK1 quedó en la primera ronda: los dos ejes ya reportaron (copiados en la sección 9 del plan, "Paso 1.10"); falta pasarlos por `verificador-review`, arreglar los urgent y high, hacer la segunda ronda sólo sobre los arreglos y abrir el PR (el merge, con OK del usuario). En el front, FT1 ya se miró en el navegador como admin, en sólo lectura: Administración con sus dos solapas y la validación del editor andan. Falta `/impeccable critique`, `audit` y `polish`, `PRODUCT.md` (3.9) y el smoke 3.10, que crea roles y usuarios de prueba en `testing` y espera el OK del usuario.
+Esquema de permisos: BK1 terminado y revisado (2026-10-11), con 2 rondas: 1 high arreglado (paso R1, 409 en lugar de 500 cuando el nombre choca con la UNIQUE) y 10 minors sin tocar, anotados en la sección 9 del plan. La suite da 1111 passed y 1 xfailed. Espera el OK del usuario para abrir el PR de BK1; el merge, con otro OK. No se deploya solo: requiere `core/002`, y el deploy es uno solo con BK2, FT1 y FT2. En el front, FT1 ya se miró en el navegador como admin, en sólo lectura: Administración con sus dos solapas y la validación del editor andan. Falta `/impeccable critique`, `audit` y `polish`, `PRODUCT.md` (3.9) y el smoke 3.10, que crea roles y usuarios de prueba en `testing` y espera el OK del usuario.
 
 ## Pendientes del usuario
 
@@ -44,7 +44,7 @@ Esquema de permisos, retomar en el paso 1.10 (pausa del 2026-10-09): BK1 tiene c
 - Mirar en el sitio real Verificación y Gerencial con el arreglo del FT #65; el aviso de error se ve sólo si falla una carga (deploy del 2026-10-09).
 - Mirar en el sitio real las etiquetas con texto oscuro, el aviso de error rojo y la barra de filtros alineada (deploy del 2026-10-09).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
-- Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82).
+- Avisarle a Pitu que el glosario de Terceros (`docs/modulos/terceros/CONTEXT-terceros.md`) suma la lista de sus cinco pantallas con qué es ver y editar, y que el esquema nuevo de permisos va a cambiar cómo se protegen las rutas y los endpoints de Terceros (BK #82). En el BK1 (rama `feature/permisos-pantallas`), Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py` y `__init__.py`, y en el front cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla.
 
 ## A futuro
 
