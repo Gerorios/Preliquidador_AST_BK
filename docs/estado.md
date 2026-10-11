@@ -12,8 +12,9 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
   aprobado el 2026-10-09: `docs/superpowers/plans/2026-10-09-esquema-permisos.md` (en la rama
   `feature/permisos-pantallas`, worktrees `.claude/worktrees/permisos-pantallas` de los dos
   repos), con 4 PRs (BK1, BK2, FT1, FT2) y un solo deploy. Fase: etapa 1 (BK1) y etapa 3
-  (FT1) en paralelo. BK1 está completo y revisado; la migración `core/002` ya se aplicó en
-  `testing` (2026-10-09). FT1 tiene commiteado todo lo que no necesitaba la API y se miró
+  (FT1) en paralelo. BK1 está completo y revisado, en el PR #83 (sin mergear); la migración `core/002` ya se
+  aplicó en `testing` (2026-10-09). BK2 en curso en la rama `feature/permisos-bk2`, que sale
+  de BK1. FT1 tiene commiteado todo lo que no necesitaba la API y se miró
   en el navegador como admin. `docs/modulos/GUIA-MODULOS.md`
   todavía describe `operador`/`gerente` y la "etiqueta de rol": cambia en el BK2.
 - Módulo Facturación (carril completo, sin código): espera la implementación del esquema de
@@ -26,7 +27,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Esquema de permisos: BK1 terminado y revisado (2026-10-11), con 2 rondas: 1 high arreglado (paso R1, 409 en lugar de 500 cuando el nombre choca con la UNIQUE) y 10 minors sin tocar, anotados en la sección 9 del plan. La suite da 1111 passed y 1 xfailed. Espera el OK del usuario para abrir el PR de BK1; el merge, con otro OK. No se deploya solo: requiere `core/002`, y el deploy es uno solo con BK2, FT1 y FT2. En el front, FT1 ya se miró en el navegador como admin, en sólo lectura: Administración con sus dos solapas y la validación del editor andan. Falta `/impeccable critique`, `audit` y `polish`, `PRODUCT.md` (3.9) y el smoke 3.10, que crea roles y usuarios de prueba en `testing` y espera el OK del usuario.
+Esquema de permisos (2026-10-11): BK1 está en el PR #83; el merge espera el OK del usuario y no se deploya solo (requiere `core/002`; el deploy es uno solo con BK2, FT1 y FT2). En el backend, BK2 par 2.1 (los endpoints de Preliquidación pasan a pantallas) en la rama `feature/permisos-bk2`; siguen 2.2 (Terceros, con aviso a Pitu) a 2.8. En el front, FT1 tiene hecha la crítica y la auditoría (29/40 y 17/20) y está en el pulido; después `PRODUCT.md` (3.9) y el smoke 3.10, que crea roles y usuarios de prueba en `testing` y espera el OK del usuario.
 
 ## Pendientes del usuario
 
