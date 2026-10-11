@@ -19,6 +19,17 @@ dónde se facturó de más o de menos. Cubre las tareas agrícolas; la cosecha q
 _Avoid_: confundirlo con el resultado operativo (facturación menos mano de obra y
 combustible), que consolida varios módulos y no es parte de este.
 
+**Pantallas de Facturación**:
+Las Pantallas del módulo y qué es ver y qué es editar en cada una (Pantalla y Permiso están en `CONTEXT.md`):
+- **Pendientes**: ver las Alertas de facturación; editar es marcarlas como revisadas.
+- **Cruce**: solo ver.
+- **Comprobantes**: ver los Comprobantes y sus Adjuntos; editar es cargarlos, editarlos,
+  adjuntar e importar Órdenes de facturación.
+- **Unidad de facturación**: ver la Unidad sugerida de cada tarea, su marca No facturable y el
+  Umbral de diferencia; editar es cambiarlos.
+- **Equivalencias**: ver las Equivalencias de cada Cliente; editar es crearlas y cambiarlas.
+- **Panel**: solo ver.
+
 **Cliente**:
 La empresa para la que el grupo trabaja en sus fincas, tal como figura en el maestro de
 clientes del sistema de campo. Es el mismo Cliente que usan las tareas y la preliquidación.
@@ -53,8 +64,8 @@ Líneas restan en el Cruce.
 
 **Línea de comprobante**:
 Un renglón del Comprobante traducido al lenguaje del campo: fecha, tarea del sistema de campo,
-cantidad, precio unitario e importe neto (sin IVA). La finca es opcional. La fecha puede ser
-cualquier día del mes: no está atada a una quincena.
+Unidad de facturación, cantidad, precio unitario e importe neto (sin IVA). La finca es
+opcional. La fecha puede ser cualquier día del mes: no está atada a una quincena.
 _Avoid_: el texto con que el cliente nombra la tarea; eso es lo que traduce la Equivalencia.
 
 **Adjunto**:
@@ -90,17 +101,30 @@ _Avoid_: traducir por parecido de nombre.
 
 ## El control
 
-**Grupo de facturación**:
-El atributo de cada tarea del sistema de campo que dice con qué medida se le factura al
-cliente: horas de peón, horas de tractor, plantas, hectáreas o tancadas, o que no se factura.
-Decide cuál de las cantidades que se cargan en el campo se compara contra lo facturado.
-_Avoid_: confundirlo con el Grupo de pago de Preliquidación (cómo se le paga al trabajador) o
-con el Grupo de tareas (el agrupador funcional).
+**Unidad de facturación**:
+La medida con que se le factura al Cliente una Línea de comprobante: horas de peón, horas de
+tractor, plantas, hectáreas o tancadas. La elige quien carga la Línea, y decide cuál de las
+cantidades que se cargan en el campo se compara contra lo facturado. Una misma tarea se puede
+facturar en una unidad un mes y en otra el siguiente.
+_Avoid_: "grupo de facturación" (el nombre del diseño anterior, cuando la unidad era fija por
+tarea); confundirla con el Grupo de pago de Preliquidación (cómo se le paga al trabajador) o con
+el Grupo de tareas (el agrupador funcional).
+
+**Unidad sugerida**:
+La Unidad de facturación que cada tarea del sistema de campo trae por defecto: precarga la
+Línea de comprobante al elegir la tarea, y es la que usa el Cruce para una tarea que todavía no
+tiene Líneas en el rango. No obliga: la Línea puede facturar en otra. Una tarea facturable sin
+Unidad sugerida genera un aviso.
+
+**No facturable**:
+La marca de una tarea del sistema de campo que no se le factura a ningún Cliente (por ejemplo,
+una tarea interna). No entra al Cruce ni a las Alertas de facturación.
 
 **Cantidad del campo**:
-Lo trabajado para un Cliente según el sistema de campo, medido en la unidad que fija el Grupo
-de facturación de cada tarea. En el campo una misma tarea se carga con varias medidas a la vez
-(horas de peón, horas de máquina, plantas, tancadas); sólo una cuenta para facturar.
+Lo trabajado para un Cliente según el sistema de campo, medido en la Unidad de facturación de
+lo facturado, o en la Unidad sugerida de la tarea si todavía no hay nada facturado. En el campo
+una misma tarea se carga con varias medidas a la vez (horas de peón, horas de máquina, plantas,
+tancadas); sólo una cuenta para facturar.
 _Avoid_: "cantidad LA", "cantidad final" (los nombres del informe anterior).
 
 **Cruce**:
