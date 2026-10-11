@@ -960,3 +960,21 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
     - el mensaje del choque muestra el nombre pedido;
     - el monkeypatch está repetido en los tests, y no hay un test de `uq_rol_permiso` que dé 500.
   - Revisión cerrada: 1 high arreglado y 10 minor sin tocar, 6 de la ronda 1 y 4 de la ronda 2.
+- **Paso 3.8, `/impeccable critique` y `audit` (2026-10-11, sólo lectura).** La crítica da unos 29/40 y la auditoría 17/20, y el brief del shape está cubierto entero. El detector no encuentra nada en `src/core/administracion`.
+  - **Pulido de FT1 (`/impeccable polish`)**, en este orden:
+    1. Foco a la confirmación: `autoFocus` en "Sí, guardar" y en el "Cancelar" de borrar.
+    2. El "Sin acceso" elegido deja de ir relleno oscuro y pasa a un tono neutro, para que lo que más se vea sea lo que el rol da.
+    3. Ayudas de pantalla y cuenta de personas: de 11 px a 12 px.
+    4. La tabla de usuarios con unos 800 px de ancho: `.acciones` corta línea, el select toma ancho automático con un mínimo, y `.celdaRoles` tiene un ancho máximo.
+    5. Filas del editor en grilla (nombre y opciones cerca) o con un ancho máximo para el editor.
+  - **Sin tocar en FT1** (minors):
+    - el motivo que impide guardar no marca la fila culpable;
+    - las solapas no se recorren con flechas;
+    - las opciones van con `aria-pressed` y no como `radiogroup`.
+  - **Deuda previa del núcleo, fuera de FT1:**
+    - "Tipo de usuario" y "Desactivar" se guardan sin confirmar;
+    - `.btn` y `.input` no tienen `:focus-visible`;
+    - `.btn-sm` va en 11 px;
+    - `max-width: 1280px` sin centrar en Administración;
+    - el ámbar de aviso se usa para "editando";
+    - la franja `border-left` en `Inicio.module.css`.
