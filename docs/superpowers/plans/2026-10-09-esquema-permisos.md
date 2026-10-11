@@ -937,3 +937,18 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
     - Dudoso: dos altas simultáneas, o una diferencia entre `_norm` y la collation, chocan con `uq_rol_nombre` como `IntegrityError` y dan 500 en vez de 409.
     - Dudoso: `permisos_de` usa `NIVELES.index(nivel)` sin CHECK en la base, así que un nivel cargado a mano da 500.
     - Proceso: el aviso a Pitu en `estado.md` no nombra la declaración de `PANTALLAS` en Terceros.
+- **Paso 1.10, verificador de la ronda 1:** 0 urgent, 1 high, 7 minor y 9 descartados.
+  - Minors, sin tocar (van al cuerpo del PR):
+    - el asunto de `91fe489` tiene 74 caracteres;
+    - `7342f05` mezcla el plan con código;
+    - `_norm` está copiada de `precios.py`, como deuda;
+    - `NIVELES` está definida dos veces;
+    - "¿es admin?" se repite en tres lugares;
+    - el tipo `dict[str, dict[str, str]]` se escribe a mano y `ModuloInfo.pantallas` es `tuple` a secas;
+    - el aviso a Pitu no nombra `PANTALLAS` en Terceros.
+
+**Paso R1 — 409 y no 500 cuando el nombre choca con `uq_rol_nombre`** (high, ronda 1)
+- Hallazgo: en `crear_rol`/`actualizar_rol` (`app/core/administracion.py`, `app/core/roles_service.py`), el nombre repetido sólo se detecta con la consulta previa. Si el commit choca con la UNIQUE `uq_rol_nombre`, el `IntegrityError` no se atrapa.
+- Escenario: el admin hace doble clic en "Crear rol". Los dos POST validan antes de que exista el rol, y el segundo responde 500 en lugar del 409 que pide el plan. No se corrompe nada.
+- Arreglo mínimo: atrapar `IntegrityError` en esas dos operaciones, hacer rollback y responder 409 con el texto de nombre repetido. Es el mismo patrón que `_es_duplicado` de `precios.py` (ADR-0018).
+- Par: un test que reproduce el choque contra la UNIQUE da rojo (500 o excepción), y después de arreglar da verde con 409.
