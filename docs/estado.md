@@ -6,7 +6,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Etapa 6 del esquema de permisos: borrar `usuario_modulo` (carril completo, hay DDL). Plan aprobado el 2026-10-11: `docs/superpowers/plans/2026-10-11-borrar-usuario-modulo.md` (rama `feature/permisos-etapa6`, worktree `.claude/worktrees/permisos-etapa6`). Fase: ejecución, pasos 6.1 y 6.2. Decidido: el respaldo del VPS se borra junto con el `DROP` en producción.
+- Etapa 6 del esquema de permisos: borrar `usuario_modulo` (carril completo, hay DDL). Plan aprobado el 2026-10-11: `docs/superpowers/plans/2026-10-11-borrar-usuario-modulo.md` (rama `feature/permisos-etapa6`, worktree `.claude/worktrees/permisos-etapa6`). Fase: entrega. Revisión hecha (0 urgent, 0 high, 5 minor en el cuerpo); `DROP` ya aplicado en `testing` (2026-10-11); PR #87 abierto. Decidido: el respaldo del VPS se borra junto con el `DROP` en producción.
 - Módulo Facturación (carril completo, sin código): el esquema de permisos que esperaba
   ya está deployado (2026-10-11; ADR-0020; su plan cambia las "capacidades" por pantallas), igual que el refinamiento (2026-10-09). Sigue: plan de implementación con
   el planificador, a partir de `docs/modulos/facturacion/plan-facturacion.md`, y E1. Notas
@@ -14,7 +14,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Etapa 6 (2026-10-11): pasos 6.1 y 6.2 en ejecución; después, el `DROP` en `testing` (6.3, con OK), la suite y la revisión, el PR y, con OK, el `DROP` en producción. Después, el plan de implementación de Facturación.
+Etapa 6 (2026-10-11): el PR #87 espera el OK del usuario para el merge. Después, con OK, en producción: V4 y su inversa, `DROP`, `git pull` sin reinicio y borrar el respaldo del VPS. El minor 1 del PR (encabezado viejo de `core/002`) conviene corregirlo en un PR chico. Después, el plan de implementación de Facturación.
 
 ## Pendientes del usuario
 
