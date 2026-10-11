@@ -1024,3 +1024,18 @@ Antes de cada pantalla: `impeccable context --target <pantalla>` y craft-floor.
     - El banner de incompletas ya no dice "el maestro" y ofrece "Ir a Conceptos" sólo a quien ve Conceptos.
   - 4.4 (`e22cbcd`): `conceptosSoloLectura.js` lleva 7 tests. "Sin Nuevo" se aplica a **todas** las altas de la pantalla: "Sin concepto", "+ Agregar regla" y la celda "falta". Todas hacen `POST /conceptos`.
   - **Verificación en el navegador con un rol de sólo Ver: no se hace antes del deploy, por decisión del usuario (2026-10-11).** Se mira en el sitio real después, igual que el smoke 3.10.
+- **Etapa 4, `/impeccable critique` y `audit` (2026-10-11, desde el código y sin navegador).** Crítica: 27/40 en la primera pasada y 28/40 con la revisión de diseño completa. Auditoría: 14/20. El detector no encuentra nada.
+  - **Pulido** (FT `1104b86` y `d3cbb8a`):
+    - las filas que no se abren en modo Ver van sin puntero ni fondo al pasar el mouse: "Sin concepto", Por regla, Mantenimiento y Por concepto;
+    - el Inicio sin ningún permiso muestra el subtítulo "Historial de quincenas generadas";
+    - el aviso de incompletas dice "Cargá lo que falta en Conceptos.";
+    - sale `exportar` de `accionesRevision`.
+  - **Etiqueta "Consulta" en modo Ver:** el usuario decidió no ponerla por ahora y mirarlo en el sitio real. Queda en "A futuro" de `estado.md`.
+  - **Minors de diseño, sin tocar:**
+    - la lista de conceptos repetida en el panel de la línea en modo Ver;
+    - el verde de `.precioValor` en las solapas Comunes a Por supervisor;
+    - "sin precio" se ve distinto en Por concepto y en Por regla.
+  - **Deuda previa:**
+    - la regla global `tbody tr { cursor: pointer }`;
+    - las filas de Revisión no se abren con el teclado;
+    - estilos en línea y 11 px en `DataRow` de `PanelLinea`.
