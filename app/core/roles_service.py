@@ -10,7 +10,11 @@ editor de roles del front (`src/core/administracion/roles.js`,
 El catálogo de pantallas llega por parámetro (los `ModuloInfo` activos) porque
 el núcleo no importa módulos. Para la API: el único motivo de alta o cambio que
 es un conflicto (409) y no una validación (400) es el nombre repetido, y se
-reconoce con `rol_con_el_nombre`; el de `borrar_rol` es siempre un conflicto.
+reconoce con `es_nombre_repetido`; el de `borrar_rol` es siempre un conflicto.
+El nombre repetido sale de la consulta previa o, si dos altas simultáneas o una
+diferencia entre `_norm` y la collation la pasan, del choque contra la UNIQUE
+`uq_rol_nombre` en el commit (mismo patrón que `_es_duplicado` de `precios.py`,
+ADR-0018).
 
 `crear_rol`, `actualizar_rol` y `borrar_rol` son operaciones completas y hacen
 commit. `reemplazar_roles` sólo deja el cambio en la sesión, como
@@ -20,6 +24,7 @@ lote); el commit es de quien la llama.
 import unicodedata
 from collections.abc import Iterable
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.models import Rol, RolPermiso, Usuario, UsuarioRol
@@ -33,6 +38,8 @@ LARGO_MAXIMO_NOMBRE = 60  # rol.nombre es VARCHAR(60)
 _SIN_NIVEL = (None, "", "sin")
 
 Permisos = dict[str, dict[str, str | None]]
+
+_PREFIJO_REPETIDO = 'Ya hay un rol que se llama "'
 
 
 def _norm(texto: str | None) -> str:
@@ -49,6 +56,37 @@ def _enumerar(nombres: list[str]) -> str:
     if len(nombres) <= 1:
         return nombres[0] if nombres else ""
     return f"{', '.join(nombres[:-1])} y {nombres[-1]}"
+
+
+def _motivo_repetido(nombre: str) -> str:
+    return f'{_PREFIJO_REPETIDO}{nombre}".'
+
+
+def es_nombre_repetido(motivo: str | None) -> bool:
+    """Si el motivo de un alta o cambio es el nombre repetido (un conflicto)."""
+    return (motivo or "").startswith(_PREFIJO_REPETIDO)
+
+
+def _choca_con_el_nombre(exc: IntegrityError) -> bool:
+    """El rechazo viene de la UNIQUE del nombre: MySQL nombra el índice
+    (`rol.uq_rol_nombre`) y SQLite, la columna (`rol.nombre`)."""
+    mensaje = str(exc.orig)
+    return "uq_rol_nombre" in mensaje or "rol.nombre" in mensaje
+
+
+def _guardar(db: Session, nombre: str) -> str | None:
+    """Commit del alta o el cambio. Si choca con `uq_rol_nombre`, rollback y el
+    motivo de nombre repetido (con el nombre pedido: el que ya está puede no
+    verse con la consulta previa). Cualquier otro error de base sigue de largo,
+    al 500 genérico de `main.py`."""
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if not _choca_con_el_nombre(exc):
+            raise
+        return _motivo_repetido(nombre.strip())
+    return None
 
 
 def _con_nivel(pantallas: dict[str, str | None] | None) -> list[tuple[str, str]]:
@@ -77,7 +115,7 @@ def motivo_para_no_guardar(db: Session, nombre: str | None, permisos: Permisos |
         return f"El nombre puede tener hasta {LARGO_MAXIMO_NOMBRE} caracteres."
     repetido = rol_con_el_nombre(db, nombre, excluir_id=rol_id)
     if repetido:
-        return f'Ya hay un rol que se llama "{repetido.nombre}".'
+        return _motivo_repetido(repetido.nombre)
 
     modulos = {m.clave: m for m in catalogo}
     alguna = False
@@ -129,8 +167,8 @@ def crear_rol(db: Session, nombre: str | None, permisos: Permisos | None,
         return None, motivo
     rol = Rol(nombre=nombre.strip(), permisos=_filas(permisos))
     db.add(rol)
-    db.commit()
-    return rol, None
+    motivo = _guardar(db, nombre)
+    return (None, motivo) if motivo else (rol, None)
 
 
 def actualizar_rol(db: Session, rol: Rol, nombre: str | None, permisos: Permisos | None,
@@ -155,8 +193,7 @@ def actualizar_rol(db: Session, rol: Rol, nombre: str | None, permisos: Permisos
     db.flush()
     rol.nombre = nombre.strip()
     rol.permisos = quedan + _filas(permisos)
-    db.commit()
-    return None
+    return _guardar(db, nombre)
 
 
 def personas_con_rol(db: Session, rol: Rol) -> list[Usuario]:

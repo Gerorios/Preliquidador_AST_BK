@@ -104,10 +104,11 @@ def _buscar_rol(db: Session, rol_id: int) -> Rol:
     return rol
 
 
-def _rechazar_rol(db: Session, motivo: str, nombre: str, rol_id: int | None = None):
+def _rechazar_rol(motivo: str):
     """El nombre repetido es un conflicto (409); el resto, una validación (400).
-    Se reconoce como lo indica `roles_service`: con `rol_con_el_nombre`."""
-    repetido = roles_service.rol_con_el_nombre(db, nombre, excluir_id=rol_id) is not None
+    Se reconoce como lo indica `roles_service`: con `es_nombre_repetido`, que
+    cubre también el choque contra la UNIQUE en el commit (no se ve consultando)."""
+    repetido = roles_service.es_nombre_repetido(motivo)
     codigo = status.HTTP_409_CONFLICT if repetido else status.HTTP_400_BAD_REQUEST
     raise HTTPException(codigo, motivo)
 
@@ -275,7 +276,7 @@ def crear_rol(
 ):
     rol, motivo = roles_service.crear_rol(db, datos.nombre, datos.permisos, catalogo)
     if motivo:
-        _rechazar_rol(db, motivo, datos.nombre)
+        _rechazar_rol(motivo)
     invalidar_cache_usuarios()
     return _rol_publico(rol, [])
 
@@ -292,7 +293,7 @@ def actualizar_rol(
     rol = _buscar_rol(db, rol_id)
     motivo = roles_service.actualizar_rol(db, rol, datos.nombre, datos.permisos, catalogo)
     if motivo:
-        _rechazar_rol(db, motivo, datos.nombre, rol_id=rol.id)
+        _rechazar_rol(motivo)
     invalidar_cache_usuarios()
     return _rol_publico(rol, roles_service.personas_con_rol(db, rol))
 

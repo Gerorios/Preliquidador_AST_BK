@@ -12,6 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core import roles_service
 from app.core.auth import invalidar_cache_usuarios, pwd_context
 from app.core.database import Base, get_db_propia
 from app.core.models import Rol, RolPermiso, Usuario, UsuarioModulo, UsuarioRol
@@ -204,6 +205,24 @@ def test_nombre_repetido_responde_409(db):
                    headers=h)
     assert cambio.status_code == 409
     assert cambio.json()["detail"] == 'Ya hay un rol que se llama "Gerente".'
+    db.expire_all()
+    assert sorted(r.nombre for r in db.query(Rol).all()) == ["Auditor", "Gerente"]
+
+
+def test_nombre_que_choca_con_la_unique_responde_409_y_no_500(db, monkeypatch):
+    # Doble clic en "Crear rol": los dos pedidos pasan la consulta previa y el
+    # segundo choca con uq_rol_nombre en el commit. Se simula salteándola.
+    c = TestClient(app, raise_server_exceptions=False)
+    h = _token(c, "adm@t.com")
+    _crear(c, h, "Gerente", CONCEPTOS_VER)
+    otro = _crear(c, h, "Auditor", CONCEPTOS_VER)
+    monkeypatch.setattr(roles_service, "rol_con_el_nombre", lambda *a, **k: None)
+
+    alta = c.post("/api/admin/roles", json={"nombre": "Gerente", "permisos": CONCEPTOS_VER}, headers=h)
+    cambio = c.put(f"/api/admin/roles/{otro['id']}", json={"nombre": "Gerente", "permisos": CONCEPTOS_VER},
+                   headers=h)
+    assert [alta.status_code, cambio.status_code] == [409, 409]
+    assert alta.json()["detail"] == cambio.json()["detail"] == 'Ya hay un rol que se llama "Gerente".'
     db.expire_all()
     assert sorted(r.nombre for r in db.query(Rol).all()) == ["Auditor", "Gerente"]
 

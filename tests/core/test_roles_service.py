@@ -10,9 +10,11 @@ que llega por `app.state` (sólo módulos activos): el núcleo no importa módul
 """
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core import roles_service
 from app.core.auth import pwd_context
 from app.core.database import Base
 from app.core.models import Rol, RolPermiso, Usuario, UsuarioRol
@@ -277,6 +279,50 @@ def test_actualizar_rechazado_no_cambia_nada(db):
     guardado = db.query(Rol).filter(Rol.id == rol.id).one()
     assert guardado.nombre == "Consulta"
     assert _permisos(guardado) == CONCEPTOS_VER
+
+
+# ─── Choque contra la UNIQUE del nombre (uq_rol_nombre) ──────────────────────
+# Dos altas simultáneas (doble clic en "Crear rol") o una diferencia entre
+# `_norm` y la collation pasan la consulta previa y chocan recién en el commit.
+# Se simula salteando la consulta previa.
+
+@pytest.fixture()
+def sin_consulta_previa(monkeypatch):
+    monkeypatch.setattr(roles_service, "rol_con_el_nombre", lambda *a, **k: None)
+
+
+def test_alta_que_choca_con_la_unique_del_nombre_devuelve_el_motivo(db, sin_consulta_previa):
+    _crear(db, "Gerente", {"preliquidacion": {"gerencial": "ver"}})
+    rol, motivo = crear_rol(db, " Gerente ", CONCEPTOS_VER, CATALOGO)
+    assert (rol, motivo) == (None, 'Ya hay un rol que se llama "Gerente".')
+    # Hizo rollback: la sesión sigue usable y no quedó nada a medias.
+    assert db.query(Rol).count() == 1
+    assert db.query(RolPermiso).count() == 1
+
+
+def test_cambio_de_nombre_que_choca_con_la_unique_devuelve_el_motivo_sin_cambiar_nada(db, sin_consulta_previa):
+    _crear(db, "Gerente", {"preliquidacion": {"gerencial": "ver"}})
+    rol = _crear(db, "Consulta", CONCEPTOS_VER)
+    rol_id = rol.id
+    motivo = actualizar_rol(db, rol, "Gerente", {"preliquidacion": {"inicio": "ver"}}, CATALOGO)
+    assert motivo == 'Ya hay un rol que se llama "Gerente".'
+    db.expire_all()
+    guardado = db.query(Rol).filter(Rol.id == rol_id).one()
+    assert guardado.nombre == "Consulta"
+    assert _permisos(guardado) == CONCEPTOS_VER
+
+
+def test_otro_error_de_integridad_no_se_disfraza_de_nombre_repetido(db, monkeypatch):
+    rol = _crear(db, "Consulta", CONCEPTOS_VER)
+
+    def commit_que_falla():
+        raise IntegrityError("INSERT ...", {}, Exception("FOREIGN KEY constraint failed"))
+
+    monkeypatch.setattr(db, "commit", commit_que_falla)
+    with pytest.raises(IntegrityError):
+        crear_rol(db, "Otro", CONCEPTOS_VER, CATALOGO)
+    with pytest.raises(IntegrityError):
+        actualizar_rol(db, rol, "Lectura", CONCEPTOS_VER, CATALOGO)
 
 
 # ─── Borrado ─────────────────────────────────────────────────────────────────
