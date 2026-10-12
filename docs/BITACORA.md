@@ -3370,3 +3370,76 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 **Pendiente**
 - Sumar las `terceros_*` a `TABLAS` de `refrescar_testing.py` (cambia código) y el
   encabezado de `migrations/core/002`: fuera de alcance (en `docs/estado.md`).
+
+## 2026-10-11 — Deuda chica después de la Facturación E1
+
+**Mergeado**
+- PR #90 (backend) — comentarios de `migrations/core/002_roles_y_permisos.sql` y de Terceros
+  en `migrations/ORDEN.txt` al día; trae el plan
+  `docs/superpowers/plans/2026-10-11-deuda-chica.md`, con el Paso R1.
+- PR #91 (backend) — `000_esquema_base.sql` y `core/000_usuarios.sql` regenerados desde
+  producción, y `ws18` marcada `historica` en `ORDEN.txt`.
+- PR #92 (backend) — `traducir_errores_externa()` y `CODIGOS_ACCESO_RECHAZADO` suben a
+  `app/core/database.py`; Preliquidación y Facturación los usan.
+- PR #74 (front) — `.input:focus-visible` con anillo visible; `CargandoOverlay` traga el
+  teclado mientras hay una escritura en curso y es `role="status"`.
+
+**Por frontera**
+- Núcleo: `app/core/database.py` suma, al lado de `ExternaNoDisponible`, el context manager
+  `traducir_errores_externa()` (mismos dos mensajes y mismo log `[EXTERNA]` de antes) y
+  `CODIGOS_ACCESO_RECHAZADO`, con su test en `tests/core/test_externa_no_disponible.py`. En
+  el front, `.input` con foco visible en `src/index.css`; `CargandoOverlay` siempre montado
+  como región de estado, con la decisión de qué tecla se traga en
+  `src/core/bloqueoTeclado.js` (función pura, con tests).
+- Preliquidación: `_ejecutar` de `consulta_externa.py` usa el context manager del núcleo y
+  conserva su forma de devolver resultados.
+- Facturación: lo mismo en su `consulta_externa.py`.
+- Prod y Datos: el encabezado de `core/002` ya no dice que es idempotente ni que no toca
+  `usuario_modulo` (desde `core/003` no se vuelve a correr en una base existente) y su vuelta
+  atrás remite a la de `core/003`; el comentario de Terceros en `ORDEN.txt` dice que sus
+  migraciones se aplicaron en producción el 2026-09-30. El esquema base suma la columna de
+  `ws18`, generado en el servidor en sólo lectura (`SHOW CREATE TABLE`) con
+  `scripts/exportar_esquema.py`, a una carpeta temporal que se borró; el diff es sólo esa
+  columna y la fecha de la cabecera.
+- Docs: el plan de la deuda chica, con el Paso R1 de la revisión del front.
+
+**Decisiones**
+- La traducción de errores del campo sube al núcleo. Porqué: desde la Facturación E1 dos
+  módulos la tenían copiada, un módulo no importa a otro (ADR-0013) y lo que usan dos sube;
+  así un corte del campo se avisa igual en todas las pantallas. Descartado: un decorador o
+  una clase base para `_ejecutar`, porque los dos devuelven cosas distintas (Preliquidación
+  mide el execute y el fetch).
+- `CargandoOverlay` traga todo salvo F5, F12 y Ctrl/Cmd (sin Alt) con R, C o F. Porqué: con
+  Tab y Enter se podía volver a apretar lo de abajo y guardar dos veces, y la lista blanca
+  deja recargar si una escritura queda colgada, copiar, buscar y abrir las herramientas.
+  Descartado: la lista negra, porque F4 y Alt+Flecha abajo abren un select, Ctrl+V pega y
+  AltGr escribe.
+- `ws18` pasa al esquema base. Porqué: está en producción desde el 2026-10-07 y una base
+  nueva queda con la columna sin correr la migración aparte.
+- El encabezado de `core/002` se corrige. Porqué: quien lo leyera podría volver a correr
+  002 en producción, y fallaría (minor 1 del BK #87).
+- Las `terceros_*` en `TABLAS` de `scripts/refrescar_testing.py` (ítem C del plan) no se
+  hicieron: el usuario lo dejó para Pitu, porque el próximo refresco pisaría sus datos de
+  prueba de Terceros.
+
+**Estado**
+- Deploy: no; entra con el próximo deploy. El BK #92 no cambia la API (mismos mensajes y
+  mismo 503); el FT #74 no toca datos.
+- Migraciones: ninguna. La lectura de producción para el esquema base fue con OK del
+  usuario, sin escritura.
+- Pruebas: backend 1227 passed y 1 xfailed (test del núcleo en rojo primero con
+  `ImportError`); front 173 pasan (3 nuevos), lint sin errores nuevos, build OK. Smoke del
+  front en el navegador contra `testing` sin escribir: con las escrituras colgadas, Tab,
+  Enter, flechas, espacio, F4 y Alt+Flecha abajo no movieron el foco ni dispararon otro
+  PATCH, y el anillo de foco se ve. #90 y #91 sólo con los tests de migraciones (34 y 42
+  passed), sin ronda de revisión el #90.
+- Revisión: BK #92 con 0 urgent, 0 high y 3 minor sin tocar; FT #74 con 0 urgent, 1 high
+  arreglado (R1: F4 y Alt+Flecha abajo abrían el select bajo el cartel y permitían un
+  segundo PATCH) y 3 minor sin tocar. Los minor están en los cuerpos de los PRs.
+- Fuera de git: la nota local de `docs/DEPLOY.md` (ítem F del plan).
+
+**Pendiente**
+- Las vistas de `ws12` no están en el `000`: una base nueva desde cero queda sin ellas (en
+  `docs/estado.md`, "A futuro").
+- Las `terceros_*` en el refresco de `testing`, para Pitu (en `docs/estado.md`).
+- Facturación E2: resolver las preguntas abiertas 2 a 18 de su plan.
