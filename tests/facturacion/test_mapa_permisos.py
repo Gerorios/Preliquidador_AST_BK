@@ -1,10 +1,13 @@
 """Mapa de permisos de Facturación (ADR-0020): qué pantalla y qué nivel exige
 cada endpoint de `/api/facturacion`.
 
-`ESPERADO` está vacío: las dos rutas de la E1 (`/tareas`, pantalla `unidad`)
-salieron el 2026-10-12 con su pantalla
-(`docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`), y la E2 suma acá
-las suyas. El mapa real se lee
+`ESPERADO` copia la tabla de la sección 3.2 del plan de la E2
+(`docs/superpowers/plans/2026-10-11-facturacion-e2.md`): las filas 1 a 5
+(Comprobantes), 9 a 11 (clientes, fincas y empresas) y `GET /tareas`, todas de
+la pantalla `comprobantes`. Las filas 6 a 8 (adjuntos) llegan con BK-B. Las dos
+rutas de la E1 (`/tareas`, pantalla `unidad`) salieron el 2026-10-12 con su
+pantalla (`docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`); la E2
+vuelve a crear `GET /tareas`, ahora en `comprobantes`. El mapa real se lee
 de `app.routes`: cada dependencia de `requiere_pantalla` expone `.requisito`.
 Una ruta nueva sin su fila, una fila sin ruta o un permiso distinto del de la
 tabla hacen fallar el test.
@@ -25,9 +28,25 @@ def _exige(nivel, *pantallas):
 
 F = PREFIJO
 
-# Hoy Facturación no tiene rutas. La E2 suma acá sus filas, con `_exige` y `F`:
-# ("GET", f"{F}/<ruta>"): _exige("ver", "<pantalla>").
-ESPERADO = {}
+VER_COMPROBANTES = _exige("ver", "comprobantes")
+EDITAR_COMPROBANTES = _exige("editar", "comprobantes")
+
+# Los números son los de la tabla 3.2 del plan de la E2.
+ESPERADO = {
+    # 1 y 2
+    ("GET", f"{F}/comprobantes"): VER_COMPROBANTES,
+    ("GET", f"{F}/comprobantes/{{comprobante_id}}"): VER_COMPROBANTES,
+    # 3 a 5
+    ("POST", f"{F}/comprobantes"): EDITAR_COMPROBANTES,
+    ("PUT", f"{F}/comprobantes/{{comprobante_id}}"): EDITAR_COMPROBANTES,
+    ("DELETE", f"{F}/comprobantes/{{comprobante_id}}"): EDITAR_COMPROBANTES,
+    # 9 a 11: las lecturas del campo y de sueldos que usa el alta.
+    ("GET", f"{F}/clientes"): VER_COMPROBANTES,
+    ("GET", f"{F}/clientes/{{cliente_id}}/fincas"): VER_COMPROBANTES,
+    ("GET", f"{F}/empresas"): VER_COMPROBANTES,
+    # Las tareas del campo, con su Unidad sugerida (la crea la E2, paso A6).
+    ("GET", f"{F}/tareas"): VER_COMPROBANTES,
+}
 
 
 def _normalizar(requisito):
@@ -62,8 +81,8 @@ def _mapa_real():
     return mapa
 
 
-def test_la_tabla_no_tiene_rutas():
-    assert len(ESPERADO) == 0
+def test_la_tabla_tiene_las_9_rutas():
+    assert len(ESPERADO) == 9
 
 
 def test_cada_endpoint_exige_la_pantalla_y_el_nivel_de_la_tabla():
