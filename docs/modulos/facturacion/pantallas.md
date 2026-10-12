@@ -20,8 +20,10 @@ mismos números que el informe de Power BI que hoy hace ese control.
 ## Dirección
 
 - **Extensión del mundo actual**, no un diseño nuevo: los tokens de `src/index.css`, el layout
-  del núcleo y los componentes que ya existen (barra de filtros común, tablas, chips, overlay
-  "Procesando...", avisos).
+  del núcleo y lo que el núcleo ya tiene (las clases globales de campos, chips y tablas, el
+  overlay "Procesando..." y `CargandoContenido`). La barra de filtros, las tablas, el aviso de
+  error y el estado por pantalla son de Preliquidación: usarlos pide antes un PR del núcleo
+  que los suba a `src/core/`.
 - La idea central es **de lo general al detalle**: Pendientes → Cruce del Cliente → tarea →
   finca → parte de campo. Cada nivel responde "¿por qué no cierra?".
 

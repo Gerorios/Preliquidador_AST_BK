@@ -208,8 +208,12 @@ Cada etapa es un par de PRs hermanos (backend y frontend). Deploy sólo con OK.
 
 1. **Cambio del esquema de permisos** (tarea aparte, del núcleo): entregado y deployado el
    2026-10-11 (ADR-0020). El módulo nace con pantallas.
-2. **Refinamiento de Preliquidación**: entregado y deployado el 2026-10-09. Facturación
-   reutiliza su barra de filtros común, sus tablas y su estado por pantalla.
+2. **Refinamiento de Preliquidación**: entregado y deployado el 2026-10-09. Su barra de
+   filtros, sus tablas, su aviso de error y su estado por pantalla son de Preliquidación
+   (`src/modulos/preliquidacion/`), y un módulo no importa a otro (ADR-0013): para que
+   Facturación los use, antes hace falta un PR del núcleo que los suba a `src/core/`. Las
+   clases globales (`.input`, `.chip`, `.table-wrap`), el overlay "Procesando..." y
+   `CargandoContenido` sí son del núcleo.
 
 ## 7. Pendientes
 

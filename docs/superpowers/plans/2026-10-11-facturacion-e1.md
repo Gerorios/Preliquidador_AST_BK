@@ -322,7 +322,8 @@ Todo se hace en los worktrees `facturacion-e1` de cada repo.
     - con el campo caído (el falso levanta `ExternaNoDisponible`), GET y PATCH dan 503 con el mensaje.
 - **Tests del núcleo** (`tests/core/test_registro_modulos.py`):
   - el conjunto de módulos pasa a ser los tres, y el test cambia de nombre porque ya no son "los dos";
-  - en el test del núcleo que revisa imports se suma `assert "app.modulos.facturacion" not in contenido`.
+  - en el test del núcleo que revisa imports se suma `assert "app.modulos.facturacion" not in contenido`;
+  - *(agregado en la ejecución)* `tests/core/test_administracion_roles.py` usaba `"facturacion"` como ejemplo de módulo fuera del catálogo (líneas 157, 164 y 250). Al registrarse el módulo, ese ejemplo deja de valer: se cambia por `"inexistente"`, para que los dos tests sigan probando lo mismo.
 - **Implementación:**
   - `app/modulos/facturacion/permisos.py`: `MODULO`, `PANTALLAS` (D1), `ver_unidad` y `editar_unidad`. Las otras cinco pantallas no tienen dependencia hasta su etapa.
   - `app/modulos/facturacion/schemas.py` (regla 16): `TareaFacturacionOut` y `DefinirTareaIn`. Los dos campos son obligatorios: `unidad_sugerida: Optional[str]` sin default y `no_facturable: bool`. La regla vive en el servicio y no en Pydantic, para que la compartan la API y el script.
@@ -530,6 +531,38 @@ Todo se hace en los worktrees `facturacion-e1` de cada repo.
 - `PRODUCT.md` ya con las contadoras.
 
 **Antes de su front:** si la E2 quiere la barra de filtros, las tablas o el estado por pantalla de Preliquidación, hace falta un PR del núcleo que los suba a `src/core/` (ver 2.1).
+
+### 3.7 Pasos agregados en la revisión (2026-10-11)
+
+La revisión dio 0 urgent y 0 high. Estos pasos los pidió el usuario: tres minor del front y
+el caso de dos contadoras cargando a la vez. Regla decidida por el usuario para esta
+pantalla: **gana la última que guarda**, sin error y sin aviso de conflicto. El control
+fuerte se diseña en la E2, para los comprobantes.
+
+**Paso R1 (backend): dos PATCH a la vez no dan 500.**
+- *Escenario de falla:* dos personas definen al mismo tiempo una tarea Sin definir. Las dos
+  ven que no tiene fila y la insertan. El UNIQUE frena a la segunda con `IntegrityError` y
+  esa persona recibe un 500. Pasa lo mismo si una la deja Sin definir (borra la fila)
+  mientras la otra la cambia: el UPDATE no encuentra la fila (`StaleDataError`).
+- *Arreglo:* en `UnidadService.definir`, si el commit falla por eso, `rollback` y se vuelve
+  a hacer la escritura una vez sobre lo que haya en la base. Así gana la última, sin 500.
+- *Par:* un test que simula la fila creada por otra sesión entre la lectura y el commit (rojo
+  con 500 o excepción, verde con el valor nuevo guardado). Archivos:
+  `services/unidad_service.py` y su test.
+
+**Paso R2 (front): tres minor de la pantalla y la lista al día.**
+1. *El select guarda cada opción que se recorre con las flechas.* Con el teclado, el cambio
+   queda pendiente en la fila y se guarda al salir del select (blur) o con Enter. Con el
+   mouse se guarda al elegir, como ahora. El overlay no tapa el foco.
+2. *El foco no se ve en las filas Sin definir.* Un anillo `:focus-visible` propio del
+   módulo con `--accent`, sin tocar `.input` del núcleo.
+3. *Con "Sólo sin definir" activo, el foco cae al `<body>` al guardar.* La fila sigue
+   saliendo de la vista, como dice F4, y el foco pasa al select de la fila que queda en su
+   lugar (la siguiente; si era la última, la anterior; si no queda ninguna, el chip).
+4. *La lista al día con dos personas:* la consulta de esta pantalla vuelve a leer al volver
+   a la pestaña (`refetchOnWindowFocus: true` sólo en ella; el núcleo lo apaga para todo).
+- Archivos: `pages/UnidadFacturacion.jsx` y `.module.css`. Verificación: `npm test`,
+  `npm run build`, `npm run lint` y un control en el navegador contra `testing`.
 
 ## 4. Riesgos
 

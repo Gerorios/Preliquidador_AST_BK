@@ -871,6 +871,9 @@ Todo arranca de `main` con la E1 mergeada.
     - Supuesto: sí, con precio de hasta 4 decimales. Si el PDF redondea distinto, se ajusta el precio.
 17. **Mismo Cliente y número que un histórico: ¿bloquear siempre?**
     - Supuesto: sí (409). Si aparece un caso real de dos Empresas con el mismo número, se revisa.
+18. **Dos contadoras cargando a la vez** (lo pidió el usuario el 2026-10-11: puede pasar y el sistema tiene que estar preparado).
+    - Dos casos: las dos cargan el mismo Comprobante (que no quede duplicado ni dé 500), y una edita un Comprobante que la otra cambió o borró recién (¿gana la última o se avisa el conflicto?).
+    - Supuesto: el duplicado lo frena la base con un índice único y responde 409 con un mensaje claro; para la edición, se avisa el conflicto comparando la fecha de la última modificación, porque un Comprobante tiene varios campos y pisar el trabajo de la otra es caro. En la E1 (Unidad de medida por defecto) el usuario eligió "gana la última", porque es un valor por defecto que se cambia poco.
 
 ## 6. Fuera de alcance
 
@@ -882,7 +885,6 @@ Todo arranca de `main` con la E1 mergeada.
 - Sumar las tablas de Facturación a `scripts/refrescar_testing.py`, porque Terceros tampoco está. Si se suma, en `testing` los adjuntos copiados de producción responden 404 `archivo_no_encontrado`, como prevé el ADR-0019.
 - Subir la consulta de empresas al núcleo y refactorizar el endpoint de Preliquidación.
 - `AYUDA-facturacion.md` (GUIA, regla 28): va cuando el módulo sea de uso diario, en la E4. Si la pregunta 13 se contesta que sí, entra acá.
-- Bloquear la edición cuando dos personas editan a la vez: gana la última que guarda.
 - Validar rangos de fechas o que el total de una NC no supere al de su Factura.
 
 ## Anexo: Supuestos sobre la E1
