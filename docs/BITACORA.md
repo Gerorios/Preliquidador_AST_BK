@@ -3611,3 +3611,82 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 
 **Pendiente**
 - Arrancar la ejecución de la E2, con la migración `facturacion/003` (en `docs/estado.md`).
+
+## 2026-10-12 — Comprobantes en el backend y núcleo de filtros y tablas en el front (Facturación E2)
+
+**Mergeado**
+- PR #96 (backend) — BK-A de la E2: el backend de Comprobantes (Facturas y Notas de crédito),
+  con la migración `facturacion/003_comprobantes.sql`, el servicio, las lecturas del campo y
+  de sueldos, y las rutas con sus permisos.
+- PR #77 (front) — PR-0 de la E2: la barra de filtros y las tablas pasan de Preliquidación al
+  núcleo del front. PR hermano del #96; no dependen uno del otro.
+
+**Por frontera**
+- Facturación: alta, edición, borrado, listado y detalle de Comprobantes con las reglas 1 a 7
+  del plan (normalización, repetidos, Nota de crédito sobre una Factura del mismo Cliente, el
+  histórico no se edita, una Factura con Notas no se borra ni cambia de tipo o de Cliente,
+  importe con ROUND_HALF_UP calculado en el backend). Lecturas de sólo lectura con caché de 10
+  minutos: clientes, fincas y tareas del sistema de campo, y empresas emisoras de la base de
+  sueldos. Rutas en `/api/facturacion` (`comprobantes`, `clientes`, `clientes/{id}/fincas`,
+  `empresas`, `tareas`), todas sobre la pantalla `comprobantes`: Ver en los GET y Editar en las
+  escrituras; el mapa de permisos tiene 9 filas.
+- Núcleo (front): `FiltrosBar`, `TablaOrdenable`, `opcionesCascada` y `ordenarFilas` a
+  `src/core/ui/`; `estadoPantallas` y `estadoGuardado` a `src/core/`. `npm test` suma
+  `src/core/ui/*.test.js`.
+- Preliquidación (front): sus pantallas sólo cambian los imports y pasan explícito lo que antes
+  llegaba por defecto; `ALERTAS_LINEAS` queda en el módulo (`filtrarLineas.js`) y la barra la
+  recibe por props.
+- Prod y Datos: la `facturacion/003` crea tres tablas nuevas del módulo (Comprobantes, sus
+  Líneas y sus Adjuntos), idempotente y sin tocar otras tablas. La de Adjuntos la usa BK-B.
+- Docs: el plan de la E2 suma lo agregado durante BK-A y su revisión (R1 a R4).
+
+**Decisiones**
+- Facturas y Notas de crédito numeran aparte: la clave de un Comprobante cargado a mano lleva
+  el tipo. Porqué: decisión del usuario en la revisión; sin el tipo, una Nota con el mismo
+  número que una Factura de la misma Empresa daba repetido, y así una Nota tampoco choca con
+  los históricos, que son siempre Facturas.
+- La edición simultánea se frena con el `actualizado_en` que leyó la pantalla y, además, con
+  el UPDATE de la cabecera condicionado a ese valor justo antes de reemplazar las Líneas; el
+  segundo guardado recibe 409 `comprobante_modificado`. Porqué: la revisión mostró que dos
+  guardados casi simultáneos mezclaban sus Líneas y el total salía inflado. Descartado: la sola
+  comparación al principio.
+- Una Nota cargada mientras su Factura cambia de tipo o de Cliente se frena con lecturas
+  bloqueantes de los dos lados. Porqué no registrado en el PR.
+- Al editar se conservan la tarea, el Cliente y la finca que el Comprobante ya tenía aunque en
+  el campo estén de baja; si son nuevos y están de baja, se rechazan. Porqué no registrado en
+  el PR.
+- La clave de identidad la calcula el servicio y la base la hace cumplir. Porqué (del commit):
+  el histórico no tiene Empresa y MySQL acepta varios NULL en un UNIQUE.
+- Los Adjuntos no caen en cascada: los borra el servicio junto con sus archivos. Porqué no
+  registrado en el PR.
+- Las empresas copian la consulta de Preliquidación en Facturación. Porqué: subirla al núcleo
+  obligaría a tocar Preliquidación; si aparece un tercer uso, se sube. Descartado: subirla
+  ahora.
+- Los rangos de cantidad y precio se validan en el servicio y no en el schema (GUIA, regla
+  16). Porqué: para que el error salga como `linea_invalida` con su fila y su campo, según el
+  contrato.
+- La barra de filtros y las tablas suben al núcleo del front. Porqué: la pantalla de
+  Comprobantes (FT-A) usa las mismas, y un módulo no importa a otro (ADR-0013). Descartado:
+  copiarlas en Facturación, porque quedarían dos versiones que divergen.
+
+**Estado**
+- Deploy: no. Hay un solo deploy al final de la E2, con OK; la 003 va a producción con él.
+- Migraciones: `facturacion/003_comprobantes.sql` en `testing`, con OK, corrida dos veces sin
+  error. En producción, no.
+- Pruebas: backend 1441 passed y 1 xfailed después de R1 a R3, y `tests/facturacion` 299
+  passed después de R4; front 161 passed, build OK, lint con los mismos 6 errores de `main`.
+  Smoke contra `testing`: el backend de la rama arranca con las tablas verificadas, el listado
+  responde vacío, las lecturas del campo y de sueldos responden con datos, un id inexistente da
+  404 y sin sesión 401; en el front, las pantallas de Preliquidación con la barra y las tablas
+  se ven y filtran como antes. Prueba de concurrencia contra MySQL en `testing`, con OK: 5 de 5
+  casos bien; los Comprobantes de prueba se borraron.
+- Revisión: BK #96 en dos rondas (ronda 1 con 1 urgent y 1 high, arreglados en R1 y R2, más
+  la numeración, resuelta en R3; ronda 2 con 1 high, arreglado en R4) y 6 minor sin tocar;
+  FT #77 con 0 urgent, 0 high, 7 minor sin tocar y 2 descartados. Los minor están en los
+  cuerpos de los PRs.
+
+**Pendiente**
+- FT-A, las pantallas de Comprobantes, con `impeccable` (en `docs/estado.md`); tiene que pasar
+  `placeholderBusqueda` a la barra (minor del FT #77, anotado en el plan). Después siguen BK-B
+  y FT-B (adjuntos) y BK-C (histórico).
+- El deploy de la E2 con OK, con la 003 en producción.

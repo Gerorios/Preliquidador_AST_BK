@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-PR-0 (núcleo del front) hecho y revisado, sin PR. BK-A hecho y revisado en dos rondas (arreglos R1 a R4 en el plan; Facturas y Notas de crédito numeran aparte, decisión del usuario), con la `facturacion/003` en `testing` (F1). Espera el OK del usuario para abrir los dos PRs juntos; después sigue FT-A.
+FT-A: las pantallas de Comprobantes en el front, con `impeccable`. La `facturacion/003` está en `testing` y no en producción: va con el deploy único al final de la E2, con OK.
 
 ## Pendientes del usuario
 
