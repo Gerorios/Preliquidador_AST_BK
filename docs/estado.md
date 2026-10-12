@@ -6,18 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Módulo Facturación, E1 (carril completo, fase 5: entrega): el módulo con sus seis
-  pantallas, la pantalla Unidad de medida por defecto y la primera carga desde el maestro de
-  tareas. Plan aprobado el 2026-10-11: `docs/superpowers/plans/2026-10-11-facturacion-e1.md`
-  (rama `feature/facturacion-e1` en los dos repos). El plan de la E2 ya está escrito
-  (`2026-10-11-facturacion-e2.md`), con 17 preguntas abiertas que se resuelven al arrancarla.
-  Notas locales con clientes y orígenes: `docs/modulos/facturacion/fuentes/origenes.md`.
+- Nada.
 
 ## Próximo paso
 
-Facturación E1 (2026-10-11): revisión con 0 urgent y 0 high; PRs abiertos, BK #88 y FT #72
-(el del front se mergea después). Con OK: merge, deploy de los dos y primera carga en
-producción desde el VPS.
+Con OK: la primera carga de Facturación en producción (`scripts/importar_unidades_del_maestro.py` desde el VPS: simular, mostrar y aplicar). El deploy de BK #88 y FT #72 ya está hecho.
 
 ## Pendientes del usuario
 
@@ -29,6 +22,7 @@ producción desde el VPS.
 - PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: después de la carga, revisar en la pantalla Unidad de medida por defecto las unidades del maestro que parecen raras (6 tareas, vistas en la simulación del 2026-10-11) y completar las que quedan Sin definir.
+- Facturación: armar en Administración el rol de las contadoras con Editar en Unidad de medida por defecto (BK #88, FT #72).
 - Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
 - Avisarle a Pitu que el esquema nuevo de permisos ya está en producción (BK #83 y #86, FT #70; deploy del 2026-10-11): el glosario de Terceros suma sus cinco pantallas con qué es ver y editar; Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py`; cada ruta pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla; sus tests usan el rol "Liquidador de terceros". Que confirme las filas 25 y 28 del plan y qué pantallas usan `ver_inicio_o_quincena`, y que rebase sus ramas abiertas sobre `terceros.py`.

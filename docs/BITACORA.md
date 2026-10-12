@@ -3227,3 +3227,107 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 **Pendiente**
 - Minor 1 del PR: el encabezado de `core/002` todavía dice que volver al código anterior no
   toca la base y que la migración se puede volver a correr (en `docs/estado.md`).
+
+## 2026-10-11 — Facturación E1: el módulo, la pantalla Unidad de medida por defecto y la primera carga
+
+**Mergeado**
+- PR #88 (backend, merge `b6837f1`) — módulo `app/modulos/facturacion/` con sus seis
+  pantallas declaradas, la tabla `facturacion_tarea`, la API de Unidad de medida por defecto y
+  el script de la primera carga desde el maestro de tareas en CSV.
+- PR #72 (frontend, merge `171d7c6`), hermano — módulo `src/modulos/facturacion/` con su
+  tarjeta en el Inicio y la pantalla Unidad de medida por defecto (`/facturacion/unidad`).
+
+**Por frontera**
+- Facturación: módulo nuevo, tercero en `REGISTRO`. Declara Pendientes, Cruce, Comprobantes,
+  Unidad de medida por defecto, Equivalencias y Panel, así el editor de roles ya las muestra;
+  sólo existe la de Unidad (`GET /api/facturacion/tareas` con Ver y
+  `PATCH /api/facturacion/tareas/{tarea_id}` con Editar, errores 422, 404 o 503 en español).
+  En el front: una fila por tarea con su Grupo de tareas y un select (Sin definir, las cinco
+  unidades agrícolas, el grupo Cosecha y No facturable), resumen de las sin definir,
+  búsqueda, chip "Sólo sin definir" y modo Ver con texto; la lógica pura en `unidades.js`
+  con tests en `node --test`.
+- Núcleo: sin cambios de código. Un test del editor de roles usaba `"facturacion"` como
+  módulo inexistente y pasa a `"inexistente"`.
+- Prod y Datos: `migrations/facturacion/001_unidad_por_tarea.sql` al final de `ORDEN.txt`;
+  `scripts/importar_unidades_del_maestro.py` simula por defecto y escribe sólo con
+  `--aplicar` y `--confirmar-base`; `refrescar_testing.py` copia `facturacion_tarea`.
+- Docs: el glosario de Facturación cambia el Grupo de facturación por Unidad de facturación,
+  Unidad sugerida y No facturable, y suma qué es ver y editar en cada pantalla;
+  `pantallas.md` y `plan-facturacion.md` al día; planes de la E1 y la E2 en
+  `docs/superpowers/plans/`. En el front, `PRODUCT.md` suma las contadoras, el módulo y que
+  dos personas pueden cargar a la vez.
+
+**Decisiones**
+- La Unidad de facturación la elige cada Línea de comprobante; la tarea guarda sólo una
+  Unidad sugerida o la marca No facturable. Porqué: con la unidad fija por tarea, un cliente
+  que factura por hora y otro por planta comparaba horas contra plantas.
+- Las tres capacidades pasan a seis pantallas (ADR-0020). Importar orden va dentro de
+  Comprobantes, y el Umbral se edita en Unidad de medida por defecto. Porqué: que quien revisa
+  Alertas no pueda subirlo.
+- La pantalla se llama Unidad de medida por defecto, a pedido del usuario; su clave interna
+  queda `unidad`. Porqué: las claves de pantalla son `[a-z]+` y se guardan en `rol_permiso`.
+- Las unidades de cosecha entran como Unidad de facturación, pero lo facturado en ellas queda
+  fuera del Cruce. Porqué no registrado en el PR (el commit no tiene cuerpo).
+- La unidad se guarda por id de la tarea del campo, no por nombre. Porqué: los nombres cambian
+  y se repiten con variantes; el nombre sólo cruza el CSV en la primera carga.
+- Una tarea sin fila está Sin definir, sin filas vacías. Porqué: una tarea nueva del campo
+  aparece sola como Sin definir.
+- La regla "Unidad sugerida o No facturable, nunca las dos" la controla el servicio y no la
+  base. Porqué: así el mensaje de la API es claro.
+- Dos personas guardando la misma tarea a la vez: gana la última, sin error (decisión del
+  usuario, paso R1). Antes la segunda recibía un 500; ahora el servicio deshace y repite la
+  escritura una vez. En el front la lista se relee al volver a la pestaña, porque el núcleo
+  lo tiene apagado. Descartado: avisar el conflicto, porque es un valor por defecto que se
+  cambia poco. El control fuerte queda para los comprobantes de la E2 (pregunta 18 de su
+  plan).
+- La traducción de errores del sistema de campo se copió en el módulo (pregunta 6 del plan);
+  subirla al núcleo queda para un PR aparte. Porqué no registrado en el PR.
+- Con el mouse se guarda al elegir; con el teclado, con Enter o al salir del select (paso R2).
+  Porqué: recorrer las opciones con las flechas mandaba un guardado por opción.
+- El guardado actualiza la fila con lo que devuelve el `PATCH`, sin volver a leer el campo ni
+  reordenar la lista mientras se trabaja.
+- Con "Sólo sin definir", la tarea recién definida sale de la vista. Porqué: es una cola de
+  trabajo. El foco pasa a la fila que queda en su lugar o al chip; antes caía al `<body>`.
+- Anillo de foco propio del módulo. Porqué: el de `.input` del núcleo casi no se veía sobre el
+  borde de aviso, y el núcleo no se toca en este PR. Íconos existentes por lo mismo: uno
+  propio sería un PR del núcleo.
+
+**Estado**
+- Deploy: no todavía; va en una entrada de deploy aparte.
+- Migraciones: `facturacion/001_unidad_por_tarea.sql` aplicada en `testing`, con
+  `SHOW CREATE TABLE` igual al archivo; en producción, todavía no.
+- Primera carga: 134 tareas en `testing`, y al volver a simular quedan 0 por cargar; en
+  producción, pendiente con OK.
+- Pruebas: backend 1219 passed y 1 xfailed (82 del módulo, con los 2 de la escritura
+  simultánea, en rojo antes de R1); front 170 en verde, build OK y lint sin errores nuevos.
+  Smoke en el navegador contra `testing` con los backends de la rama. Sin probar: el modo Ver
+  (no hay usuario de prueba) y el guardado al elegir con el mouse en la lista nativa.
+- Revisión: 0 urgent y 0 high en las dos rondas; los minor sin tocar están en los cuerpos de
+  los PRs (7 en cada uno).
+
+**Pendiente**
+- Deploy de los dos juntos, la migración antes que el código, y la primera carga en
+  producción desde el VPS con su propio OK (en `docs/estado.md`).
+- Después del deploy: armar el rol de las contadoras con Editar en Unidad de medida por
+  defecto, y revisar las unidades raras y las Sin definir (en `docs/estado.md`).
+- E2: el plan ya está escrito (`2026-10-11-facturacion-e2.md`), con sus preguntas abiertas,
+  que se resuelven al arrancarla.
+- Traducción de errores al núcleo, deuda del núcleo del front y docs viejos (en
+  `docs/estado.md`, "A futuro").
+
+## 2026-10-11 — Deploy de la Facturación E1
+
+**Estado**
+- Deploy: sí, a producción. Backend de `b5e4b50` a `b6837f1` (BK #88); frontend a
+  `171d7c6` (FT #72), con swap de carpeta enseguida del reinicio.
+- Migraciones: `facturacion/001_unidad_por_tarea.sql` en producción, después de respaldar
+  `usuarios` fuera del repo (la tabla nueva tiene FK hacia ella). Pre-check sin tablas
+  `facturacion%`; `SHOW CREATE TABLE` igual al archivo, 0 filas. Respaldo borrado después
+  del smoke.
+- Smoke sin escribir: arranque con las tablas verificadas, `/health` ok; el módulo activo con
+  sus seis pantallas y la pantalla Unidad de medida por defecto con todas las tareas del
+  campo Sin definir; sitio con el bundle nuevo; la API sin sesión responde 401; journal sin
+  errores.
+
+**Pendiente**
+- La primera carga en producción, desde el VPS y con su propio OK (en `docs/estado.md`).
