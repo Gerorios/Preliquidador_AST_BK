@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Facturación E2, con su migración 003: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` y una propuesta para agrupar las filas sin número (la 4 cambió: la migración de la planilla sube todas las filas, tengan o no número de factura).
+Facturación E2, con su migración 003: las 18 preguntas del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` quedaron cerradas el 2026-10-12, en la rama `feature/plan-e2-decisiones` (sin PR). Falta el OK del usuario para abrir y mergear ese PR, y después arranca la ejecución.
 
 ## Pendientes del usuario
 
