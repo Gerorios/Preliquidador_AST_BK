@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Facturación E2, con su migración 003: las 18 preguntas del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` quedaron cerradas el 2026-10-12, en la rama `feature/plan-e2-decisiones` (sin PR). Falta el OK del usuario para abrir y mergear ese PR, y después arranca la ejecución.
+Facturación E2: el plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` está cerrado, sin preguntas abiertas (BK #95, 2026-10-12). Lo próximo es arrancar su ejecución (fase 3 del flujo), con la migración `facturacion/003`.
 
 ## Pendientes del usuario
 

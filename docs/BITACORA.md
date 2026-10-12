@@ -3576,3 +3576,38 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 **Pendiente**
 - Borrar del servidor el respaldo de la 002 cuando ya no haga falta como vuelta atrás (en
   `docs/estado.md`).
+
+## 2026-10-12 — Decisiones abiertas de la Facturación E2 cerradas en el plan
+
+**Mergeado**
+- PR #95 (backend) — cierra las 18 preguntas abiertas del plan de la E2 y pasa sus
+  consecuencias al modelo, la migración del histórico, la API, el listado y los tests. Sin PR
+  hermano en el front.
+
+**Por frontera**
+- Docs: el plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` queda sin preguntas
+  abiertas; el glosario de Facturación suma que un Comprobante histórico puede no tener número
+  y el término Pendiente de facturar.
+
+**Decisiones**
+- Las filas sin número de factura se migran todas, agrupadas en un Comprobante sin número por
+  Cliente y fecha a facturar; cuando la planilla tenga el número, la corrida siguiente las pasa
+  al Comprobante numerado en la misma corrida. Las de fecha a facturar hasta el 2026-07-31
+  cuentan como facturadas y las posteriores quedan Pendiente de facturar, sin contar en el
+  Cruce. Porqué: decisión del usuario, distinta de lo recomendado; una fila nunca cuenta dos
+  veces, y el corte separa las dos tandas de la planilla de hoy y vale para las corridas que
+  vengan. Descartado: un Comprobante por fila (llena el listado) y sumarlas al Comprobante
+  numerado del mismo Cliente y fecha (no se sabe si fueron en la misma factura).
+- Los números dobles se migran tal cual. Porqué: las contadoras identificaban así ese detalle.
+  Descartado: omitirlos y corregir la planilla.
+- Las empresas emisoras son las de la base de sueldos. Porqué no registrado en el PR.
+- Durante la E2 y la E3 las contadoras siguen con la planilla hasta que el módulo esté
+  probado, aprobado y revisado por completo. Porqué no registrado en el PR.
+- La pregunta 2 se resuelve omitiendo y listando; las demás quedan con el supuesto del plan.
+
+**Estado**
+- Deploy: no (sólo docs).
+- Migraciones: ninguna.
+
+**Pendiente**
+- Arrancar la ejecución de la E2, con la migración `facturacion/003` (en `docs/estado.md`).
