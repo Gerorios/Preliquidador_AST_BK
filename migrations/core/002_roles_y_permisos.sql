@@ -1,9 +1,10 @@
 -- core/002 — Roles armables con permisos de ver o editar por pantalla (ADR-0020).
 -- NO DIFERIBLE: el código de esta versión lee rol, rol_permiso y usuario_rol cada vez que
 -- carga a la persona (login y cada pedido con sesión). Sin estas tablas no entra nadie.
--- Idempotente: las tablas se crean si no existen y la carga inicial corre sólo si `rol`
--- está vacía. Correrla otra vez no cambia nada.
--- No toca usuario_modulo: queda como foto del esquema anterior hasta el PR que la borra.
+-- Las tablas se crean si no existen y la carga inicial corre sólo si `rol` está vacía. La
+-- carga inicial lee usuario_modulo, que core/003 borra: en una base que ya pasó por core/003
+-- esta migración no se vuelve a correr (falla con "Table doesn't exist"). En una base nueva
+-- sigue andando, porque ORDEN.txt corre 001, 002 y 003 en ese orden.
 
 -- Los literales comparan con la collation de las tablas (si no, "Illegal mix of collations").
 SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -78,10 +79,9 @@ WHERE @sembrar;
 
 COMMIT;
 
--- Vuelta atrás: para volver al código anterior NO hace falta tocar la base. Ese código lee
--- usuario_modulo, que esta migración no toca, e ignora estas tablas. Los cambios de roles
--- hechos después del deploy no están en usuario_modulo y habría que rehacerlos a mano.
--- Sólo si se abandona el esquema, en este orden y una sentencia por línea:
+-- Vuelta atrás: desde core/003 ya no hay código anterior al que volver sin tocar la base,
+-- porque ese código lee usuario_modulo (ver la vuelta atrás de core/003). Estas tablas sólo
+-- se borran si se abandona el esquema, en este orden y una sentencia por línea:
 --   DROP TABLE usuario_rol;
 --   DROP TABLE rol_permiso;
 --   DROP TABLE rol;
