@@ -64,7 +64,7 @@ usuario lo pida.
 | Cambio en el VPS o la infraestructura: config del servidor, paquetes, accesos, certificados, cómo se deploya | `docs/DEPLOY.md` (local, fuera de git) | en el momento del cambio |
 | El *por qué* de un cambio de código: qué se eligió y qué se descartó | cuerpo del PR | al abrir el PR |
 | Lo que está en curso con su fase, el próximo paso, lo que espera al usuario y lo pospuesto | `docs/estado.md`, sólo lo vivo | al avanzar; al entregar se borra de ahí |
-| Un merge a `main` | `docs/BITACORA.md`, y la tarea sale de `docs/estado.md` | después de preguntar (ver "Bitácora y estado") |
+| Un merge a `main` | `docs/BITACORA.md`, y la tarea sale de `docs/estado.md` | después de cada merge, sin preguntar (ver "Bitácora y estado") |
 | Un término del dominio: qué **es**, no cómo se implementa | el glosario que indica `CONTEXT-MAP.md`: `CONTEXT.md` si es del Sistema, el `CONTEXT-<módulo>.md` si es de un módulo | al cerrar el término |
 | Una decisión de arquitectura, con sus alternativas descartadas | `docs/adr/` | sólo con el usuario |
 | Una regla para construir un módulo | `docs/modulos/GUIA-MODULOS.md` | cuando cambia la regla |
@@ -131,9 +131,12 @@ Cómo se mantienen:
   bitácora; el 2026-10-05 se reabrió esa decisión para sumar `estado.md`, que cambia en el
   mismo commit que cierra cada entrega: por PR caería en la misma cadena. No extender la
   excepción a ningún otro archivo.
-- **Después de cada merge a `main`, preguntar al usuario** en una línea si se anota. Si dice
-  que no, seguir sin insistir: la próxima corrida lo cubre igual. Nunca anotar sin
-  preguntar, porque escribe en `main` directo.
+- **Después de cada merge a `main`, se anota sin preguntar**: se corre `/bitacora` y se
+  commitean los dos archivos a `main`. El push de `main` sigue esperando el OK del usuario.
+  Al terminar se le avisa en una línea, nombrando los archivos. Porqué: hasta el
+  2026-10-11 se preguntaba antes, porque escribe en `main` directo, y la respuesta era
+  siempre que sí; el usuario pidió automatizarlo. El push con OK conserva el control sobre
+  lo que sale de la máquina.
 
 ### Idioma
 

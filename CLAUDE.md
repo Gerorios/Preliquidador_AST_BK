@@ -18,7 +18,7 @@ lo que existe en Claude Code.
   este sistema de la skill global `flujo`, que se usa en lugar de la global (no las dos).
 - **Bitácora**: la escribe el agente `bitacora` con `/bitacora`, que también actualiza
   `docs/estado.md`; quien lo despachó commitea los dos juntos a `main`. Dos respaldos
-  recuerdan preguntar después de un merge: un hook PostToolUse sobre `gh pr merge` y el
+  recuerdan anotar después de un merge: un hook PostToolUse sobre `gh pr merge` y el
   `post-merge` de git.
 - **Memoria de Claude**: no guarda el estado de las tareas, que vive en `docs/estado.md`.
   Queda para las preferencias del usuario y las trampas de las herramientas. Vive fuera del
