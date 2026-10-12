@@ -163,7 +163,7 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
 
 ### 3.1 Decisiones
 
-**Modelo.** Una migración, `migrations/facturacion/002_comprobantes.sql` (supuesto E1: la E1 usa `001`), crea las tres tablas.
+**Modelo.** Una migración, `migrations/facturacion/003_comprobantes.sql` (la `001` es de la E1 y la `002` la borra), crea las tres tablas.
 
 `facturacion_comprobante`:
 
@@ -357,7 +357,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 | 9 | `GET /clientes` (sólo activos) | ver | 200 `[{id, nombre}]` · 503 |
 | 10 | `GET /clientes/{cliente_id}/fincas` | ver | 200 `[{id, nombre}]` · 503 |
 | 11 | `GET /empresas` | ver | 200 `["..."]` · 503 |
-| — | `GET /tareas` (supuesto E1) | ver en `unidad` **o** `comprobantes` | `[{tarea_id, nombre, unidad_sugerida, no_facturable}]` |
+| — | `GET /tareas` (lo crea la E2) | ver en `comprobantes` | `[{tarea_id, nombre, grupo_tarea, unidad_sugerida, no_facturable}]` |
 
 **Entrada de POST y PUT:**
 ```json
@@ -406,7 +406,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 ### 3.3 Corte en PRs y orden
 
 1. **PR-0, núcleo del front**, sólo si la E1 no lo hace. Se puede hacer ya, en paralelo con BK-A.
-2. **BK-A y FT-A, hermanos**: comprobantes, migración 002 con las tres tablas, lecturas del campo, mapa de permisos, listado y alta/edición. El FT-A arranca en paralelo contra el contrato.
+2. **BK-A y FT-A, hermanos**: comprobantes, migración 003 con las tres tablas, lecturas del campo, mapa de permisos, listado y alta/edición. El FT-A arranca en paralelo contra el contrato.
 3. **BK-B y FT-B, hermanos**: adjuntos. Van después del merge de BK-A.
 4. **BK-C, sólo backend**: el histórico. Va después del merge de BK-A y en paralelo con BK-B.
 5. **Un solo deploy de toda la E2**, con OK (FRENADOS F4 a F8).
@@ -450,8 +450,8 @@ Todo arranca de `main` con la E1 mergeada.
 
 **A2. Par: modelo y migración**
 - Archivos:
-  - `app/modulos/facturacion/models.py` (E1): suma `Comprobante`, `LineaComprobante` y `Adjunto`;
-  - `migrations/facturacion/002_comprobantes.sql`;
+  - `app/modulos/facturacion/models.py` (hoy sin clases): suma `Comprobante`, `LineaComprobante` y `Adjunto`;
+  - `migrations/facturacion/003_comprobantes.sql`;
   - `migrations/ORDEN.txt`;
   - `tests/facturacion/test_modelo_comprobantes.py`.
 - Rojo (SQLite con `create_all`):
@@ -461,7 +461,7 @@ Todo arranca de `main` con la E1 mergeada.
   - un `nombre_en_disco` repetido da `IntegrityError`.
 - Verde:
   - los modelos;
-  - el SQL con encabezado `-- facturacion/002 — ...`, `-- NO DIFERIBLE` y "aplicar una vez por base", más la vuelta atrás comentada (sección 4, riesgo 1);
+  - el SQL con encabezado `-- facturacion/003 — ...`, `-- NO DIFERIBLE` y "aplicar una vez por base", más la vuelta atrás comentada (sección 4, riesgo 1);
   - la línea en `ORDEN.txt`.
 - Verificación: `python -m pytest tests/facturacion/test_modelo_comprobantes.py tests/core/test_manifiesto_migraciones.py tests/core/test_refrescar_testing.py -q`. Además, controlar que las columnas del SQL y del modelo sean las mismas; el control de verdad es F1.
 
@@ -474,7 +474,7 @@ Todo arranca de `main` con la E1 mergeada.
   - `todas_las_fincas()`, para el script, trae `{id, nombre, cliente_id}`;
   - `empresas()` va a la sesión de sueldos, recorta, saca vacíos y ordena;
   - la segunda llamada dentro de los 10 minutos no vuelve a consultar (monkeypatch del reloj).
-  - Si la E1 no da `tareas(incluir_baja=True)`, se suma acá.
+  - `obtener_tareas()` no trae las tareas dadas de baja: si la E2 las necesita, se suma acá.
 - Verde: SQL `text()` con el estilo y el filtro `estado <> 9` de `app/modulos/preliquidacion/services/consulta_externa.py:209-223`, pero con ids. El de empresas copia `preliquidacion.py:120-124`.
 - Verificación: correr el archivo de tests. Los datos reales se ven en F1.
 
@@ -509,12 +509,12 @@ Todo arranca de `main` con la E1 mergeada.
 **A6. Par: router y mapa de permisos**
 - Archivos:
   - `app/modulos/facturacion/api/comprobantes.py`;
-  - `app/modulos/facturacion/__init__.py` (E1: suma el router a `routers`);
+  - `app/modulos/facturacion/__init__.py` (`routers` pasa de `()` al router nuevo);
   - `app/modulos/facturacion/permisos.py` (E1: `ver_comprobantes` y `editar_comprobantes` si no están; zona sensible);
   - `app/modulos/facturacion/schemas.py` (salidas);
-  - `tests/facturacion/test_mapa_permisos.py` (E1: suma las filas 1 a 5 y 9 a 11, y sube el conteo en 8);
+  - `tests/facturacion/test_mapa_permisos.py` (hoy con `ESPERADO` vacío: suma las filas 1 a 5, 9 a 11 y la de `GET /tareas`, y el conteo pasa de 0 a 9);
   - `tests/facturacion/test_api_comprobantes.py`.
-- Si la ruta de tareas de la E1 exige sólo `unidad`, se amplía a `requiere_pantalla(MODULO, "unidad", "comprobantes")` y se corrige su fila.
+- Se crea `GET /api/facturacion/tareas` con Ver en `comprobantes`, sobre `obtener_tareas()` de la `consulta_externa`, con su fila en el mapa.
 - Rojo:
   - el mapa con las filas sin ruta;
   - la API con servicio falso (como `tests/terceros/test_api_terceros.py`): 201 con cuerpo; cada excepción da su código y su `detail` del contrato; quien sólo ve recibe 403 en las escrituras y 200 en los GET; quien no tiene la pantalla recibe 403.
@@ -745,7 +745,7 @@ Todo arranca de `main` con la E1 mergeada.
 - **F1. DDL en `testing`** (BK-A):
   - script con `assert database == "testing"`;
   - antes, `SHOW TABLES LIKE 'facturacion\_comprobante'`, y lo mismo con las otras dos, tiene que dar vacío;
-  - se aplica la 002 y sólo se tocan esas tablas;
+  - se aplica la 003 y sólo se tocan esas tablas;
   - después, el backend de la rama arranca con "Tablas y columnas BD propia: verificadas".
 - **F2. Carpeta de adjuntos local** fuera del repo, con la variable en el `.env` de la máquina del smoke. No se copia el `.env` real al worktree.
 - **F3. Histórico en `testing`**:
@@ -760,7 +760,7 @@ Todo arranca de `main` con la E1 mergeada.
   - todo anotado en `docs/DEPLOY.md`.
 - **F5. Producción**:
   - **respaldo de la base** antes del DDL;
-  - aplicar la 002;
+  - aplicar la 003;
   - verificar que existan las tablas;
   - la vuelta atrás está escrita (sección 4, riesgo 1).
 - **F6. Deploy** del backend y del front (swap de carpeta).
@@ -891,20 +891,20 @@ Todo arranca de `main` con la E1 mergeada.
 
 **Backend**
 1. Existe `app/modulos/facturacion/` con:
-   - `__init__.py`: `ModuloInfo(clave="facturacion", activo=True, routers=..., modelos="app.modulos.facturacion.models", pantallas=PANTALLAS)`;
-   - `permisos.py`: `MODULO = "facturacion"` y `PANTALLAS` con `pendientes`, `cruce` (`editable=False`), `comprobantes`, `unidad`, `equivalencias` y `panel` (`editable=False`);
+   - `__init__.py`: `ModuloInfo(clave="facturacion", activo=True, routers=(), modelos="app.modulos.facturacion.models", pantallas=PANTALLAS)`;
+   - `permisos.py`: `MODULO = "facturacion"` y `PANTALLAS` con cinco: `pendientes`, `cruce` (`editable=False`), `comprobantes`, `equivalencias` y `panel` (`editable=False`). La clave `unidad` se retiró el 2026-10-12 y no se reutiliza;
    - `models.py`, `schemas.py`, `api/` y `services/consulta_externa.py`.
 2. Las claves de unidad son las 9 de la sección 3.1, en una constante del módulo; por ejemplo, `UNIDADES` en `app/modulos/facturacion/unidades.py`.
-3. Una tabla `facturacion_tarea` con `tarea_id` del campo, `unidad_sugerida` y `no_facturable`.
-4. `GET /api/facturacion/tareas` devuelve `[{tarea_id, nombre, unidad_sugerida, no_facturable}]`. **Su permiso tiene que admitir Ver en `comprobantes`**: lo mejor es que nazca como `requiere_pantalla(MODULO, "unidad", "comprobantes")`.
-5. La `consulta_externa` tiene `tareas()` con id y nombre. La E2 necesita además las dadas de baja para el histórico.
-6. La migración de la E1 es `migrations/facturacion/001_*.sql`; la de la E2 es `002`.
+3. La tabla `facturacion_tarea` de la E1 la borró `facturacion/002` (2026-10-12): la Unidad sugerida y No facturable se leen del sistema de campo.
+4. `GET /api/facturacion/tareas` no existe: lo crea la E2 (paso A6), con Ver en `comprobantes`, y devuelve `[{tarea_id, nombre, grupo_tarea, unidad_sugerida, no_facturable}]`.
+5. La `consulta_externa` tiene `obtener_tareas()`, que devuelve `{tarea_id, nombre, grupo_tarea, unidad_sugerida, no_facturable}` sin las dadas de baja; la Unidad sugerida sale del tercer segmento de la descripción de la tarea. La E2 necesita además las dadas de baja para el histórico.
+6. La migración de la E1 es `migrations/facturacion/001_*.sql` y la `002` borra su tabla; la de la E2 es `003`.
 7. Existe `tests/facturacion/test_mapa_permisos.py`, con `ESPERADO` y una prueba del conteo.
-8. El script de primera carga de la E1 lee de `fuentes/`, simula por defecto y escribe con `--aplicar`. Conviene alinear la guarda de producción con la de la sección 3.1.
+8. El script de primera carga de la E1 se borró el 2026-10-12. Su guarda (`--aplicar`, y `--confirmar-base <nombre>` fuera de `testing`) sigue descrita acá, en la alineación con la E1, y en el PR #88; con ella se alinea la de la sección 3.1.
 9. No existe `app/modulos/facturacion/config.py`; lo crea la E2.
 
 **Front**
-10. Existe `src/modulos/facturacion/rutas.jsx` (`PREFIJO = '/facturacion'`, `MODULO = 'facturacion'`), registrado en `src/modulos/registro.js`, con su servicio de tareas (`listarTareas`) y las etiquetas de las 9 unidades.
+10. Existe `src/modulos/facturacion/rutas.jsx` (`PREFIJO = '/facturacion'`, `MODULO = 'facturacion'`), registrado en `src/modulos/registro.js`, sin rutas ni servicio. `unidades.js` conserva las claves y las etiquetas de las 9 unidades, y el servicio lo crea el FT-A.
 11. Si la E1 mueve FiltrosBar, TablaOrdenable y el estado por pantalla al núcleo, el PR-0 desaparece.
 12. Si la E1 tiene tests, `package.json` ya incluye `src/modulos/facturacion/*.test.js`.
 13. `PRODUCT.md` del front ya suma a las contadoras.
@@ -913,10 +913,19 @@ Todo arranca de `main` con la E1 mergeada.
 
 El plan de la E1 (`2026-10-11-facturacion-e1.md`) confirma casi todo el anexo. Las diferencias, ya corregidas arriba o a seguir al ejecutar:
 
-- **La clave de la pantalla es `unidad`**, no `unidad_facturacion`: `tests/core/test_registro_modulos.py` exige claves `[a-z]+`. Ya está reemplazada en este plan.
-- **La tabla de la E1 es `facturacion_tarea`** (`tarea_id` del campo, `unidad_sugerida`, `no_facturable`, `actualizado_en`, `actualizado_por`). Sin fila = Sin definir.
-- **`GET /api/facturacion/tareas`** de la E1 devuelve además `grupo_tarea` y `sin_definir`, y nace con Ver en `unidad` sola. La E2 la amplía a `requiere_pantalla(MODULO, "unidad", "comprobantes")` y corrige su fila en `tests/facturacion/test_mapa_permisos.py`, como dice el paso de arriba.
-- **La consulta del campo de la E1** filtra las bajas y expone `normalizar_nombre()`. La E2 suma la lectura con bajas para el histórico, sin cambiar la de la E1.
-- **La guarda de escritura de los scripts**: la E1 usa `--aplicar` y, sobre una base que no sea `testing`, además `--confirmar-base <nombre>`. El script del histórico usa la misma convención en vez de pedir que se tipee el nombre.
+- **La clave de la pantalla de la E1 era `unidad`**, no `unidad_facturacion`: `tests/core/test_registro_modulos.py` exige claves `[a-z]+`. Se retiró el 2026-10-12 (ver la sección siguiente) y no se reutiliza.
+- **La tabla de la E1 era `facturacion_tarea`** (`tarea_id` del campo, `unidad_sugerida`, `no_facturable`, `actualizado_en`, `actualizado_por`). La borró `facturacion/002` el 2026-10-12.
+- **`GET /api/facturacion/tareas`** de la E1 se retiró el 2026-10-12 con su pantalla. La E2 lo crea con Ver en `comprobantes` y suma su fila en `tests/facturacion/test_mapa_permisos.py`, como dice el paso A6.
+- **La consulta del campo de la E1** filtra las bajas y expone `normalizar_nombre()`; desde el 2026-10-12 trae también la Unidad sugerida y No facturable de cada tarea. La E2 suma la lectura con bajas para el histórico, sin cambiar la de la E1.
+- **La guarda de escritura de los scripts**: el script de la E1 (borrado el 2026-10-12) usaba `--aplicar` y, sobre una base que no sea `testing`, además `--confirmar-base <nombre>`. El script del histórico usa la misma convención en vez de pedir que se tipee el nombre.
 - **La barra de filtros, las tablas y el estado por pantalla** no los sube la E1: el PR-0 de este plan queda.
 - **La E2 sale de `main` después del merge de BK-E1** (las dos tocan `permisos.py`, `__init__.py`, `ORDEN.txt` y el test del mapa).
+
+## Alineación con la Unidad sugerida leída del campo (sesión principal, 2026-10-12)
+
+El plan `2026-10-12-unidad-desde-campo.md` retiró la pantalla Unidad de medida por defecto, sus endpoints, la tabla `facturacion_tarea` y los permisos guardados de `unidad`: la Unidad sugerida y No facturable se leen en vivo del sistema de campo. Lo que cambia acá ya está corregido arriba:
+
+- **La migración de la E2 es la `003`**: la `002` borra la tabla de la E1.
+- **`GET /api/facturacion/tareas` lo crea la E2**, con Ver en `comprobantes`.
+- **El módulo arranca sin rutas**: `routers=()`, `models.py` sin clases y el mapa de permisos con 0 filas.
+- **La E2 sale de `main` después del merge de ese PR** (toca `permisos.py`, `__init__.py`, `models.py`, `ORDEN.txt` y el test del mapa).
