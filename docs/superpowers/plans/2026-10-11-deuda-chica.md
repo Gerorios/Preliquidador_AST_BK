@@ -68,3 +68,13 @@ de Terceros en `testing`. Lo que sigue queda como referencia.
 A y B tocan líneas distintas de `ORDEN.txt`; se mergean de a uno, A primero. D y E son
 independientes. Aprobado por el usuario el 2026-10-11 (B con la lectura en el VPS; C, para
 Pitu).
+
+## Paso R1 (revisión de E, high)
+
+- Hallazgo: `debeTragar` dejaba pasar toda tecla con Ctrl, Cmd o Alt y las F. F4 y Alt+Flecha
+  abajo abren la lista nativa de un select por encima del cartel: en la pantalla Unidad de
+  medida por defecto se podía elegir otra unidad mientras salía el guardado y mandar un segundo
+  PATCH de la misma tarea. Ctrl+V y AltGr (Ctrl+Alt en Windows) cambiaban el texto del campo.
+- Arreglo: lista blanca. Se traga todo salvo F5, F12 y Ctrl/Cmd (sin Alt) con R, C o F.
+- Par: test rojo con F4, Alt+Flecha abajo, Ctrl+V/X/Z, AltGr; verde; y en el navegador, con el
+  guardado colgado, F4 y Alt+Flecha abajo no abren la lista ni mandan otro PATCH.
