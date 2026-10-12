@@ -1,8 +1,10 @@
 """Mapa de permisos de Facturación (ADR-0020): qué pantalla y qué nivel exige
 cada endpoint de `/api/facturacion`.
 
-`ESPERADO` copia las dos rutas del contrato 2.5 del plan de la E1
-(`docs/superpowers/plans/2026-10-11-facturacion-e1.md`). El mapa real se lee
+`ESPERADO` está vacío: las dos rutas de la E1 (`/tareas`, pantalla `unidad`)
+salieron el 2026-10-12 con su pantalla
+(`docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`), y la E2 suma acá
+las suyas. El mapa real se lee
 de `app.routes`: cada dependencia de `requiere_pantalla` expone `.requisito`.
 Una ruta nueva sin su fila, una fila sin ruta o un permiso distinto del de la
 tabla hacen fallar el test.
@@ -21,15 +23,11 @@ def _exige(nivel, *pantallas):
     return (M, frozenset(pantallas), nivel)
 
 
-VER_UNIDAD = _exige("ver", "unidad")
-EDITAR_UNIDAD = _exige("editar", "unidad")
-
 F = PREFIJO
 
-ESPERADO = {
-    ("GET", f"{F}/tareas"): VER_UNIDAD,
-    ("PATCH", f"{F}/tareas/{{tarea_id}}"): EDITAR_UNIDAD,
-}
+# Hoy Facturación no tiene rutas. La E2 suma acá sus filas, con `_exige` y `F`:
+# ("GET", f"{F}/<ruta>"): _exige("ver", "<pantalla>").
+ESPERADO = {}
 
 
 def _normalizar(requisito):
@@ -64,8 +62,8 @@ def _mapa_real():
     return mapa
 
 
-def test_la_tabla_tiene_las_2_rutas():
-    assert len(ESPERADO) == 2
+def test_la_tabla_no_tiene_rutas():
+    assert len(ESPERADO) == 0
 
 
 def test_cada_endpoint_exige_la_pantalla_y_el_nivel_de_la_tabla():
