@@ -1,8 +1,9 @@
 # Sistema de gestión La Asturiana — backend
 
 Monolito modular en FastAPI. Núcleo compartido (`app/core/`) + módulos autocontenidos
-(`app/modulos/<m>/`). Módulos: **Preliquidación** (activo, en producción) y
-**Liquidación Terceros** (molde, inactivo, lo construye Pitu).
+(`app/modulos/<m>/`). Módulos, los tres activos y en producción: **Preliquidación**,
+**Liquidación Terceros** (en construcción, lo construye Pitu) y **Facturación** (en
+construcción por etapas).
 
 **El front es otro repo**: `frontend_preliquidacion` (React + Vite). Casi todo cambio de
 módulo necesita PRs hermanos en los dos.

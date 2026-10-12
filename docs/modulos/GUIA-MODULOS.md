@@ -16,7 +16,11 @@ Es una aplicación web interna de La Asturiana SRL que arma la **preliquidación
 
 Está **en producción desde 2026-07-23** en `https://preliquidacion.laasturianasrl.com.ar`, lo usan el liquidador de sueldos y la gerencia, y los datos que tiene son reales. Eso condiciona todo lo que sigue: cualquier cambio tiene que poder entrar sin romper lo que ya se usa.
 
-El módulo de Liquidación Terceros resuelve otro circuito, el de lo que se le paga y se le descuenta a los terceros que prestan servicio (fletes de colectivos y horas de taller sobre maquinaria ajena), que hoy se hace con un Excel conectado a la misma base del sistema de campo. La idea es traerlo adentro del mismo sistema, con el mismo login, el mismo menú y el mismo deploy, como segundo módulo. El sistema pasa a ser un pequeño sistema de gestión al que se le van a ir agregando módulos.
+El sistema pasó a ser un pequeño sistema de gestión al que se le van agregando módulos, con el mismo login, el mismo menú y el mismo deploy. Hoy tiene tres, los tres activos y en producción:
+
+- **Preliquidación**: lo de arriba, el primero.
+- **Liquidación Terceros** (desde 2026-09-30, en construcción; lo construye Pitu): lo que se le paga y se le descuenta a los terceros que prestan servicio (fletes de colectivos y horas de taller sobre maquinaria ajena), que hoy se hace con un Excel conectado a la misma base del sistema de campo y el módulo trae adentro del sistema.
+- **Facturación** (desde 2026-10-11, en construcción por etapas): registra los comprobantes que el grupo le emite a cada cliente y los cruza contra lo trabajado en el campo, para saber qué falta facturar. Su primera etapa trajo la pantalla Unidad de medida por defecto.
 
 ### 1.1 Lo que tiene que saber del dominio del preliquidador
 
@@ -147,7 +151,7 @@ backend_preliquidacion/
 │   │   ├── asistente.py              # chat de ayuda, transversal
 │   │   └── quincena.py               # calcular_rango_quincena y afines
 │   └── modulos/
-│       ├── __init__.py               # REGISTRO = (PRELIQUIDACION, TERCEROS); activos(); claves()
+│       ├── __init__.py               # REGISTRO = (PRELIQUIDACION, TERCEROS, FACTURACION); activos(); claves()
 │       ├── preliquidacion/           # MÓDULO Preliquidación de sueldos (activo=True)
 │       │   ├── __init__.py           # arma MODULO: ModuloInfo(..., pantallas=PANTALLAS)
 │       │   ├── permisos.py           # PANTALLAS y las dependencias por pantalla y nivel
@@ -155,27 +159,36 @@ backend_preliquidacion/
 │       │   ├── models.py
 │       │   ├── schemas.py
 │       │   └── services/             # consulta_externa.py y el resto de la lógica del módulo
-│       └── terceros/                 # MÓDULO Liquidación Terceros (molde, inactivo — activo=False)
+│       ├── terceros/                 # MÓDULO Liquidación Terceros (activo=True)
+│       │   ├── __init__.py           # arma MODULO: ModuloInfo(..., pantallas=PANTALLAS)
+│       │   ├── permisos.py           # PANTALLAS y las dependencias por pantalla y nivel
+│       │   ├── api/terceros.py       # APIRouter(prefix="/api/terceros", tags=["Liquidación Terceros"])
+│       │   ├── models.py             # tablas terceros_*
+│       │   ├── schemas.py
+│       │   └── services/             # consulta_externa.py (las consultas del Excel) y el resto
+│       └── facturacion/              # MÓDULO Facturación (activo=True)
 │           ├── __init__.py           # arma MODULO: ModuloInfo(..., pantallas=PANTALLAS)
-│           ├── permisos.py           # PANTALLAS y las dependencias por pantalla y nivel
-│           ├── api/terceros.py       # APIRouter(prefix="/api/terceros", tags=["Liquidación Terceros"])
-│           ├── models.py             # tablas terceros_* (aún sin ninguna)
+│           ├── permisos.py           # PANTALLAS: las seis, aunque todavía exista una sola
+│           ├── api/tareas.py         # Unidad de medida por defecto
+│           ├── models.py             # tablas facturacion_*
 │           ├── schemas.py
-│           ├── services/
-│           └── consulta_externa.py   # las consultas del Excel, en SQL parametrizado
+│           └── services/             # consulta_externa.py, unidad_service.py, primera_carga.py
 ├── migrations/
 │   ├── ORDEN.txt                     # orden de aplicación de todas las migraciones; marca `historica` las ya contenidas en el 000
 │   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
-│   └── terceros/                     # (molde, inactivo) LEEME.md; 001_crear_tablas.sql cuando arranque
+│   ├── terceros/                     # LEEME.md; 001_crear_tablas.sql, 002_…
+│   └── facturacion/                  # LEEME.md; 001_unidad_por_tarea.sql
 ├── tests/
 │   ├── core/                         # autorización por pantalla, arranque
-│   ├── preliquidacion/               # el resto (22 archivos)
-│   └── terceros/                     # (molde, inactivo) test_molde.py
+│   ├── preliquidacion/
+│   ├── terceros/
+│   └── facturacion/
 └── docs/
     ├── adr/                          # decisiones de todo el sistema
     └── modulos/
         ├── GUIA-MODULOS.md           # este archivo
-        └── terceros/                 # CONTEXT-terceros.md, plan-terceros.md, fuentes/ (fuera de git)
+        ├── terceros/                 # CONTEXT-terceros.md, plan-terceros.md, fuentes/ (fuera de git)
+        └── facturacion/              # CONTEXT-facturacion.md, plan-facturacion.md, fuentes/ (fuera de git)
 
 frontend_preliquidacion/
 └── src/
@@ -201,44 +214,47 @@ frontend_preliquidacion/
         │   ├── pages/            # Dashboard, Revision, Verificacion, Conceptos, CategoriasOperarios, Gerencial, PanelPorConcepto
         │   ├── components/       # PanelLinea, FiltrosBar, AlertasBanner, ControlesJornal, InputBusqueda
         │   └── services/         # preliquidacion.js, gerencial.js
-        └── terceros/             # (PR 4, frontend) molde, inactivo
-            ├── rutas.jsx         # activo: false
-            └── pages/Inicio.jsx  # única pantalla del molde
+        ├── terceros/             # MÓDULO Liquidación Terceros
+        │   ├── rutas.jsx         # activo: true
+        │   └── pages/            # Inicio, Grilla, Tarifario, Verificaciones, Estaciones
+        └── facturacion/          # MÓDULO Facturación
+            ├── rutas.jsx         # activo: true
+            ├── unidades.js       # lógica pura de la pantalla, con unidades.test.js (node --test)
+            └── pages/            # UnidadFacturacion
 ```
 
 Cada módulo se registra en dos lugares y nada más: `app/modulos/__init__.py` incluye su `MODULO`, y `src/modulos/registro.js` incluye su entrada. `app/main.py` y `App.jsx` no conocen módulos por nombre: recorren el registro. Todo lo demás del módulo vive adentro de su carpeta.
 
-### 3.3 Cómo activar y completar el molde de Liquidación Terceros
+### 3.3 Cómo se suma un módulo
 
-El molde ya existe en los dos repos, registrado pero inactivo (ver "Módulo activo" en `CONTEXT.md`). Esto es lo que hay que tocar para que deje de ser un molde:
+Los tres módulos de hoy se hicieron así; Facturación (2026-10-11) es el ejemplo más reciente y más chico para copiar. Completar un módulo que ya existe, como Terceros o Facturación, es lo mismo pero dentro de su carpeta.
 
-**1. Backend — activar y completar.**
+**1. Backend.**
 
-- `app/modulos/terceros/__init__.py`: cambiar `activo=False` a `activo=True` en `ModuloInfo(...)` (hacerlo en local primero). Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` empieza a devolverlo (endpoint para la pantalla de Administración del PR 5; hoy el frontend no lo consulta). Los modelos del módulo se registran con el campo `modelos` de `ModuloInfo`; el arranque los importa y con eso el chequeo de tablas y columnas faltantes del arranque (y de `/health`) cubre al módulo.
-- `app/modulos/terceros/api/terceros.py` hoy tiene un único endpoint de estado (`GET /api/terceros/` → `{"modulo": "terceros", "estado": "en construcción"}`); ahí se agregan los endpoints reales, o se parte en más archivos dentro de `api/` (ver el patrón de `app/modulos/preliquidacion/api/`).
-- Modelos en `app/modulos/terceros/models.py`, tablas con prefijo `terceros_` (regla 5 de la sección 4.2).
-- Migraciones en `migrations/terceros/` (`001_crear_tablas.sql`, `002_...`; ver `migrations/terceros/LEEME.md`), anotadas al final de `migrations/ORDEN.txt` y probadas primero contra `testing`.
-- Tests en `tests/terceros/` (hoy solo `test_molde.py`, que confirma que el módulo compila inactivo).
-- Glosario del dominio en `docs/modulos/terceros/CONTEXT-terceros.md`: ya tiene el cuestionario de la sección 8.1 de esta guía: responderlo ahí antes de diseñar el modelo.
+- `app/modulos/<m>/__init__.py` arma `MODULO = ModuloInfo(...)` con `clave`, `nombre`, `descripcion`, `activo`, sus `routers`, `modelos` (la ruta del `models.py`, para que el arranque lo importe y el chequeo de tablas y columnas faltantes del arranque y de `/health` cubra al módulo) y `pantallas=PANTALLAS`. Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` lo publica.
+- `app/modulos/<m>/permisos.py` declara `PANTALLAS`, y cada endpoint pide la suya con `requiere_pantalla` (ver la sección 5). Se pueden declarar pantallas que todavía no existen, así el editor de roles ya las muestra: Facturación declaró sus seis con una sola hecha.
+- Endpoints en `api/`, lógica en `services/` (las consultas a la base de campo, en `services/consulta_externa.py`, con SQL parametrizado), modelos en `models.py` con tablas de prefijo `<m>_` (regla 5 de la sección 4.2).
+- Migraciones en `migrations/<m>/` (`LEEME.md`, `001_...`), anotadas al final de `migrations/ORDEN.txt` y probadas primero contra `testing`. Sus tablas se suman a `TABLAS` de `scripts/refrescar_testing.py` (sección 6.2).
+- Tests en `tests/<m>/`. Los de `tests/facturacion/test_registro_y_permisos.py` (registrado, activo y con sus pantallas) y `test_mapa_permisos.py` (cada endpoint con su pantalla y nivel) sirven de molde.
+- Glosario del módulo en `docs/modulos/<m>/CONTEXT-<m>.md`, anotado en `CONTEXT-MAP.md`. Antes de diseñar el modelo, se responde ahí el cuestionario de la sección 8.1.
 
-**2. Frontend — activar y completar.**
+**2. Frontend.**
 
-- `src/modulos/terceros/rutas.jsx`: cambiar `activo: false` a `activo: true`.
-- Agregar páginas en `src/modulos/terceros/pages/` (hoy solo `Inicio.jsx`, la pantalla del molde) y sus rutas.
-- Cada ruta de `src/modulos/terceros/rutas.jsx` lleva `pantalla` con la misma clave que declara el backend en `PANTALLAS` (ver la sección 5, "Cómo declara un módulo sus pantallas").
+- `src/modulos/<m>/rutas.jsx` con `activo: true`, sus rutas, su menú y su Tarjeta. Cada ruta lleva `pantalla` con la misma clave que declara el backend en `PANTALLAS`.
+- Páginas en `src/modulos/<m>/pages/`; la lógica pura, en archivos `.js` con sus tests en `node --test` (como `src/modulos/facturacion/unidades.js`).
 - Íconos disponibles para la Tarjeta en `src/core/ui/iconos.jsx`.
 
-Activar el módulo = `activo: True`/`true` en los dos repos; el Inicio no consulta al backend para decidir las tarjetas — lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra los `permisos` de la sesión (`src/core/accesos.js`).
+El Inicio no consulta al backend para decidir las tarjetas: lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra los `permisos` de la sesión (`src/core/accesos.js`). Un módulo inactivo (`activo: False`/`false` en los dos repos) existe en el código pero no monta rutas ni muestra su Tarjeta.
 
-**3. Registro — ya está hecho.** `app/modulos/__init__.py` ya tiene `TERCEROS` en `REGISTRO` y `src/modulos/registro.js` ya tiene su entrada; no hace falta tocarlos. Para el **tercer módulo** (y siguientes), agregarlo es una línea en cada uno de esos dos archivos y nada más — el resto de esta sección aplica igual.
+**3. Registro.** Una línea en cada repo: el `MODULO` en `REGISTRO` de `app/modulos/__init__.py` y su entrada en `src/modulos/registro.js`. `app/main.py` y `App.jsx` no se tocan.
 
-**4. Permisos.** Las pantallas de Terceros ya están declaradas (`PANTALLAS` en `app/modulos/terceros/permisos.py`) y cada endpoint pide la suya. Para que una persona use el módulo, el admin le asigna en la Administración un rol con permisos en esas pantallas; la migración `core/002` crea "Liquidador de terceros". Por consola:
+**4. Permisos.** Para que una persona use el módulo, el admin le asigna desde Administración un rol con permisos en sus pantallas. Un rol se arma ahí mismo; Terceros nació con el suyo, "Liquidador de terceros", creado por la migración `core/002`. Por consola:
 
 ```bash
 python scripts/asignar_rol.py --email liq@x.com --rol "Liquidador de terceros"
 ```
 
-**Recordatorio**: nunca importar de `app.modulos.preliquidacion` (ni desde el frontend, de `src/modulos/preliquidacion/`); nunca escribir en las bases Externa o Sueldos.
+**Recordatorio**: un módulo nunca importa de otro (ni en el frontend, de otro `src/modulos/<m>/`); nunca escribir en las bases Externa o Sueldos.
 
 ---
 
@@ -404,7 +420,7 @@ La regla de esta etapa:
 | Desarrollo (tu máquina) | `testing` | Pitu y Gero, con las credenciales de `testing` |
 | Producción (VPS) | `preliquidacion` | Solo el VPS |
 
-`testing` es el entorno de prueba del área y es **compartida con otros sistemas**: tiene un espejo de nuestras tablas y tablas ajenas. Toda DDL se aplica primero acá y después en producción. **No se hace nunca un drop general**, solo se tocan las tablas del preliquidador y las de terceros. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas del preliquidador y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cuando existan las tablas `terceros_*`, se agregan a la lista del script.
+`testing` es el entorno de prueba del área y es **compartida con otros sistemas**: tiene un espejo de nuestras tablas y tablas ajenas. Toda DDL se aplica primero acá y después en producción. **No se hace nunca un drop general**, solo se tocan las tablas nuestras: las del núcleo y las de cada módulo. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas de su lista `TABLAS` (hoy las del núcleo, Preliquidación y Facturación) y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cada módulo suma sus tablas a esa lista; las `terceros_*` existen en producción desde 2026-09-30 y todavía no están, así que el script no las copia ni las toca.
 
 Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque son de solo lectura. Las consultas que hagas en desarrollo van contra datos reales del sistema de campo: perfecto para validar contra el Excel.
 
