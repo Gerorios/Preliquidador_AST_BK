@@ -107,10 +107,10 @@ facturado.
 - **Unidad sugerida y No facturable por tarea.** Cada tarea del sistema de campo tiene una
   Unidad sugerida, que precarga la Línea y que el Cruce usa cuando la tarea todavía no tiene
   nada facturado en el rango, o la marca No facturable, que la deja fuera del Cruce y de las
-  Alertas. El módulo las guarda y se editan desde una pantalla. La primera carga sale del
-  maestro de tareas de la planilla, con un script que sólo completa lo vacío. **Una tarea
-  facturable sin Unidad sugerida genera un aviso**: el informe anterior la dejaba en cero sin
-  decir nada.
+  Alertas. Se definen en el sistema de campo (hoy, el tercer segmento de la descripción de la
+  tarea) y el módulo las lee en vivo, sin copia: la app de campo es la dueña del dato y así no
+  hay desfasajes (decidido el 2026-10-12). **Una tarea facturable sin Unidad sugerida genera un
+  aviso en Pendientes** (etapa 3): el informe anterior la dejaba en cero sin decir nada.
 - Decidido el 2026-10-11, al planificar la etapa 1. Descartado: la unidad fija por tarea del
   diseño original ("Grupo de facturación"), porque una tarea que un cliente pide facturar por
   hora y otro por planta comparaba horas contra plantas.
@@ -170,14 +170,13 @@ ellas. Reemplazan a las tres capacidades del diseño original (consultar, cargar
 | **Pendientes** | las Alertas de facturación | marcarlas como revisadas |
 | **Cruce** | sí | — (sólo Ver) |
 | **Comprobantes** | los Comprobantes y sus Adjuntos | cargar y editar, adjuntar e importar Órdenes de facturación |
-| **Unidad de medida por defecto** | la Unidad sugerida, No facturable y el Umbral de diferencia | cambiarlos |
 | **Equivalencias** | las Equivalencias por Cliente | crearlas y cambiarlas |
 | **Panel** | sí | — (sólo Ver) |
 
 - **Importar orden va dentro de Comprobantes**, no como pantalla propia: importar es otra
   forma de crear Comprobantes, y separarlas permitiría importar sin poder cargar a mano.
-- **El Umbral se edita en Unidad de medida por defecto**, no en Pendientes: quien marca Alertas
-  revisadas no puede subir el Umbral para hacerlas desaparecer.
+- **Dónde se edita el Umbral lo decide la etapa 3.** Quien marca Alertas revisadas sigue sin
+  poder subirlo, para no hacerlas desaparecer.
 - **El Mes de corte es fijo** (octubre de 2026), no un dato editable.
 - **El módulo no crea roles.** Al activarlo, el admin arma desde la Administración el rol de
   las contadoras y suma al de Gerente lo que corresponda. Las contadoras están en el padrón
@@ -188,9 +187,9 @@ ellas. Reemplazan a las tres capacidades del diseño original (consultar, cargar
 A revisar cuando se valide el Cruce contra el informe (etapa 3):
 
 - **Pulverización con dos tractores**: el informe compara sólo las horas del primer tractor.
-  Si una tarea de pulverización se factura por horas, se cuenta de menos. Hay que confirmar
-  cómo se factura antes de decidir si se suman las del segundo.
-- **Tarea sin unidad**: el informe la deja en cero en silencio. El módulo avisa.
+  Decidido el 2026-10-12: se cuenta un solo tractor; cuál, lo confirma la etapa 3.
+- **Tarea sin unidad**: el informe la deja en cero en silencio. El módulo avisa en Pendientes
+  (etapa 3).
 
 ## 5. Etapas
 
@@ -198,9 +197,9 @@ Cada etapa es un par de PRs hermanos (backend y frontend). Deploy sólo con OK.
 
 | Etapa | Qué entra | Se da por buena cuando |
 |---|---|---|
-| **1** | El módulo registrado y activo, con sus pantallas. La **Unidad sugerida** y la marca **No facturable** de cada tarea, con su primera carga y la pantalla Unidad de medida por defecto. `PRODUCT.md` del front con las contadoras y el módulo. | Cada tarea tiene Unidad sugerida o es No facturable, y las que no tienen nada se ven primero. |
+| **1** | El módulo registrado y activo, con sus pantallas. La **Unidad sugerida** y la marca **No facturable** de cada tarea, con su primera carga y la pantalla Unidad de medida por defecto. `PRODUCT.md` del front con las contadoras y el módulo. Esa pantalla, con su tabla y su primera carga, se retiró el 2026-10-12: la Unidad sugerida y No facturable se leen del sistema de campo. | Cada tarea tiene Unidad sugerida o es No facturable, y las que no tienen nada se ven primero. |
 | **2** | **Comprobantes** (Factura y Nota de crédito, cabecera y líneas), **Adjuntos** en la carpeta del VPS y la **migración del histórico**, re-ejecutable. | El histórico migrado suma lo mismo que la planilla, por Cliente y mes. |
-| **3** | **Cruce** (con el detalle hasta el parte de campo) y **Alertas de facturación** con Alerta revisada, Umbral (editable en Unidad de medida por defecto) y Mes de corte. Pantallas Pendientes y Cruce. | El Cruce da los mismos números que el informe de Power BI para los meses ya cerrados, salvo las diferencias explicadas en la sección 4. |
+| **3** | **Cruce** (con el detalle hasta el parte de campo) y **Alertas de facturación** con Alerta revisada, Umbral (dónde se edita, lo decide esta etapa) y Mes de corte. El aviso de tarea facturable sin Unidad sugerida, en Pendientes. Pantallas Pendientes y Cruce. | El Cruce da los mismos números que el informe de Power BI para los meses ya cerrados, salvo las diferencias explicadas en la sección 4. |
 | **4** | **Importador del primer cliente con portal** (formato nuevo) y **Equivalencias** por Cliente, con su primera carga. **Las contadoras dejan la planilla.** | Una orden real se importa completa, y cada renglón sin Equivalencia frena hasta definirla. |
 | **5** | **Importador del segundo cliente con portal** y **Panel** de lo facturado por Cliente y grupo de tareas. | Lo mismo que la etapa 4 para el segundo formato. |
 
@@ -219,10 +218,10 @@ Cada etapa es un par de PRs hermanos (backend y frontend). Deploy sólo con OK.
 
 - **Respaldo de la carpeta de adjuntos** en el VPS. Se suma al pendiente de confirmar el
   respaldo de la base (ADR-0019).
-- **Umbral de diferencia**: arranca en 5%. Se ajusta con el uso.
+- **Umbral de diferencia**: arranca en 5%. Se ajusta con el uso. Dónde se edita lo decide la
+  etapa 3.
 - **Pegar varias filas desde Excel** en la grilla de líneas: por ahora no. Se agrega si las
   contadoras lo piden.
-- **Horas del segundo tractor** en pulverización (sección 4): confirmar con las contadoras.
 
 ## 8. A futuro
 

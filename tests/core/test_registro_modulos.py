@@ -30,7 +30,9 @@ def test_preliquidacion_tiene_panel_gerencial():
 
 def test_se_montan_las_rutas_de_los_activos_y_ninguna_de_los_inactivos():
     paths = app.openapi()["paths"]
-    prefijos_activos = {f"/api/{m.clave}" for m in activos()}
+    # Un módulo activo puede no tener rutas todavía (Facturación entre el
+    # 2026-10-12 y la E2): publica sus pantallas y no monta nada.
+    prefijos_activos = {f"/api/{m.clave}" for m in activos() if m.routers}
     inactivos = {f"/api/{m.clave}" for m in REGISTRO if not m.activo}
     for prefijo in prefijos_activos:
         assert any(p.startswith(prefijo) for p in paths), f"{prefijo} no se montó"

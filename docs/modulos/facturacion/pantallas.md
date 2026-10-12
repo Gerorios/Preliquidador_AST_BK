@@ -51,9 +51,6 @@ En el orden de las etapas del módulo.
     sugerida de la tarea y editable, finca opcional, cantidad, precio, importe calculado),
     pensada para copiar mirando el PDF con Tab. Lo típico es de 1 a 15 líneas.
   - Adjuntos: subir, ver y quitar. La Nota de crédito se muestra con importe negativo.
-- **Unidad de medida por defecto**: la lista de tareas del sistema de campo con su Unidad sugerida y
-  su marca No facturable, editables. Las tareas facturables sin Unidad sugerida aparecen
-  primero. Desde la etapa 3, también el Umbral de diferencia (en Pendientes sólo se ve).
 - **Equivalencias**: por Cliente, el texto con que el cliente nombra la tarea → tarea del
   sistema de campo.
 - **Importar orden**: subir el archivo de la Orden de facturación, previsualizar los renglones
@@ -70,7 +67,7 @@ En el orden de las etapas del módulo.
   dice.
 - Un Cliente sin trabajo y sin Comprobantes no aparece.
 - Comprobante histórico: sin Empresa emisora ni Adjunto, con una marca y sin Alerta.
-- Tarea facturable sin Unidad sugerida: aviso en el Cruce.
+- Tarea facturable sin Unidad sugerida: aviso en Pendientes (etapa 3).
 - La lectura del sistema de campo es lenta: indicador de carga. Toda escritura muestra el
   overlay.
 
@@ -85,5 +82,5 @@ En el orden de las etapas del módulo.
 
 - Pegar varias filas desde Excel en la grilla de líneas: por ahora no; se agrega si las
   contadoras lo piden.
-- `PRODUCT.md` del front: sumar a las contadoras, el módulo y su vocabulario, con la primera
-  etapa.
+- Dónde se edita el Umbral de diferencia: lo decide la etapa 3. Quien marca Alertas revisadas
+  no lo puede subir.

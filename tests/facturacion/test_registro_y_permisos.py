@@ -1,8 +1,11 @@
-"""El módulo Facturación en el registro y sus seis pantallas (plan de la E1, D1).
+"""El módulo Facturación en el registro y sus cinco pantallas (plan de la E1, D1).
 
 Las claves de pantalla se guardan en la base (rol_permiso.pantalla) y no
-cambian. El orden es el del editor de roles. Sólo `unidad` tiene endpoints en
-la E1; las otras cinco se declaran igual para que las claves queden fijas (D2).
+cambian. El orden es el del editor de roles. Ninguna tiene endpoints todavía:
+se declaran igual para que las claves queden fijas (D2). La pantalla `unidad`
+(Unidad de medida por defecto) se retiró el 2026-10-12, porque la Unidad
+sugerida se lee del sistema de campo
+(docs/superpowers/plans/2026-10-12-unidad-desde-campo.md).
 """
 from types import SimpleNamespace
 
@@ -19,7 +22,6 @@ CATALOGO_FACTURACION = [
     ("pendientes", "Pendientes", True),
     ("cruce", "Cruce", False),
     ("comprobantes", "Comprobantes", True),
-    ("unidad", "Unidad de medida por defecto", True),
     ("equivalencias", "Equivalencias", True),
     ("panel", "Panel", False),
 ]
@@ -32,13 +34,17 @@ def test_el_modulo_esta_registrado_y_activo():
     assert MODULO in activos()
 
 
-def test_las_seis_pantallas_del_catalogo():
+def test_las_cinco_pantallas_del_catalogo():
     assert [(p.clave, p.nombre, p.editable) for p in PANTALLAS] == CATALOGO_FACTURACION
     assert MODULO.pantallas == PANTALLAS
     assert all(p.requiere == () for p in PANTALLAS)
+    assert "unidad" not in {p.clave for p in PANTALLAS}, (
+        "la clave `unidad` se retiró el 2026-10-12 y no se reutiliza: "
+        "un rol con permisos viejos ganaría la pantalla nueva"
+    )
 
 
-def test_auth_modulos_publica_las_seis_en_orden():
+def test_auth_modulos_publica_las_cinco_en_orden():
     usuario = SimpleNamespace(id=1, nombre="T", email="t@t.com", rol="admin", activo=True, modulos=[])
     app.dependency_overrides[get_usuario_actual] = lambda: usuario
     try:
