@@ -1,9 +1,9 @@
 # Plan del módulo Facturación
 
-**Estado**: diseño cerrado, sin código. El plan de implementación (los pasos de cada etapa,
-con archivos y tests) se hace con el planificador **cuando estén mergeados el cambio de
-permisos y el refinamiento de Preliquidación** (ver "Dependencias"): hecho hoy, citaría
-componentes del front que esas tareas están cambiando.
+**Estado**: diseño cerrado, sin código. Las dos dependencias ya están entregadas (ver
+"Dependencias"). El plan de implementación se hace **por etapa** con el planificador, en
+`docs/superpowers/plans/`: uno de las cinco etapas con archivos y tests concretos quedaría
+viejo antes de llegar a la mitad (2026-10-11).
 **Fecha de la decisión**: 2026-10-08, entrevista sobre la planilla de facturación a clientes y
 el informe de Power BI que la cruza contra el sistema de campo.
 **Quién lo construye**: Gero.
@@ -88,21 +88,34 @@ facturado.
 
 ### 3.3 El Cruce
 
-- **Grupo de facturación por tarea.** Cada tarea del sistema de campo tiene un Grupo de
-  facturación que dice qué cantidad del campo se compara con lo facturado:
+- **Unidad de facturación por Línea.** Cada Línea de comprobante dice en qué unidad se
+  factura, y esa unidad dice qué cantidad del campo se compara con lo facturado:
 
-  | Grupo de facturación | Cantidad del campo |
+  | Unidad de facturación | Cantidad del campo |
   |---|---|
   | Horas de peón | horas de jornal |
   | Horas de tractor | horas de máquina |
   | Plantas | unidades |
   | Hectáreas | unidades |
   | Tancadas | tancadas |
-  | No facturable | no entra al Cruce |
+  | Bins, Bins C, Bins M, Viajes (cosecha) | no entra al Cruce |
 
-  El módulo guarda el grupo y se edita desde una pantalla. La primera carga sale del maestro de
-  tareas de la planilla. **Una tarea sin grupo genera un aviso**: el informe anterior la dejaba
-  en cero sin decir nada.
+  Las unidades de cosecha existen para que sus tareas y sus líneas históricas queden con la
+  unidad que usa la planilla; quedan fuera del Cruce y de las Alertas hasta el submódulo de
+  cosecha (decidido el 2026-10-11). Así una misma tarea se puede facturar por planta un mes y por hora otro, y el Cruce compara
+  cada vez contra la medida correcta.
+- **Unidad sugerida y No facturable por tarea.** Cada tarea del sistema de campo tiene una
+  Unidad sugerida, que precarga la Línea y que el Cruce usa cuando la tarea todavía no tiene
+  nada facturado en el rango, o la marca No facturable, que la deja fuera del Cruce y de las
+  Alertas. El módulo las guarda y se editan desde una pantalla. La primera carga sale del
+  maestro de tareas de la planilla, con un script que sólo completa lo vacío. **Una tarea
+  facturable sin Unidad sugerida genera un aviso**: el informe anterior la dejaba en cero sin
+  decir nada.
+- Decidido el 2026-10-11, al planificar la etapa 1. Descartado: la unidad fija por tarea del
+  diseño original ("Grupo de facturación"), porque una tarea que un cliente pide facturar por
+  hora y otro por planta comparaba horas contra plantas.
+- Pendiente para el plan de la etapa 3: qué muestra el Cruce cuando una misma tarea se factura
+  en dos unidades dentro del rango.
 - **Clave del Cruce: Cliente + rango de fechas + tarea**, agrupado por grupo de tareas. La finca
   sirve para abrir el detalle, no es parte de la clave (en la planilla casi nunca se carga).
 - **El rango es libre y arranca en el mes completo.** Una diferencia de una quincena puede
@@ -147,19 +160,28 @@ facturado.
 - **Cuando entra el primer importador, la planilla queda congelada** como respaldo de sólo
   lectura.
 
-### 3.7 Permisos: tres capacidades
+### 3.7 Permisos: pantallas con Ver o Editar
 
-El módulo no habla de roles sino de capacidades:
+El módulo declara sus pantallas (ADR-0020), y cada endpoint exige Ver o Editar en una de
+ellas. Reemplazan a las tres capacidades del diseño original (consultar, cargar, mantener):
 
-| Capacidad | Qué permite |
-|---|---|
-| **Consultar** | Pendientes, Cruce, Panel, Comprobantes y sus Adjuntos |
-| **Cargar** | Crear y editar Comprobantes, importar órdenes, adjuntar |
-| **Mantener** | Grupo de facturación, Equivalencias, Umbral de diferencia |
+| Pantalla | Ver | Editar |
+|---|---|---|
+| **Pendientes** | las Alertas de facturación | marcarlas como revisadas |
+| **Cruce** | sí | — (sólo Ver) |
+| **Comprobantes** | los Comprobantes y sus Adjuntos | cargar y editar, adjuntar e importar Órdenes de facturación |
+| **Unidad de medida por defecto** | la Unidad sugerida, No facturable y el Umbral de diferencia | cambiarlos |
+| **Equivalencias** | las Equivalencias por Cliente | crearlas y cambiarlas |
+| **Panel** | sí | — (sólo Ver) |
 
-Con los roles de hoy: operador = las tres, gerente = consultar, admin = todo. Cuando cambie el
-esquema de permisos (ver "Dependencias"), cambia sólo ese mapeo, no los endpoints. Las
-contadoras están en el padrón de empleados y se dan de alta como cualquier usuario.
+- **Importar orden va dentro de Comprobantes**, no como pantalla propia: importar es otra
+  forma de crear Comprobantes, y separarlas permitiría importar sin poder cargar a mano.
+- **El Umbral se edita en Unidad de medida por defecto**, no en Pendientes: quien marca Alertas
+  revisadas no puede subir el Umbral para hacerlas desaparecer.
+- **El Mes de corte es fijo** (octubre de 2026), no un dato editable.
+- **El módulo no crea roles.** Al activarlo, el admin arma desde la Administración el rol de
+  las contadoras y suma al de Gerente lo que corresponda. Las contadoras están en el padrón
+  de empleados y se dan de alta como cualquier usuario.
 
 ## 4. Lo que el informe anterior hace y conviene no copiar
 
@@ -168,7 +190,7 @@ A revisar cuando se valide el Cruce contra el informe (etapa 3):
 - **Pulverización con dos tractores**: el informe compara sólo las horas del primer tractor.
   Si una tarea de pulverización se factura por horas, se cuenta de menos. Hay que confirmar
   cómo se factura antes de decidir si se suman las del segundo.
-- **Tarea sin grupo de facturación**: el informe la deja en cero en silencio. El módulo avisa.
+- **Tarea sin unidad**: el informe la deja en cero en silencio. El módulo avisa.
 
 ## 5. Etapas
 
@@ -176,19 +198,22 @@ Cada etapa es un par de PRs hermanos (backend y frontend). Deploy sólo con OK.
 
 | Etapa | Qué entra | Se da por buena cuando |
 |---|---|---|
-| **1** | El módulo registrado y activo, con sus permisos. El **Grupo de facturación** de cada tarea, con su primera carga y su pantalla. `PRODUCT.md` del front con las contadoras y el módulo. | Todas las tareas facturables tienen grupo, y las que no lo tienen se ven primero. |
+| **1** | El módulo registrado y activo, con sus pantallas. La **Unidad sugerida** y la marca **No facturable** de cada tarea, con su primera carga y la pantalla Unidad de medida por defecto. `PRODUCT.md` del front con las contadoras y el módulo. | Cada tarea tiene Unidad sugerida o es No facturable, y las que no tienen nada se ven primero. |
 | **2** | **Comprobantes** (Factura y Nota de crédito, cabecera y líneas), **Adjuntos** en la carpeta del VPS y la **migración del histórico**, re-ejecutable. | El histórico migrado suma lo mismo que la planilla, por Cliente y mes. |
-| **3** | **Cruce** (con el detalle hasta el parte de campo) y **Alertas de facturación** con Alerta revisada, Umbral y Mes de corte. Pantallas Pendientes y Cruce. | El Cruce da los mismos números que el informe de Power BI para los meses ya cerrados, salvo las diferencias explicadas en la sección 4. |
+| **3** | **Cruce** (con el detalle hasta el parte de campo) y **Alertas de facturación** con Alerta revisada, Umbral (editable en Unidad de medida por defecto) y Mes de corte. Pantallas Pendientes y Cruce. | El Cruce da los mismos números que el informe de Power BI para los meses ya cerrados, salvo las diferencias explicadas en la sección 4. |
 | **4** | **Importador del primer cliente con portal** (formato nuevo) y **Equivalencias** por Cliente, con su primera carga. **Las contadoras dejan la planilla.** | Una orden real se importa completa, y cada renglón sin Equivalencia frena hasta definirla. |
 | **5** | **Importador del segundo cliente con portal** y **Panel** de lo facturado por Cliente y grupo de tareas. | Lo mismo que la etapa 4 para el segundo formato. |
 
 ## 6. Dependencias
 
-1. **Cambio del esquema de permisos** (tarea aparte, del núcleo): se hace antes de la etapa 1,
-   para que el módulo nazca con el esquema nuevo y no haya que migrar sus usuarios después.
-2. **Refinamiento de Preliquidación** (en curso): Facturación reutiliza la barra de filtros
-   común, las tablas y el estado por pantalla que esa tarea está cambiando. El plan de
-   implementación se hace después de que termine.
+1. **Cambio del esquema de permisos** (tarea aparte, del núcleo): entregado y deployado el
+   2026-10-11 (ADR-0020). El módulo nace con pantallas.
+2. **Refinamiento de Preliquidación**: entregado y deployado el 2026-10-09. Su barra de
+   filtros, sus tablas, su aviso de error y su estado por pantalla son de Preliquidación
+   (`src/modulos/preliquidacion/`), y un módulo no importa a otro (ADR-0013): para que
+   Facturación los use, antes hace falta un PR del núcleo que los suba a `src/core/`. Las
+   clases globales (`.input`, `.chip`, `.table-wrap`), el overlay "Procesando..." y
+   `CargandoContenido` sí son del núcleo.
 
 ## 7. Pendientes
 

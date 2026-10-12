@@ -41,10 +41,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Tablas del preliquidador, en orden de dependencias (padres primero).
-# Cualquier otra tabla que haya en el destino se deja intacta.
-# Las tablas `terceros_*` del módulo Liquidación Terceros se agregan acá cuando existan
-# (hoy el módulo es un molde inactivo, sin migraciones propias).
+# Tablas del núcleo y de los módulos que se copian, en orden de dependencias
+# (padres primero). Cualquier otra tabla que haya en el destino se deja intacta.
+# Las `terceros_*` de Liquidación Terceros ya existen (en producción desde el
+# 2026-09-30) pero todavía no están en la lista: hasta que se sumen, este script
+# no las copia ni las toca.
 TABLAS = [
     "usuarios",
     "rol",
@@ -56,6 +57,7 @@ TABLAS = [
     "concepto_adicional",
     "ajuste_manual",
     "categoria_operario",
+    "facturacion_tarea",
 ]
 VISTAS = ["vw_bi_lineas", "vw_bi_conceptos_pagados"]
 LOTE = 1000
