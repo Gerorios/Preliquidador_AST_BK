@@ -3329,5 +3329,10 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
   campo Sin definir; sitio con el bundle nuevo; la API sin sesión responde 401; journal sin
   errores.
 
+- Primera carga en producción, el mismo día y con OK: simulada igual que en `testing` (134 a
+  cargar, una tarea sin grupo en el maestro, sin conflictos) y aplicada, 134 cargadas; al
+  volver a simular, 0 por cargar y 0 contradicciones. El maestro no quedó en el VPS.
+
 **Pendiente**
-- La primera carga en producción, desde el VPS y con su propio OK (en `docs/estado.md`).
+- Armar el rol de las contadoras y revisar en la pantalla las unidades raras y la tarea Sin
+  definir (en `docs/estado.md`).

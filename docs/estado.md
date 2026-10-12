@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Con OK: la primera carga de Facturación en producción (`scripts/importar_unidades_del_maestro.py` desde el VPS: simular, mostrar y aplicar). El deploy de BK #88 y FT #72 ya está hecho.
+Nada en marcha. Facturación E2 cuando el usuario la arranque (plan `2026-10-11-facturacion-e2.md`, 18 preguntas abiertas).
 
 ## Pendientes del usuario
 
