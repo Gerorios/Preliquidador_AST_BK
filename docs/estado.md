@@ -2,15 +2,15 @@
 
 Sólo lo vivo: lo que está en curso, el próximo paso, lo que espera al usuario y lo que quedó para más adelante.
 Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva abajo). La regla está en
-`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-11**.
+`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-12**.
 
 ## En curso
 
-- Facturación: la Unidad sugerida se lee del sistema de campo y sale la pantalla Unidad de medida por defecto, con su tabla. Fase 3, ejecución (plan aprobado el 2026-10-12): `docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`, en la rama `feature/unidad-desde-campo` de los dos repos.
+- Facturación: la Unidad sugerida se lee del sistema de campo y sale la pantalla Unidad de medida por defecto, con su tabla. Fase 5, espera el OK del usuario para los PRs (ejecución y revisión terminadas el 2026-10-12): `docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`, en la rama `feature/unidad-desde-campo` de los dos repos.
 
 ## Próximo paso
 
-Terminar la ejecución del cambio de arriba. Después, Facturación E2: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md`, y una propuesta para agrupar las filas sin número (la 4 cambió: la migración sube todas las filas).
+Con el OK, PRs hermanos del cambio de arriba (merge del FT y después del BK) y la 002 en `testing`. Después, Facturación E2: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md`, y una propuesta para agrupar las filas sin número (la 4 cambió: la migración sube todas las filas).
 
 ## Pendientes del usuario
 
@@ -28,6 +28,8 @@ Terminar la ejecución del cambio de arriba. Después, Facturación E2: faltan l
 
 ## A futuro
 
+- Revisar por qué el planificador tardó cerca de una hora en un plan mediano (plan del 2026-10-12, unidad desde el campo); el usuario lo quiere ver más adelante (2026-10-12).
+- Inicio del núcleo del front, deuda vista con `/impeccable audit` el 2026-10-12: el foco de la Tarjeta casi no se ve (halo y borde por debajo de 3:1, WCAG 1.4.11); el estado sin pantallas es un párrafo chico y gris, sin título ni a quién pedir acceso, y "Elegí dónde trabajar" se muestra igual (2026-10-12).
 - Deuda del núcleo del front vista en la revisión de la Facturación E1: el encabezado de la tabla de Mantenimiento no queda fijo (2026-10-11).
 - Ningún test controla que el rollback comentado de una migración no tenga `;` (2026-10-11).
 - `docs/modulos/GUIA-MODULOS.md` (línea 139 y regla 8) no nombra `traducir_errores_externa()` del núcleo: minor 1 del BK #92 (2026-10-11).
