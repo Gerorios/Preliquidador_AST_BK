@@ -13,9 +13,9 @@ from app import main as app_main
 from app.main import app
 
 
-def test_los_dos_modulos_estan_en_el_registro():
+def test_los_tres_modulos_estan_en_el_registro():
     por_clave = {m.clave: m for m in REGISTRO}
-    assert set(por_clave) == {"preliquidacion", "terceros"}
+    assert set(por_clave) == {"preliquidacion", "terceros", "facturacion"}
     assert all(isinstance(m, ModuloInfo) for m in REGISTRO)
     # Terceros se activó en la etapa 2 de su plan, al tener su primera pantalla
     # real. No se afirma acá qué módulo está activo: eso cambia con cada módulo
@@ -136,3 +136,4 @@ def test_main_no_importa_modulos_por_nombre():
     contenido = Path(app_main.__file__).read_text(encoding="utf-8")
     assert "app.modulos.preliquidacion" not in contenido
     assert "app.modulos.terceros" not in contenido
+    assert "app.modulos.facturacion" not in contenido

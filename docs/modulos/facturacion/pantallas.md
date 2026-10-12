@@ -20,8 +20,10 @@ mismos números que el informe de Power BI que hoy hace ese control.
 ## Dirección
 
 - **Extensión del mundo actual**, no un diseño nuevo: los tokens de `src/index.css`, el layout
-  del núcleo y los componentes que ya existen (barra de filtros común, tablas, chips, overlay
-  "Procesando...", avisos).
+  del núcleo y lo que el núcleo ya tiene (las clases globales de campos, chips y tablas, el
+  overlay "Procesando..." y `CargandoContenido`). La barra de filtros, las tablas, el aviso de
+  error y el estado por pantalla son de Preliquidación: usarlos pide antes un PR del núcleo
+  que los suba a `src/core/`.
 - La idea central es **de lo general al detalle**: Pendientes → Cruce del Cliente → tarea →
   finca → parte de campo. Cada nivel responde "¿por qué no cierra?".
 
@@ -45,11 +47,13 @@ En el orden de las etapas del módulo.
   "sin adjunto").
   - Alta y edición: cabecera (Cliente, Empresa emisora, tipo, número del Sistema contable,
     fecha y, en una Nota de crédito, la Factura que corrige) y una **grilla de líneas tipo
-    planilla** (fecha, tarea con autocompletar, finca opcional, cantidad, precio, importe
-    calculado), pensada para copiar mirando el PDF con Tab. Lo típico es de 1 a 15 líneas.
+    planilla** (fecha, tarea con autocompletar, Unidad de facturación precargada con la Unidad
+    sugerida de la tarea y editable, finca opcional, cantidad, precio, importe calculado),
+    pensada para copiar mirando el PDF con Tab. Lo típico es de 1 a 15 líneas.
   - Adjuntos: subir, ver y quitar. La Nota de crédito se muestra con importe negativo.
-- **Grupo de facturación**: la lista de tareas del sistema de campo con su Grupo de
-  facturación editable. Las tareas sin grupo aparecen primero.
+- **Unidad de medida por defecto**: la lista de tareas del sistema de campo con su Unidad sugerida y
+  su marca No facturable, editables. Las tareas facturables sin Unidad sugerida aparecen
+  primero. Desde la etapa 3, también el Umbral de diferencia (en Pendientes sólo se ve).
 - **Equivalencias**: por Cliente, el texto con que el cliente nombra la tarea → tarea del
   sistema de campo.
 - **Importar orden**: subir el archivo de la Orden de facturación, previsualizar los renglones
@@ -66,7 +70,7 @@ En el orden de las etapas del módulo.
   dice.
 - Un Cliente sin trabajo y sin Comprobantes no aparece.
 - Comprobante histórico: sin Empresa emisora ni Adjunto, con una marca y sin Alerta.
-- Tarea sin Grupo de facturación: aviso en el Cruce.
+- Tarea facturable sin Unidad sugerida: aviso en el Cruce.
 - La lectura del sistema de campo es lenta: indicador de carga. Toda escritura muestra el
   overlay.
 
