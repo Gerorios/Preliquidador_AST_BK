@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-El deploy de la Unidad sugerida desde el campo, con OK (ver Pendientes del usuario). Después, Facturación E2, con su migración 003: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` y una propuesta para agrupar las filas sin número (la 4 cambió: la migración de la planilla sube todas las filas, tengan o no número de factura).
+Facturación E2, con su migración 003: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` y una propuesta para agrupar las filas sin número (la 4 cambió: la migración de la planilla sube todas las filas, tengan o no número de factura).
 
 ## Pendientes del usuario
 
@@ -20,7 +20,7 @@ El deploy de la Unidad sugerida desde el campo, con OK (ver Pendientes del usuar
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
-- Facturación, la Unidad sugerida desde el campo (BK #94, FT #76; sin deploy): la `facturacion/002` ya está en `testing` y el smoke de `main` pasó (2026-10-12). Falta el deploy con OK (front, backend con reinicio y recién después la 002, con respaldo), según la etapa 3 del plan `docs/superpowers/plans/2026-10-12-unidad-desde-campo.md` (S4 y S5).
+- Facturación: borrar del servidor el respaldo de la `facturacion/002` cuando ya no haga falta como vuelta atrás (deploy del 2026-10-12).
 - Avisarle a Pitu que haga pull de `main` en los dos repos: `testing` ya no tiene la tabla de la Unidad sugerida, y un `main` anterior al BK #94 arranca contra `testing` avisando que faltan tablas (2026-10-12).
 - Facturación: revisar en la app de campo las tareas facturables que quedan Sin definir (la Unidad sugerida ahora se define allá; BK #94).
 - Facturación: el rol de las contadoras ya existe en producción; no asignarlo a nadie hasta que esté la primera versión completa del módulo (decisión del usuario, 2026-10-12).

@@ -3557,3 +3557,22 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Revisar en la app de campo las tareas facturables que quedan Sin definir (en
   `docs/estado.md`).
 - La deuda del Inicio que vio el audit, en "A futuro" de `docs/estado.md`.
+
+## 2026-10-12 — Deploy de la Unidad sugerida desde el sistema de campo
+
+**Estado**
+- Deploy: sí, a producción, con OK del usuario. Backend de `b6837f1` a `2d638fc` (BK #89 a
+  #94); frontend a `9d71dae` (FT #73 a #76), con swap de carpeta enseguida del reinicio.
+- Migraciones: `facturacion/002_borrar_unidad_por_tarea.sql` en producción, después del
+  código, corrida dos veces sin error: la tabla de la Unidad sugerida borrada y los permisos
+  de `unidad` en 0. Antes, respaldo de la tabla y de los permisos fuera del repo, que queda
+  como vuelta atrás. El pre-check encontró una tarea marcada a mano y un rol con Editar en la
+  pantalla retirada: la marca era una prueba del usuario (lo confirmó) y el permiso es el que
+  la 002 borra.
+- Smoke sin escribir: arranque con las tablas verificadas, todavía con la tabla en la base;
+  `/health` ok; los endpoints de tareas responden 404 y la API sin sesión 401; sitio con el
+  bundle nuevo; journal sin errores.
+
+**Pendiente**
+- Borrar del servidor el respaldo de la 002 cuando ya no haga falta como vuelta atrás (en
+  `docs/estado.md`).
