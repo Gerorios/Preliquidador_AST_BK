@@ -154,14 +154,14 @@ def test_el_put_conserva_los_permisos_de_un_modulo_fuera_del_catalogo(db):
     rol = _crear(c, h, "Contadora", CONCEPTOS_VER)
     # Un módulo que no está activo (no está en el catálogo): el editor no lo
     # muestra, así que no lo manda.
-    db.add(RolPermiso(rol_id=rol["id"], modulo="facturacion", pantalla="emision", nivel="editar"))
+    db.add(RolPermiso(rol_id=rol["id"], modulo="inexistente", pantalla="emision", nivel="editar"))
     db.commit()
 
     r = c.put(f"/api/admin/roles/{rol['id']}",
               json={"nombre": "Contadora", "permisos": {"preliquidacion": {"conceptos": "editar"}}},
               headers=h)
     assert r.status_code == 200, r.text
-    esperado = {"preliquidacion": {"conceptos": "editar"}, "facturacion": {"emision": "editar"}}
+    esperado = {"preliquidacion": {"conceptos": "editar"}, "inexistente": {"emision": "editar"}}
     assert r.json()["permisos"] == esperado
     assert _permisos_en_la_base(db, rol["id"]) == esperado
 
@@ -247,7 +247,7 @@ def test_borrar_un_rol_en_uso_responde_409(db):
     ("X" * 61, CONCEPTOS_VER, "El nombre puede tener hasta 60 caracteres."),
     ("Vacío", {}, "El rol tiene que dar acceso al menos a una pantalla."),
     ("Vacío", {"preliquidacion": {"conceptos": None}}, "El rol tiene que dar acceso al menos a una pantalla."),
-    ("Raro", {"facturacion": {"emision": "ver"}}, 'El módulo "facturacion" no existe o no está activo.'),
+    ("Raro", {"inexistente": {"emision": "ver"}}, 'El módulo "inexistente" no existe o no está activo.'),
     ("Raro", {"preliquidacion": {"caja": "ver"}}, 'Preliquidación no tiene la pantalla "caja".'),
     ("Raro", {"preliquidacion": {"conceptos": "borrar"}}, 'Conceptos tiene un nivel desconocido: "borrar".'),
     ("Raro", {"preliquidacion": {"gerencial": "editar"}}, "Vista gerencial sólo admite Ver."),
