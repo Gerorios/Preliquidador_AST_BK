@@ -34,8 +34,8 @@ La E1 se planifica en paralelo. Lo que este plan supone de ella se marca **(supu
 5. **La planilla no dice ni el tipo ni la Empresa emisora, y FACT N° no siempre es un número.**
    - No hay columna de tipo ni ningún importe negativo.
    - "Nosotros" mezcla fechas y notas.
-   - Hay 12 filas con dos números en FACT N°, con la forma "`<n>-<m>`", "`<n> - <m>`" o "`F.<n> - NC <m>`"; casi todas son de cosecha.
-   - Hay unas 65 filas sin número (vacías o con "-").
+   - Hay 11 filas con dos números en FACT N°, con la forma "`<n>-<m>`", "`<n> - <m>`" o "`F.<n> - NC <m>`"; casi todas son de cosecha. Se pasan tal cual (pregunta 3).
+   - Hay 69 filas sin número (vacías o con "-"), de 5 Clientes. También se migran (pregunta 4).
    - Hay una fila con "#VALUE!" como importe.
    - Hay unas 250 filas con número y FECHA FAC vacía.
    - La sección 3.4 resuelve cada caso; lo que no me corresponde va a preguntas abiertas.
@@ -174,11 +174,12 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
 | `cliente_id` | INT NOT NULL | id del maestro de clientes de campo |
 | `cliente_nombre` | VARCHAR(150) NOT NULL | Copia al guardar: el listado no lee la base de campo |
 | `empresa_emisora` | VARCHAR(100) NULL | Vacía sólo en históricos |
-| `numero` | VARCHAR(30) NOT NULL | Normalizado |
+| `numero` | VARCHAR(30) NULL | Normalizado. Vacío sólo en un histórico sin número (pregunta 4) |
 | `fecha` | DATE NULL | Vacía sólo en históricos sin FECHA FAC |
 | `factura_corregida_id` | INT NULL, FK a la misma tabla | Obligatoria en una NC cargada a mano |
 | `es_historico` | TINYINT(1) NOT NULL DEFAULT 0 | |
-| `clave_identidad` | VARCHAR(160) NOT NULL UNIQUE | `E\|<empresa>\|<numero>` o, en un histórico, `H\|<cliente_id>\|<numero>` |
+| `pendiente_de_facturar` | TINYINT(1) NOT NULL DEFAULT 0 | Sólo en un histórico sin número posterior al corte: el Cruce (E3) no cuenta sus Líneas como facturado (pregunta 4) |
+| `clave_identidad` | VARCHAR(160) NOT NULL UNIQUE | `E\|<empresa>\|<numero>`; en un histórico, `H\|<cliente_id>\|<numero>`; en un histórico sin número, `S\|<cliente_id>\|<fecha a facturar AAAA-MM-DD>` |
 | `creado_en`, `creado_por` | DATETIME; INT NULL con FK a `usuarios` | |
 | `actualizado_en`, `actualizado_por` | NULL; INT NULL con FK a `usuarios` | |
 
@@ -225,7 +226,7 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
 
 **Reglas del Comprobante (servicio):**
 1. Normalización:
-   - número: se recortan los extremos, se colapsan los espacios y se pasa a mayúsculas; no admite `|` ni puede quedar vacío;
+   - número: se recortan los extremos, se colapsan los espacios y se pasa a mayúsculas; no admite `|` ni puede quedar vacío (sólo la migración crea Comprobantes sin número);
    - Empresa: recorte y mayúsculas.
 2. Alta:
    - Cliente activo (estado distinto de 9);
@@ -305,13 +306,16 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
 
 - **Número**
   - Sólo dígitos, después de recortar.
-  - Vacío o "-" cuenta como "sin número": la fila no se migra y se informa aparte (pregunta 4).
-  - Un número compuesto se marca "número no reconocido" (pregunta 3).
+  - Vacío o "-" cuenta como "sin número": la fila se migra en un Comprobante sin número (ver Agrupado; pregunta 4).
+  - Un número compuesto ("`<n> - <m>`", "`F.<n> - NC <m>`") se migra tal cual, con la normalización de la regla 1: las contadoras identificaban así ese detalle (pregunta 3). Si supera los 30 caracteres, se omite su grupo y se lista.
+  - Cualquier otro texto también se migra tal cual; sólo `|` lo vuelve ilegible.
 - **Resolución contra el maestro**
   - Cliente y tarea por nombre exacto, después de normalizar mayúsculas, espacios y acentos. Incluye los dados de baja, porque el histórico los muestra.
   - No hay ningún parecido de nombres: si no aparece o el nombre es ambiguo, se omite el Comprobante (pregunta 14).
   - Una finca que no se encuentra deja la Línea sin finca y genera un aviso; no frena nada.
 - **Agrupado:** por `(cliente_id, número)`, en el orden del CSV.
+  - **Sin número** (pregunta 4): por `(cliente_id, FECHA A FACTURAR)`; con el export de hoy, 69 filas dan 14 Comprobantes. Una fila sin número y sin FECHA A FACTURAR se omite y se lista.
+  - **Corte**: un grupo sin número con FECHA A FACTURAR hasta el 2026-07-31 cuenta como facturado (se facturó y no se anotó el número); uno posterior queda `pendiente_de_facturar`, por las dudas. Lo decidió el usuario el 2026-10-12: las 58 filas viejas (septiembre de 2025 a febrero de 2026) como facturadas, y las 11 recientes (agosto y septiembre de 2026) como no facturadas. El corte es una constante del servicio, `SIN_NUMERO_FACTURADO_HASTA`.
   - Fecha del Comprobante: la única FECHA FAC no vacía del grupo. Si no hay ninguna, queda NULL; si hay dos distintas, conflicto y se omite el grupo.
   - Tipo: siempre `factura`. Un importe o una cantidad negativos omiten el grupo (pregunta 7).
   - Empresa: NULL.
@@ -323,12 +327,14 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
   - si existe y es igual, no se toca;
   - si existe y cambió (multiconjunto de Líneas o fecha), se informa; con `--reemplazar-cambiados` se reemplazan las Líneas y la fecha, conservando el id y los adjuntos (pregunta 8);
   - si el mismo Cliente y número ya fue cargado a mano, se omite el grupo;
-  - un histórico de la base que ya no está en el CSV se informa y no se borra.
+  - un histórico de la base que ya no está en el CSV se informa y no se borra;
+  - los sin número (clave `S`) se recalculan en cada corrida con `--aplicar`, sin esperar a `--reemplazar-cambiados`: si una fila ganó número en la planilla, pasa a su Comprobante numerado en la misma corrida y sale del sin número; uno que queda sin filas se borra. Así una fila nunca cuenta dos veces. Uno con Adjuntos no se borra ni se cambia: se informa y la salida no es 0.
 - **Conciliación por (Cliente, mes):** el mes es el de FECHA A FACTURAR (pregunta 10).
   - `planilla` = todas las filas con importe legible, desde la fecha de inicio;
-  - `sin_numero`;
+  - `sin_numero`, que es parte de lo migrable;
   - `omitido`, abierto por motivo;
-  - `migrable` = planilla − sin_numero − omitido;
+  - `pendiente`, la parte de `sin_numero` posterior al corte, sólo informativa;
+  - `migrable` = planilla − omitido;
   - `en_base` = suma de los históricos de la base;
   - `diferencia` = migrable − en_base.
 - **Salida del script**
@@ -373,7 +379,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 - El front convierte el formato argentino antes de mandar.
 
 **`ComprobanteFila`:**
-- Campos: `id`, `tipo`, `numero`, `fecha` (o null), `mes`, `cliente_id`, `cliente_nombre`, `empresa_emisora` (o null), `es_historico`, `cantidad_lineas`, `cantidad_adjuntos`, `total_neto`.
+- Campos: `id`, `tipo`, `numero` (o null), `fecha` (o null), `mes`, `cliente_id`, `cliente_nombre`, `empresa_emisora` (o null), `es_historico`, `pendiente_de_facturar`, `cantidad_lineas`, `cantidad_adjuntos`, `total_neto`.
 - `mes` es "AAAA-MM" de la primera Línea (pregunta 10).
 - `total_neto` va con signo: negativo en una NC.
 - Orden: por `fecha` o, si falta, por la fecha de la primera Línea, de la más nueva a la más vieja.
@@ -562,6 +568,7 @@ Todo arranca de `main` con la E1 mergeada.
 - Rojo:
   - campos para la barra común: Cliente, Empresa emisora ("Sin empresa" en un histórico), Tipo, Mes ("ago 2025") y Adjunto;
   - "Sin adjunto" excluye a los históricos, que no generan la Alerta;
+  - un histórico sin número muestra "Sin número" en la columna del número, y uno `pendiente_de_facturar` lleva además la etiqueta "Pendiente de facturar";
   - la búsqueda funciona por número y por Cliente.
 - Verificación: `npm test`.
 
@@ -695,13 +702,14 @@ Todo arranca de `main` con la E1 mergeada.
 **C2. Par: UM y número**
 - Rojo:
   - la tabla de UM de la sección 3.1, con acentos y espacios;
-  - el número: dígitos, vacío o "-", y los compuestos.
+  - el número: dígitos, vacío o "-" (sin número), y los compuestos tal cual.
 - Verificación: correr el archivo de tests.
 
 **C3. Par: clasificación y agrupado**
 - Funciones puras con un `Maestros` falso.
 - Rojo, cada regla de la sección 3.1:
   - el agrupado, y el mismo número con dos Clientes;
+  - el sin número: por Cliente y FECHA A FACTURAR, el corte (el 2026-07-31 cuenta como facturado, el 2026-08-01 queda pendiente) y la fila sin FECHA A FACTURAR que se omite;
   - la fecha única, vacía o en conflicto;
   - el todo o nada, por UM no traducible, importe ilegible, valor negativo, tarea o Cliente no resueltos o Cliente ambiguo;
   - la fecha de inicio;
@@ -715,12 +723,13 @@ Todo arranca de `main` con la E1 mergeada.
   - la segunda crea 0;
   - un Comprobante que cambió se informa, y con el flag se reemplaza manteniendo el id y los adjuntos;
   - si existe uno cargado a mano, se omite;
-  - un histórico que salió del CSV se informa y no se borra.
+  - un histórico que salió del CSV se informa y no se borra;
+  - una fila sin número que gana número pasa a su Comprobante numerado en la misma corrida, y el sin número vacío se borra; uno con Adjuntos se informa y no se toca.
 - Verificación: correr el archivo de tests.
 
 **C5. Par: conciliación**
 - Rojo:
-  - planilla = migrable + sin número + omitido, en cada Cliente y mes;
+  - planilla = migrable + omitido, en cada Cliente y mes, con el sin número dentro de lo migrable;
   - después de aplicar, todas las diferencias dan 0 y `codigo_de_salida()` da 0;
   - si se borra un Comprobante de la base, aparece la diferencia y la salida da 1.
 - Verificación: correr el archivo de tests.
@@ -837,54 +846,71 @@ Todo arranca de `main` con la E1 mergeada.
 2. **UM "NO FACTURABLE" (1 fila, de cosecha y con importe) y UM vacía (1 fila, cuya tarea tampoco está en el maestro).**
    - Recomiendo omitir su Comprobante, listarlo y que el usuario ponga la UM real en la planilla.
    - Descarto usar la Unidad sugerida, porque adivina.
+   - **Cerrada:** omitir y listar.
 3. **FACT N° compuesto (12 filas).** ¿Qué significa "`<n> - <m>`"?
    - Supuesto: se omiten y se listan, y el usuario corrige la planilla.
    - Alternativa: migrar el texto tal cual como número.
+   - **Cerrada (2026-10-12):** se migran tal cual. Las contadoras identificaban con esos dos números ese detalle. Son 11 filas.
 4. **Filas sin número.**
    - Recomiendo no migrarlas: no son Comprobantes, e inventarles un número duplicaría el real.
    - Se informan aparte por Cliente y mes, y entran solas en la corrida en que la planilla tenga el número.
+   - **Cerrada (2026-10-12), distinta de lo recomendado:** se migran todas, tengan o no número. Son 69 filas de 5 Clientes. Se agrupan en un Comprobante sin número por Cliente y FECHA A FACTURAR (14 con el export de hoy); cuando la planilla tenga el número, la corrida siguiente las pasa al Comprobante numerado. Las de FECHA A FACTURAR hasta el 2026-07-31 cuentan como facturadas; las posteriores, como pendientes de facturar, por las dudas. Ver sección 3.1, "Agrupado".
 5. **Tarea No facturable en una Línea cargada a mano.**
    - Supuesto: se permite, con un aviso en la fila. Lo emitido se registra tal cual.
+   - **Cerrada:** queda el supuesto.
 6. **Históricos de sólo lectura, salvo los adjuntos.**
    - Supuesto: sí. La idempotencia depende de que no cambien.
+   - **Cerrada:** queda el supuesto.
 7. **Notas de crédito en la planilla.** No hay negativos ni columna de tipo.
    - Supuesto: todo histórico entra como Factura, y un negativo se omite y se lista.
+   - **Cerrada:** queda el supuesto.
 8. **`--reemplazar-cambiados`.**
    - Supuesto: se incluye, porque la planilla sigue viva hasta la E4.
+   - **Cerrada:** queda el supuesto.
 9. **¿Las Empresas emisoras son las de la base de sueldos?**
    - Supuesto: sí, con el DISTINCT copiado.
+   - **Cerrada (2026-10-12):** sí, las de la base de sueldos.
 10. **"Mes" del listado y de la conciliación.**
     - Supuesto: el de las Líneas (FECHA A FACTURAR), que es como se organiza la planilla y como cuentan el Cruce y las Alertas.
     - Unas 250 filas no tienen fecha de factura.
+    - **Cerrada:** queda el supuesto.
 11. **Formato del número del Sistema contable: ¿lleva punto de venta?**
     - Supuesto: texto libre normalizado, sin tocar ceros, copiado tal cual figura en el PDF.
+    - **Cerrada:** queda el supuesto.
 12. **Tamaño y formatos de los adjuntos.**
     - Supuesto: 10 MB; PDF, PNG y JPEG.
+    - **Cerrada:** queda el supuesto.
 13. **¿Las contadoras cargan en el módulo durante la E2 y la E3?**
     - Supuesto: no. La planilla manda hasta la E4, y el módulo se usa para probar y adjuntar.
+    - **Cerrada (2026-10-12):** no. Las contadoras siguen con la planilla hasta que el módulo esté probado, aprobado y revisado por completo.
 14. **Tareas o clientes de la planilla que no estén en el maestro** (por ejemplo, las de cosecha).
     - Supuesto: se omiten y se listan.
     - Si son muchas, se decide antes de F3; por ejemplo, admitir una tarea sin id para las Líneas de cosecha.
+    - **Cerrada:** queda el supuesto.
 15. **Borrar Comprobantes.**
     - Supuesto: se permite con los no históricos, con confirmación, y no con una Factura que tiene NC.
+    - **Cerrada:** queda el supuesto.
 16. **¿El importe de la Línea es siempre cantidad por precio?**
     - Supuesto: sí, con precio de hasta 4 decimales. Si el PDF redondea distinto, se ajusta el precio.
+    - **Cerrada:** queda el supuesto.
 17. **Mismo Cliente y número que un histórico: ¿bloquear siempre?**
     - Supuesto: sí (409). Si aparece un caso real de dos Empresas con el mismo número, se revisa.
+    - **Cerrada:** queda el supuesto.
 18. **Dos contadoras cargando a la vez** (lo pidió el usuario el 2026-10-11: puede pasar y el sistema tiene que estar preparado).
     - Dos casos: las dos cargan el mismo Comprobante (que no quede duplicado ni dé 500), y una edita un Comprobante que la otra cambió o borró recién (¿gana la última o se avisa el conflicto?).
     - Supuesto: el duplicado lo frena la base con un índice único y responde 409 con un mensaje claro; para la edición, se avisa el conflicto comparando la fecha de la última modificación, porque un Comprobante tiene varios campos y pisar el trabajo de la otra es caro. En la E1 (Unidad de medida por defecto) el usuario eligió "gana la última", porque es un valor por defecto que se cambia poco.
+    - **Cerrada:** queda el supuesto.
 
 ## 6. Fuera de alcance
 
-- Cruce, Alertas, Pendientes, Equivalencias, importadores y Panel (E3 a E5). También listar las UM que no coinciden con la Unidad sugerida.
+- Cruce, Alertas, Pendientes, Equivalencias, importadores y Panel (E3 a E5). También listar las UM que no coinciden con la Unidad sugerida. La E3 no cuenta como facturado las Líneas de un Comprobante `pendiente_de_facturar`.
 - La nota de débito.
 - Pegar filas desde Excel.
 - Tests e2e.
 - Las columnas QUINCENA, GRUPO TAREA y "Nosotros" de la planilla: las notas de "Nosotros" no se migran.
 - Sumar las tablas de Facturación a `scripts/refrescar_testing.py`, porque Terceros tampoco está. Si se suma, en `testing` los adjuntos copiados de producción responden 404 `archivo_no_encontrado`, como prevé el ADR-0019.
 - Subir la consulta de empresas al núcleo y refactorizar el endpoint de Preliquidación.
-- `AYUDA-facturacion.md` (GUIA, regla 28): va cuando el módulo sea de uso diario, en la E4. Si la pregunta 13 se contesta que sí, entra acá.
+- `AYUDA-facturacion.md` (GUIA, regla 28): va cuando el módulo sea de uso diario, en la E4 (pregunta 13).
 - Validar rangos de fechas o que el total de una NC no supere al de su Factura.
 
 ## Anexo: Supuestos sobre la E1

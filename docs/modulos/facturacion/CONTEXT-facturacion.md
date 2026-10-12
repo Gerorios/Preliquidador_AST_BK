@@ -73,7 +73,13 @@ números).
 
 **Comprobante histórico**:
 Un Comprobante que vino de la planilla anterior al módulo. Puede no tener Empresa emisora ni
-Adjunto, y no genera la Alerta "sin comprobante".
+Adjunto, y no genera la Alerta "sin comprobante". Puede no tener número, cuando la planilla no
+lo anotó: junta las filas de un Cliente con la misma fecha a facturar, y pasa al Comprobante
+con número cuando la planilla lo tenga.
+
+**Pendiente de facturar**:
+Un Comprobante histórico sin número que se toma como todavía no facturado, porque es posterior
+al corte que fijó el usuario. Sus Líneas no cuentan como facturado en el Cruce.
 
 ---
 
