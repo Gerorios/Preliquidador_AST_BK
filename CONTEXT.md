@@ -11,7 +11,7 @@ El conjunto que comparten todos los Módulos: usuarios, roles y permisos, acceso
 _Avoid_: llamar "Preliquidación" al sistema completo; ese es el nombre de un módulo.
 
 **Módulo**:
-Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (Preliquidación de sueldos, Liquidación Terceros). Tiene sus propios datos, pantallas, reglas, tests y panel gerencial, y solo se apoya en el Núcleo compartido. Dos módulos nunca escriben los datos del otro; leerse entre sí solo pasa a través del Núcleo.
+Unidad funcional autocontenida del Sistema que resuelve un circuito de negocio (Preliquidación de sueldos, Liquidación Terceros, Facturación). Tiene sus propios datos, pantallas, reglas, tests y panel gerencial, y solo se apoya en el Núcleo compartido. Dos módulos nunca escriben los datos del otro; leerse entre sí solo pasa a través del Núcleo.
 _Avoid_: "sección", "pantalla" (una pantalla es parte de un módulo, no un módulo)
 
 **Núcleo compartido**:
@@ -19,7 +19,7 @@ Lo que el Sistema ofrece a todos los Módulos: autenticación, roles y permisos,
 _Avoid_: "utils", "común" (ambiguo con Concepto común)
 
 **Módulo activo**:
-Un módulo registrado puede estar inactivo: su código existe, pero el Sistema no monta sus pantallas ni su API ni muestra su Tarjeta en el Inicio. Liquidación Terceros nace inactivo y se activa cuando tenga su primera pantalla real.
+Un módulo registrado puede estar inactivo: su código existe, pero el Sistema no monta sus pantallas ni su API ni muestra su Tarjeta en el Inicio. Un módulo puede nacer inactivo mientras no tiene ninguna pantalla real, y se activa con la primera. Activo no quiere decir terminado: un módulo activo puede seguir en construcción, sumando pantallas por etapas.
 
 ## Pantallas del Sistema
 

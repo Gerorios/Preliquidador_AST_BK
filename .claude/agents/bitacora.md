@@ -28,6 +28,7 @@ Toda entrada se ordena por frontera, no por archivos. Las fronteras son:
 - **Núcleo** — `app/core/` (auth, permisos, registro de módulos, quincena, padrón)
 - **Preliquidación** — `app/modulos/preliquidacion/` y su front
 - **Liquidación Terceros** — `app/modulos/terceros/` y su front (antes se llamaba Fletes)
+- **Facturación** — `app/modulos/facturacion/` y su front
 - **Prod y Datos** — `deploy/`, `migrations/`, VPS, base `preliquidacion`
 - **Docs** — `docs/`, `AGENTS.md`, `CLAUDE.md`, `CONTEXT-MAP.md` y los glosarios, `README.md`
 
