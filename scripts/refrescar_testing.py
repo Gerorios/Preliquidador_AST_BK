@@ -1,16 +1,19 @@
 """
 Refresca la base de DESARROLLO (`testing`) con la estructura y los datos de
-las tablas del preliquidador tomadas de PRODUCCIÓN (`preliquidacion`).
+las tablas de la lista TABLAS (núcleo y módulos) tomadas de PRODUCCIÓN
+(`preliquidacion`).
 
-Uso (desde la raíz del backend, con el venv activado):
+Uso (desde la raíz del backend):
 
     python scripts/refrescar_testing.py            # estructura + datos
     python scripts/refrescar_testing.py --solo-estructura
     python scripts/refrescar_testing.py --tablas usuarios,preliquidacion
 
-Origen: la base propia del .env (DB_PROPIA_*), que en la máquina de Gero es
-producción. Destino: variables DB_DEV_* del .env; si faltan, se piden por
-consola (la contraseña no se muestra).
+Origen: la base propia (DB_PROPIA_*). Como el .env de desarrollo apunta a
+`testing`, para correrlo se le pasan las credenciales de producción como
+DB_PROPIA_* en el entorno del proceso; sin eso, origen y destino serían la misma
+base y el script se niega. Destino: variables DB_DEV_* del .env; si faltan, se
+piden por consola (la contraseña no se muestra).
 
     DB_DEV_HOST=...      (default: el mismo host que DB_PROPIA_HOST)
     DB_DEV_PORT=3306
@@ -19,8 +22,8 @@ consola (la contraseña no se muestra).
     DB_DEV_NAME=testing
 
 Qué hace, en orden, dentro del destino:
-  1. DROP + CREATE de cada tabla del preliquidador (solo las de la lista de
-     abajo: `testing` tiene tablas de otros sistemas y NO se tocan).
+  1. DROP + CREATE de cada tabla de la lista (solo esas: `testing` tiene
+     tablas de otros sistemas y NO se tocan).
   2. Copia de filas en lotes.
   3. Recrea las vistas (si el usuario destino no puede, avisa y sigue).
 
