@@ -3336,3 +3336,37 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 **Pendiente**
 - Armar el rol de las contadoras y revisar en la pantalla las unidades raras y la tarea Sin
   definir (en `docs/estado.md`).
+
+## 2026-10-11 — Docs al día con los tres módulos activos
+
+**Mergeado**
+- PR #89 (backend) — `AGENTS.md`, `CONTEXT.md`, GUIA-MODULOS y el docstring de
+  `scripts/refrescar_testing.py` describen los tres módulos activos; el agente bitácora suma
+  la frontera Facturación.
+- PR #73 (front) — `AGENTS.md`, primer párrafo fuera del bloque común: los tres módulos.
+
+**Por frontera**
+- Docs: `AGENTS.md` de los dos repos con Preliquidación, Terceros y Facturación activos y en
+  producción (Terceros y Facturación en construcción). `CONTEXT.md`: "Módulo activo" ya no
+  dice que Terceros nace inactivo (activo no quiere decir terminado) y "Módulo" nombra a
+  Facturación. GUIA-MODULOS: §1 con los tres módulos, el árbol de §3.2 sin el molde
+  inactivo y con Facturación, §3.3 pasa a "cómo se suma un módulo" con Facturación de
+  ejemplo, §6.2 aclara que el refresco copia la lista `TABLAS` y que las `terceros_*` no
+  están. `.claude/agents/bitacora.md` suma la frontera Facturación. Plan en
+  `docs/superpowers/plans/2026-10-11-docs-facturacion-e1.md`.
+- Prod y Datos: sólo el docstring de `scripts/refrescar_testing.py` ("tablas de la lista",
+  el origen como `DB_PROPIA_*` en el entorno, sale "con el venv activado").
+
+**Decisiones**
+- §3.3 se reescribe como guía para sumar o completar cualquier módulo. Porqué: los docs
+  describían el sistema de antes de activar Terceros (2026-09-30) y Facturación
+  (2026-10-11), y alguien intentaría "activar el molde" de un módulo ya en producción.
+  Descartado: dejar §3.3 como guía de Terceros, que ya está activo.
+
+**Estado**
+- Deploy: no, no cambia nada que corra.
+- Migraciones: ninguna.
+
+**Pendiente**
+- Sumar las `terceros_*` a `TABLAS` de `refrescar_testing.py` (cambia código) y el
+  encabezado de `migrations/core/002`: fuera de alcance (en `docs/estado.md`).

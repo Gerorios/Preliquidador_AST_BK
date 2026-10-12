@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-Nada en marcha. Facturación E2 cuando el usuario la arranque (plan `2026-10-11-facturacion-e2.md`, 18 preguntas abiertas).
+Los PRs chicos de deuda que pidió el usuario: el encabezado de `migrations/core/002`, sumar las `terceros_*` a `scripts/refrescar_testing.py`, regenerar `000_esquema_base.sql` y marcar `ws18` como `historica`, subir al núcleo la traducción de errores del campo y la deuda del núcleo del front. Después, Facturación E2 (plan `2026-10-11-facturacion-e2.md`, 18 preguntas abiertas).
 
 ## Pendientes del usuario
 
@@ -19,7 +19,6 @@ Nada en marcha. Facturación E2 cuando el usuario la arranque (plan `2026-10-11-
 - Actualizar en `docs/DEPLOY.md` (local, fuera de git) la nota de migraciones históricas: `ws17` ya es `historica` (BK #71, 2026-10-05).
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
-- PR aparte que regenera `000_esquema_base.sql` y marca `ws18` como `historica` (BK #73, 2026-10-07).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: después de la carga, revisar en la pantalla Unidad de medida por defecto las unidades del maestro que parecen raras (6 tareas, vistas en la simulación del 2026-10-11) y completar las que quedan Sin definir.
 - Facturación: armar en Administración el rol de las contadoras con Editar en Unidad de medida por defecto (BK #88, FT #72).
@@ -30,8 +29,9 @@ Nada en marcha. Facturación E2 cuando el usuario la arranque (plan `2026-10-11-
 ## A futuro
 
 - Subir al núcleo la traducción de errores del sistema de campo: desde la Facturación E1 la tienen copiada dos módulos (pregunta 6 de su plan, 2026-10-11).
-- Deuda del núcleo del front vista en la revisión de la Facturación E1: `CargandoOverlay` no frena el teclado ni avisa a lectores de pantalla; `.input` tiene `outline: none` y el foco casi no se ve; el encabezado de la tabla de Mantenimiento no queda fijo; `AGENTS.md` del front no lista Facturación y presenta a Terceros como inactivo (2026-10-11).
-- Docs viejos desde la Facturación E1: GUIA-MODULOS §6.2 y la ayuda de `scripts/refrescar_testing.py`; y ningún test controla que el rollback comentado de una migración no tenga `;` (2026-10-11).
+- Deuda del núcleo del front vista en la revisión de la Facturación E1: `CargandoOverlay` no frena el teclado ni avisa a lectores de pantalla; `.input` tiene `outline: none` y el foco casi no se ve; el encabezado de la tabla de Mantenimiento no queda fijo (2026-10-11).
+- Ningún test controla que el rollback comentado de una migración no tenga `;` (2026-10-11).
+- Las tablas `terceros_*` no están en `TABLAS` de `scripts/refrescar_testing.py` (existen en producción desde el 2026-09-30), así que el refresco de `testing` no las copia (2026-10-11).
 - El encabezado de `migrations/core/002_roles_y_permisos.sql` quedó viejo con `core/003`: dice que volver al código anterior no toca la base y que la migración se puede volver a correr. Un PR chico de comentarios (minor 1 del BK #87, 2026-10-11).
 - Modo Ver de Preliquidación (FT2 del esquema de permisos): los botones de escritura desaparecen sin aviso. Se evaluó una etiqueta tenue "Consulta" junto al título de Conceptos, Mantenimiento y el panel de la línea; el usuario decidió mirarlo primero en el sitio real y sumarla en un PR chico si confunde (2026-10-11).
 - Tests e2e con Playwright en el front (dependencia nueva, se aprueba antes): hoy no hay; lo de punta a punta es el smoke manual en el navegador, que sólo prueba lo que tocó la tarea. Pocos flujos críticos (login y que cada rol vea sólo sus pantallas, Revisión, Verificación, exportación), el grueso con la API simulada y uno o dos de sólo lectura contra `testing` (compartida y con datos que cambian: sin números fijos). Correrían en la fase 4 cuando la tarea toca el front y antes de cada deploy. Buen momento para arrancar: el esquema de permisos, por el caso de los roles (2026-10-11).
