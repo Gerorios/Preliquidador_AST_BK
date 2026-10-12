@@ -35,10 +35,10 @@ preliquidacion/ws14_tipo_excento.sql historica
 preliquidacion/ws15_conceptos_cliente_supervisor.sql historica
 preliquidacion/ws16_valor_hora_tractorista.sql historica
 preliquidacion/ws17_concepto_unico_normalizado.sql historica
-preliquidacion/ws18_posible_duplicado.sql
+preliquidacion/ws18_posible_duplicado.sql historica
 
-# Liquidación Terceros. Ninguna se aplicó todavía en producción: se crearon
-# y probaron en `testing`, y llegan con el primer deploy del módulo.
+# Liquidación Terceros. Aplicadas en producción con el primer deploy del
+# módulo (2026-09-30).
 terceros/001_crear_tablas.sql
 terceros/002_tarifario.sql
 terceros/003_seguros_por_tipo_y_sujeto.sql

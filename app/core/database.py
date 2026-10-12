@@ -1,4 +1,8 @@
+import time
+from contextlib import contextmanager
+
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from app.core.config import settings
 
@@ -41,6 +45,37 @@ class ExternaNoDisponible(Exception):
     no está. Vive en el núcleo porque el engine que la origina es del núcleo y
     main.py la convierte en 503 para cualquier módulo (ADR-0013: el núcleo no
     importa módulos). El mensaje está pensado para mostrárselo al usuario tal cual."""
+
+
+# Códigos de MySQL en los que ADCP contesta pero nos niega el acceso
+# (credenciales o permisos cambiados): reintentar no sirve, a diferencia de un
+# corte o un timeout. Cualquier otro código se trata como "no respondió".
+CODIGOS_ACCESO_RECHAZADO = {1044, 1045, 1142, 1143}
+
+
+@contextmanager
+def traducir_errores_externa():
+    """Envuelve una consulta a la externa: si pymysql levanta OperationalError
+    (venció el read_timeout, el servidor no está o nos niega el acceso), lo
+    traduce a ExternaNoDisponible con un mensaje que la persona entienda, en vez
+    del "Lost connection to MySQL server". Lo usan todos los módulos que leen el
+    campo, para que el mismo corte se avise igual en todas las pantallas."""
+    t0 = time.time()
+    try:
+        yield
+    except OperationalError as e:
+        codigo = (getattr(e.orig, "args", None) or (None,))[0]
+        print(f"[EXTERNA] error {codigo} tras {time.time()-t0:.1f}s: {e.orig}")
+        if codigo in CODIGOS_ACCESO_RECHAZADO:
+            raise ExternaNoDisponible(
+                "La base de datos de campo (ADCP) rechazó el acceso del sistema. "
+                "Reintentar no sirve: avisá a sistemas."
+            ) from e
+        raise ExternaNoDisponible(
+            "La base de datos de campo (ADCP) no respondió a tiempo. "
+            "Reintentá en unos minutos."
+        ) from e
+
 
 engine_externa = create_engine(
     settings.url_externa,

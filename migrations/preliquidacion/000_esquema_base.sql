@@ -1,5 +1,5 @@
 -- Esquema base generado con scripts/exportar_esquema.py desde la base real
--- (preliquidacion) el 2026-10-04. Es el punto de partida para una base nueva: correr este
+-- (preliquidacion) el 2026-10-12. Es el punto de partida para una base nueva: correr este
 -- archivo y después las migraciones siguientes de la carpeta en orden.
 -- NO editar a mano: regenerar con el script.
 
@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS `preliquidacion_linea` (
   `alerta_legajo` tinyint(1) DEFAULT NULL,
   `alerta_empresa` tinyint(1) DEFAULT NULL,
   `linea_incompleta` tinyint(1) DEFAULT NULL,
+  `es_posible_duplicado` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `ix_linea_tarea` (`preliquidacion_id`,`nombre_tarea`),
   KEY `ix_linea_cuit` (`preliquidacion_id`,`cuit`),
