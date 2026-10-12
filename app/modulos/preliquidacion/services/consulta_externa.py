@@ -4,11 +4,10 @@ Servicio de consulta a la BD externa (solo lectura).
 from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
 import time
 
 from app.core.quincena import calcular_rango_quincena  # noqa: F401 — reexport, la usan otros servicios
-from app.core.database import ExternaNoDisponible  # noqa: F401 — reexport, la levanta _ejecutar
+from app.core.database import ExternaNoDisponible, traducir_errores_externa  # noqa: F401 — reexport de ExternaNoDisponible, la importan api/preliquidacion.py y tests
 
 
 # Expresión reutilizable para extraer el grupo_pago desde tareas.descripcion
@@ -251,11 +250,6 @@ QUERY_GRUPOS_PAGO = text("""
     ORDER BY grupo_pago
 """)
 
-# Códigos de MySQL en los que ADCP contesta pero nos niega el acceso
-# (credenciales o permisos cambiados): reintentar no sirve, a diferencia de un
-# corte o un timeout. Cualquier otro código se trata como "no respondió".
-CODIGOS_ACCESO_RECHAZADO = {1044, 1045, 1142, 1143}
-
 
 class ConsultaExternaService:
 
@@ -265,27 +259,15 @@ class ConsultaExternaService:
     def _ejecutar(self, query, params=None):
         """Todas las consultas a la externa pasan por acá: si venció el
         read_timeout (ver app/core/database.py) o el servidor de ADCP no está,
-        pymysql levanta OperationalError y acá se traduce a ExternaNoDisponible,
-        con un mensaje que el liquidador entienda en vez del "Lost connection to
-        MySQL server". Devuelve (filas, columnas, segundos del execute, segundos
-        del fetchall)."""
+        pymysql levanta OperationalError y el núcleo lo traduce a
+        ExternaNoDisponible, con un mensaje que el liquidador entienda en vez
+        del "Lost connection to MySQL server". Devuelve (filas, columnas,
+        segundos del execute, segundos del fetchall)."""
         t0 = time.time()
-        try:
+        with traducir_errores_externa():
             resultado = self.db.execute(query, params or {})
             t1 = time.time()
             filas = resultado.fetchall()
-        except OperationalError as e:
-            codigo = (getattr(e.orig, "args", None) or (None,))[0]
-            print(f"[EXTERNA] error {codigo} tras {time.time()-t0:.1f}s: {e.orig}")
-            if codigo in CODIGOS_ACCESO_RECHAZADO:
-                raise ExternaNoDisponible(
-                    "La base de datos de campo (ADCP) rechazó el acceso del sistema. "
-                    "Reintentar no sirve: avisá a sistemas."
-                ) from e
-            raise ExternaNoDisponible(
-                "La base de datos de campo (ADCP) no respondió a tiempo. "
-                "Reintentá en unos minutos."
-            ) from e
         return filas, resultado.keys(), t1 - t0, time.time() - t1
 
     def obtener_tareas_quincena(self, quincena: date) -> list[dict]:
