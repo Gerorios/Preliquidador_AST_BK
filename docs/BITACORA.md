@@ -3443,3 +3443,33 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
   `docs/estado.md`, "A futuro").
 - Las `terceros_*` en el refresco de `testing`, para Pitu (en `docs/estado.md`).
 - Facturación E2: resolver las preguntas abiertas 2 a 18 de su plan.
+
+## 2026-10-11 — La bitácora se anota sin preguntar después de cada merge
+
+**Mergeado**
+- PR #93 (backend) — después de cada merge a `main` se corre `/bitacora` sin preguntar y se
+  commitean `docs/BITACORA.md` y `docs/estado.md` a `main`; el push sigue esperando el OK.
+- PR #75 (frontend) — hermano: los mismos textos en el front.
+
+**Por frontera**
+- Docs: en los dos repos, el bloque común de `AGENTS.md` (la fila "Un merge a `main`" de la
+  tabla y el último punto de "Bitácora y estado"), la línea de los respaldos de `CLAUDE.md`
+  (en el front, además, "desde acá sólo se pregunta") y el mensaje del hook
+  `.claude/hooks/recordar-bitacora.sh` después de un `gh pr merge`. En el backend, también
+  la fase 5 de `flujo-preliquidacion` y el plan `2026-10-11-bitacora-sin-preguntar.md`.
+
+**Decisiones**
+- La bitácora se anota sin preguntar; el push de `main` sigue con OK del usuario. Porqué: se
+  preguntaba porque la anotación escribe en `main` directo, y la respuesta era siempre que
+  sí; el usuario pidió automatizarlo, y el control que importa, qué sale de la máquina,
+  queda en el push. Vale también para las sesiones de Pitu, porque la regla está en el
+  bloque común. Descartado: que la escriba una GitHub Action con un modelo, porque haría
+  falta una clave de API en un repo público y que CI escriba en `main`, por casi ninguna
+  ganancia.
+
+**Estado**
+- Deploy: no; no cambia nada que corra en el VPS. El hook nuevo rige apenas esto está en
+  `main` de cada clon.
+- Migraciones: ninguna.
+- Pruebas: el bloque común de `AGENTS.md` comparado con `diff` entre los dos repos; cada
+  hook devuelve JSON válido con el mensaje nuevo. Sin ronda de revisión, por ser sólo docs.
