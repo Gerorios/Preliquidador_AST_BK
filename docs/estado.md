@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Nada.
+- Facturación: la Unidad sugerida se lee del sistema de campo y sale la pantalla Unidad de medida por defecto, con su tabla. Fase 3, ejecución (plan aprobado el 2026-10-12): `docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`, en la rama `feature/unidad-desde-campo` de los dos repos.
 
 ## Próximo paso
 
-Facturación E2: grilling de las preguntas abiertas 2 a 18 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` (la 1 ya está cerrada).
+Terminar la ejecución del cambio de arriba. Después, Facturación E2: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md`, y una propuesta para agrupar las filas sin número (la 4 cambió: la migración sube todas las filas).
 
 ## Pendientes del usuario
 
