@@ -20,7 +20,7 @@ El sistema pasó a ser un pequeño sistema de gestión al que se le van agregand
 
 - **Preliquidación**: lo de arriba, el primero.
 - **Liquidación Terceros** (desde 2026-09-30, en construcción; lo construye Pitu): lo que se le paga y se le descuenta a los terceros que prestan servicio (fletes de colectivos y horas de taller sobre maquinaria ajena), que hoy se hace con un Excel conectado a la misma base del sistema de campo y el módulo trae adentro del sistema.
-- **Facturación** (desde 2026-10-11, en construcción por etapas): registra los comprobantes que el grupo le emite a cada cliente y los cruza contra lo trabajado en el campo, para saber qué falta facturar. Su primera etapa trajo la pantalla Unidad de medida por defecto.
+- **Facturación** (desde 2026-10-11, en construcción por etapas): registra los comprobantes que el grupo le emite a cada cliente y los cruza contra lo trabajado en el campo, para saber qué falta facturar. Todavía no tiene pantallas: la Unidad sugerida de cada tarea la lee del sistema de campo, y la primera pantalla llega con su etapa 2.
 
 ### 1.1 Lo que tiene que saber del dominio del preliquidador
 
@@ -168,16 +168,15 @@ backend_preliquidacion/
 │       │   └── services/             # consulta_externa.py (las consultas del Excel) y el resto
 │       └── facturacion/              # MÓDULO Facturación (activo=True)
 │           ├── __init__.py           # arma MODULO: ModuloInfo(..., pantallas=PANTALLAS)
-│           ├── permisos.py           # PANTALLAS: las seis, aunque todavía exista una sola
-│           ├── api/tareas.py         # Unidad de medida por defecto
-│           ├── models.py             # tablas facturacion_*
+│           ├── permisos.py           # PANTALLAS: las cinco, ninguna construida todavía
+│           ├── models.py             # tablas facturacion_* (hoy ninguna)
 │           ├── schemas.py
-│           └── services/             # consulta_externa.py, unidad_service.py, primera_carga.py
+│           └── services/             # consulta_externa.py
 ├── migrations/
 │   ├── ORDEN.txt                     # orden de aplicación de todas las migraciones; marca `historica` las ya contenidas en el 000
 │   ├── preliquidacion/               # ws1…ws16 (14 archivos; no existen ws4 ni ws6) + fix_trazabilidad
 │   ├── terceros/                     # LEEME.md; 001_crear_tablas.sql, 002_…
-│   └── facturacion/                  # LEEME.md; 001_unidad_por_tarea.sql
+│   └── facturacion/                  # LEEME.md; 001_unidad_por_tarea.sql, 002_borrar_unidad_por_tarea.sql
 ├── tests/
 │   ├── core/                         # autorización por pantalla, arranque
 │   ├── preliquidacion/
@@ -219,29 +218,28 @@ frontend_preliquidacion/
         │   └── pages/            # Inicio, Grilla, Tarifario, Verificaciones, Estaciones
         └── facturacion/          # MÓDULO Facturación
             ├── rutas.jsx         # activo: true
-            ├── unidades.js       # lógica pura de la pantalla, con unidades.test.js (node --test)
-            └── pages/            # UnidadFacturacion
+            └── unidades.js       # las nueve Unidades y sus etiquetas, con unidades.test.js (node --test)
 ```
 
 Cada módulo se registra en dos lugares y nada más: `app/modulos/__init__.py` incluye su `MODULO`, y `src/modulos/registro.js` incluye su entrada. `app/main.py` y `App.jsx` no conocen módulos por nombre: recorren el registro. Todo lo demás del módulo vive adentro de su carpeta.
 
 ### 3.3 Cómo se suma un módulo
 
-Los tres módulos de hoy se hicieron así; Facturación (2026-10-11) es el ejemplo más reciente y más chico para copiar. Completar un módulo que ya existe, como Terceros o Facturación, es lo mismo pero dentro de su carpeta.
+Los tres módulos de hoy se hicieron así; Terceros es el ejemplo para copiar. Completar un módulo que ya existe, como Terceros o Facturación, es lo mismo pero dentro de su carpeta.
 
 **1. Backend.**
 
-- `app/modulos/<m>/__init__.py` arma `MODULO = ModuloInfo(...)` con `clave`, `nombre`, `descripcion`, `activo`, sus `routers`, `modelos` (la ruta del `models.py`, para que el arranque lo importe y el chequeo de tablas y columnas faltantes del arranque y de `/health` cubra al módulo) y `pantallas=PANTALLAS`. Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` lo publica.
-- `app/modulos/<m>/permisos.py` declara `PANTALLAS`, y cada endpoint pide la suya con `requiere_pantalla` (ver la sección 5). Se pueden declarar pantallas que todavía no existen, así el editor de roles ya las muestra: Facturación declaró sus seis con una sola hecha.
+- `app/modulos/<m>/__init__.py` arma `MODULO = ModuloInfo(...)` con `clave`, `nombre`, `descripcion`, `activo`, sus `routers`, `modelos` (la ruta del `models.py`, para que el arranque lo importe y el chequeo de tablas y columnas faltantes del arranque y de `/health` cubra al módulo) y `pantallas=PANTALLAS`. Con `activo=True`, `app/main.py` monta sus routers (vía `app.modulos.activos()`) y `GET /api/auth/modulos` lo publica. Un módulo activo puede no tener `routers` todavía (Facturación, hasta su etapa 2): publica sus pantallas, así el editor de roles las muestra, y no tiene Tarjeta porque no hay ruta donde aterrizar.
+- `app/modulos/<m>/permisos.py` declara `PANTALLAS`, y cada endpoint pide la suya con `requiere_pantalla` (ver la sección 5). Se pueden declarar pantallas que todavía no existen, así el editor de roles ya las muestra: Facturación declara cinco sin ninguna construida.
 - Endpoints en `api/`, lógica en `services/` (las consultas a la base de campo, en `services/consulta_externa.py`, con SQL parametrizado), modelos en `models.py` con tablas de prefijo `<m>_` (regla 5 de la sección 4.2).
 - Migraciones en `migrations/<m>/` (`LEEME.md`, `001_...`), anotadas al final de `migrations/ORDEN.txt` y probadas primero contra `testing`. Sus tablas se suman a `TABLAS` de `scripts/refrescar_testing.py` (sección 6.2).
-- Tests en `tests/<m>/`. Los de `tests/facturacion/test_registro_y_permisos.py` (registrado, activo y con sus pantallas) y `test_mapa_permisos.py` (cada endpoint con su pantalla y nivel) sirven de molde.
+- Tests en `tests/<m>/`. Los de `tests/terceros/test_registro_y_permisos.py` (registrado, activo y con sus pantallas) y `tests/terceros/test_mapa_permisos.py` (cada endpoint con su pantalla y nivel) sirven de molde.
 - Glosario del módulo en `docs/modulos/<m>/CONTEXT-<m>.md`, anotado en `CONTEXT-MAP.md`. Antes de diseñar el modelo, se responde ahí el cuestionario de la sección 8.1.
 
 **2. Frontend.**
 
 - `src/modulos/<m>/rutas.jsx` con `activo: true`, sus rutas, su menú y su Tarjeta. Cada ruta lleva `pantalla` con la misma clave que declara el backend en `PANTALLAS`.
-- Páginas en `src/modulos/<m>/pages/`; la lógica pura, en archivos `.js` con sus tests en `node --test` (como `src/modulos/facturacion/unidades.js`).
+- Páginas en `src/modulos/<m>/pages/`; la lógica pura, en archivos `.js` con sus tests en `node --test` (como `src/modulos/preliquidacion/pages/filtrarLineas.js`).
 - Íconos disponibles para la Tarjeta en `src/core/ui/iconos.jsx`.
 
 El Inicio no consulta al backend para decidir las tarjetas: lee el registro estático de `src/modulos/registro.js` (filtrado por `activo`) contra los `permisos` de la sesión (`src/core/accesos.js`). Un módulo inactivo (`activo: False`/`false` en los dos repos) existe en el código pero no monta rutas ni muestra su Tarjeta.
@@ -373,6 +371,8 @@ ver_lineas = requiere_pantalla(MODULO, "revision", "verificacion")
 
 Una pantalla nueva se suma a `PANTALLAS`, a su ruta y al glosario del módulo, con qué es ver y qué es editar en ella. Los roles que ya existen no la incluyen: el admin la agrega editando los roles. Los permisos más finos que la pantalla (por acción) se descartaron en el ADR-0020.
 
+Una pantalla que se retira sale de `PANTALLAS`, de su ruta, del menú y del glosario del módulo, y sus endpoints salen o pasan a pedir otra pantalla en el mismo PR. **Su clave no se reutiliza nunca**: un rol con permisos viejos ganaría la pantalla nueva. Sus permisos guardados se borran con una migración, que se aplica después del deploy del código.
+
 Alta y gestión de usuarios (desde el PR 5 de la etapa 0): se hace **desde la pantalla de Administración** (solo rol global `admin`), que busca a la persona en el padrón de empleados (solo lectura) y la da de alta con los roles elegidos. La identidad de la persona es su **CUIL**: como la columna `email` de `usuarios` es `UNIQUE NOT NULL` y esta etapa no migra el esquema, el alta guarda un email sintético `<cuil>@usuarios.laasturianasrl.com.ar` (`app/core/identidad.py`), y la **contraseña inicial es el CUIL**. Nadie tipea ese email: el login acepta el CUIL pelado (con o sin guiones) además del email real de los usuarios anteriores al PR 5. Cambiarla es voluntario — la persona puede seguir usando el CUIL indefinidamente — y el propio usuario la cambia desde su sesión con `POST /api/auth/password` (pide la contraseña actual).
 
 `scripts/crear_usuario.py` (crea o actualiza un usuario; `--asignar-rol "<nombre>"`, repetible, le asigna roles que ya existen) y `scripts/asignar_rol.py` (`--email <mail> --rol "<nombre>"` le suma un rol, con `--quitar` se lo saca; `--listar` muestra sus roles y permisos efectivos, y `--roles` los roles que existen) siguen existiendo como alternativa de consola y como **salida de emergencia** si el admin pierde su propio acceso. Los roles se arman en la Administración, no por consola.
@@ -420,7 +420,7 @@ La regla de esta etapa:
 | Desarrollo (tu máquina) | `testing` | Pitu y Gero, con las credenciales de `testing` |
 | Producción (VPS) | `preliquidacion` | Solo el VPS |
 
-`testing` es el entorno de prueba del área y es **compartida con otros sistemas**: tiene un espejo de nuestras tablas y tablas ajenas. Toda DDL se aplica primero acá y después en producción. **No se hace nunca un drop general**, solo se tocan las tablas nuestras: las del núcleo y las de cada módulo. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas de su lista `TABLAS` (hoy las del núcleo, Preliquidación y Facturación) y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cada módulo suma sus tablas a esa lista; las `terceros_*` existen en producción desde 2026-09-30 y todavía no están, así que el script no las copia ni las toca.
+`testing` es el entorno de prueba del área y es **compartida con otros sistemas**: tiene un espejo de nuestras tablas y tablas ajenas. Toda DDL se aplica primero acá y después en producción. **No se hace nunca un drop general**, solo se tocan las tablas nuestras: las del núcleo y las de cada módulo. Para refrescar `testing` con la estructura y los datos actuales de producción existe `scripts/refrescar_testing.py` (lo corre Gero, que tiene las credenciales de `testing` en su `.env` como `DB_DEV_*`). Copia solo las tablas de su lista `TABLAS` (hoy las del núcleo y Preliquidación) y las vistas, verifica conteos, y se puede correr cuando haga falta resetear el ambiente. Cada módulo suma sus tablas a esa lista; las `terceros_*` existen en producción desde 2026-09-30 y todavía no están, así que el script no las copia ni las toca.
 
 Las bases Externa y Sueldos son las mismas en desarrollo y producción, porque son de solo lectura. Las consultas que hagas en desarrollo van contra datos reales del sistema de campo: perfecto para validar contra el Excel.
 

@@ -25,8 +25,6 @@ Las Pantallas del módulo y qué es ver y qué es editar en cada una (Pantalla y
 - **Cruce**: solo ver.
 - **Comprobantes**: ver los Comprobantes y sus Adjuntos; editar es cargarlos, editarlos,
   adjuntar e importar Órdenes de facturación.
-- **Unidad de medida por defecto**: ver la Unidad sugerida de cada tarea, su marca No facturable y el
-  Umbral de diferencia; editar es cambiarlos.
 - **Equivalencias**: ver las Equivalencias de cada Cliente; editar es crearlas y cambiarlas.
 - **Panel**: solo ver.
 
@@ -116,11 +114,13 @@ el Grupo de tareas (el agrupador funcional).
 La Unidad de facturación que cada tarea del sistema de campo trae por defecto: precarga la
 Línea de comprobante al elegir la tarea, y es la que usa el Cruce para una tarea que todavía no
 tiene Líneas en el rango. No obliga: la Línea puede facturar en otra. Una tarea facturable sin
-Unidad sugerida genera un aviso.
+Unidad sugerida genera un aviso. Se define en el sistema de campo, en cada tarea; Facturación la
+lee y no la cambia.
 
 **No facturable**:
 La marca de una tarea del sistema de campo que no se le factura a ningún Cliente (por ejemplo,
-una tarea interna). No entra al Cruce ni a las Alertas de facturación.
+una tarea interna). No entra al Cruce ni a las Alertas de facturación. Se define en el sistema
+de campo, en cada tarea; Facturación la lee y no la cambia.
 
 **Cantidad del campo**:
 Lo trabajado para un Cliente según el sistema de campo, medido en la Unidad de facturación de

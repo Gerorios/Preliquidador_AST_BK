@@ -60,7 +60,6 @@ TABLAS = [
     "concepto_adicional",
     "ajuste_manual",
     "categoria_operario",
-    "facturacion_tarea",
 ]
 VISTAS = ["vw_bi_lineas", "vw_bi_conceptos_pagados"]
 LOTE = 1000

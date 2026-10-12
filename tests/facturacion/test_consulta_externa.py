@@ -1,7 +1,9 @@
-"""La lectura del maestro de tareas del sistema de campo (plan de la E1, D6).
+"""La lectura del maestro de tareas del sistema de campo (plan de la E1, D6, y
+docs/superpowers/plans/2026-10-12-unidad-desde-campo.md, B2).
 
 El SQL es de MySQL y no corre en SQLite: acá se prueba lo que el módulo pone y
-saca de la base —qué columnas pide, qué filtra, cómo arma cada tarea— y que un
+saca de la base —qué columnas pide, qué filtra, cómo arma cada tarea con su
+grupo y su Unidad sugerida— y que un
 corte del campo llegue como ExternaNoDisponible, que main.py convierte en 503.
 """
 import pymysql
@@ -41,44 +43,64 @@ class SesionFalsa:
 
 # ─── Las tareas ─────────────────────────────────────────────────────────────
 
+COLUMNAS = ("tarea_id", "nombre_tarea", "descripcion")
+
+
 def test_obtener_tareas_arma_cada_tarea_en_el_orden_en_que_llegan():
     externa = SesionFalsa(
-        columnas=("tarea_id", "nombre_tarea", "grupo_tarea"),
-        filas=[(12, "TAREA B", "GRUPO 1"), (5, "TAREA A", None), (40, "TAREA C", "GRUPO 2")],
+        columnas=COLUMNAS,
+        filas=[(12, "TAREA B", "GRUPO 1;PAGO;HORAS PEON"), (5, "TAREA A", None),
+               (40, "TAREA C", "GRUPO 2;PAGO;NO FACTURABLE")],
     )
     tareas = ConsultaExternaService(externa).obtener_tareas()
 
+    # Sólo los valores traducidos: ni el texto crudo ni un sin_definir aparte.
     assert tareas == [
-        {"tarea_id": 12, "nombre": "TAREA B", "grupo_tarea": "GRUPO 1"},
-        {"tarea_id": 5, "nombre": "TAREA A", "grupo_tarea": None},
-        {"tarea_id": 40, "nombre": "TAREA C", "grupo_tarea": "GRUPO 2"},
+        {"tarea_id": 12, "nombre": "TAREA B", "grupo_tarea": "GRUPO 1",
+         "unidad_sugerida": "horas_peon", "no_facturable": False},
+        {"tarea_id": 5, "nombre": "TAREA A", "grupo_tarea": None,
+         "unidad_sugerida": None, "no_facturable": False},
+        {"tarea_id": 40, "nombre": "TAREA C", "grupo_tarea": "GRUPO 2",
+         "unidad_sugerida": None, "no_facturable": True},
     ]
     query, _ = externa.llamadas[0]
     assert query is QUERY_TAREAS
 
 
-def test_sin_grupo_es_siempre_none():
-    # Una descripción vacía da "" y una NULL da None: el contrato tiene un solo
-    # valor para "sin grupo".
-    externa = SesionFalsa(
-        columnas=("tarea_id", "nombre_tarea", "grupo_tarea"),
-        filas=[(1, "TAREA A", ""), (2, "TAREA B", "   "), (3, "TAREA C", None),
-               (4, "TAREA D", " GRUPO 1 ")],
-    )
-    grupos = [t["grupo_tarea"] for t in ConsultaExternaService(externa).obtener_tareas()]
+# Sin definir es (None, False); No facturable es (None, True).
+@pytest.mark.parametrize("descripcion, grupo, unidad, no_facturable", [
+    ("G;P;PLANTA;EXTRA", "G", "plantas", False),
+    ("G;P;PLANTA", "G", "plantas", False),
+    # Con dos segmentos el segundo es el grupo de pago, no la unidad: es el
+    # caso que SUBSTRING_INDEX en SQL leería mal.
+    ("G;HORAS PEON", "G", None, False),
+    ("G", "G", None, False),
+    ("", None, None, False),
+    (None, None, None, False),
+    ("G;P;", "G", None, False),
+    (" G ; P ; horas  tractor ", "G", "horas_tractor", False),
+    ("G;P;NO FACTURABLE", "G", None, True),
+    (";P;BINS C", None, "bins_c", False),
+])
+def test_el_grupo_y_la_unidad_salen_de_la_descripcion(descripcion, grupo, unidad, no_facturable):
+    externa = SesionFalsa(columnas=COLUMNAS, filas=[(1, "TAREA", descripcion)])
+    (tarea,) = ConsultaExternaService(externa).obtener_tareas()
 
-    assert grupos == [None, None, None, "GRUPO 1"]
+    assert tarea["grupo_tarea"] == grupo
+    assert tarea["unidad_sugerida"] == unidad
+    assert tarea["no_facturable"] is no_facturable
 
 
-def test_el_sql_trae_el_id_y_filtra_las_bajas():
+def test_el_sql_trae_la_descripcion_cruda_y_filtra_las_bajas():
     sql = " ".join(str(QUERY_TAREAS).split())
     assert "ta.id AS tarea_id" in sql
     assert "ta.nombre AS nombre_tarea" in sql
-    # El grupo de tareas es el primer segmento de la descripción.
-    assert "SUBSTRING_INDEX(ta.descripcion, ';', 1)" in sql
+    # La descripción viene cruda: el corte en segmentos se hace en Python.
+    assert "ta.descripcion" in sql
+    assert "SUBSTRING_INDEX" not in sql
     assert "WHERE ta.estado <> 9" in sql
     assert "ORDER BY ta.nombre" in sql
-    # Sólo lo que usa el módulo: ni el grupo de pago ni el grupo_factura.
+    # Ni el grupo de pago ni el grupo_factura: no los usa el módulo.
     assert "grupo_pago" not in sql
     assert "grupo_factura" not in sql
 
