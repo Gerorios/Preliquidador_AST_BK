@@ -300,14 +300,15 @@ minor sin tocar". Mandá aviso si algo necesita su decisión (completo).
    hubo cambio de API. El detalle del deploy va en `docs/DEPLOY.md` (local,
    fuera de git) y la bitácora lleva una **entrada de deploy aparte**, sin
    datos del servidor.
-4. **Anotar el cierre**: después de cada merge, preguntá en una línea si se
-   anota con `/bitacora`; si dice que no, seguí sin insistir. El agente
+4. **Anotar el cierre**: después de cada merge, corré `/bitacora` sin
+   preguntar (`AGENTS.md`, "Bitácora y estado"). El agente
    `bitacora` escribe la entrada **al final** de `docs/BITACORA.md` (la más
    nueva abajo) y **saca la tarea de `docs/estado.md`** (si dejó algo
    pendiente, por ejemplo el smoke del usuario, queda sólo eso, en una línea).
    Commiteás **los dos juntos a `main`**, en el checkout principal del
-   backend, con `/commit`. Si hubo deploy, su
-   entrada va aparte. Al avisar que quedó anotado, nombrá los archivos.
+   backend, con `/commit`, sin push: el push de `main` espera el OK del
+   usuario. Si hubo deploy, su entrada va aparte. Al avisar que quedó
+   anotado, nombrá los archivos.
 
 ---
 
