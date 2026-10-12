@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Nada.
+- Facturación E2 (Comprobantes, adjuntos e histórico), fase 3 (ejecución), carril completo. Plan: `docs/superpowers/plans/2026-10-11-facturacion-e2.md`.
 
 ## Próximo paso
 
-Facturación E2: el plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` está cerrado, sin preguntas abiertas (BK #95, 2026-10-12). Lo próximo es arrancar su ejecución (fase 3 del flujo), con la migración `facturacion/003`.
+PR-0 (núcleo del front) y BK-A (comprobantes, con la `facturacion/003`) en paralelo; después FT-A. El DDL de la 003 va primero a `testing`, con OK (F1).
 
 ## Pendientes del usuario
 
