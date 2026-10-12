@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-PR-0 (núcleo del front) y BK-A (comprobantes, con la `facturacion/003`) en paralelo; después FT-A. El DDL de la 003 va primero a `testing`, con OK (F1).
+PR-0 (núcleo del front) hecho y revisado, sin PR. BK-A: pares A1 a A6 hechos y la `facturacion/003` aplicada en `testing` (F1); falta la revisión de dos rondas. Después se abren los dos PRs juntos y sigue FT-A.
 
 ## Pendientes del usuario
 
