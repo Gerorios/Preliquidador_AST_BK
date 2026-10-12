@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Facturación: la Unidad sugerida se lee del sistema de campo y sale la pantalla Unidad de medida por defecto, con su tabla. Fase 5, espera el OK del usuario para los PRs (ejecución y revisión terminadas el 2026-10-12): `docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`, en la rama `feature/unidad-desde-campo` de los dos repos.
+- Nada.
 
 ## Próximo paso
 
-Con el OK, PRs hermanos del cambio de arriba (merge del FT y después del BK) y la 002 en `testing`. Después, Facturación E2: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md`, y una propuesta para agrupar las filas sin número (la 4 cambió: la migración sube todas las filas).
+El deploy de la Unidad sugerida desde el campo, con OK (ver Pendientes del usuario). Después, Facturación E2, con su migración 003: faltan las respuestas del usuario a las preguntas 3, 9 y 13 del plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md` y una propuesta para agrupar las filas sin número (la 4 cambió: la migración de la planilla sube todas las filas, tengan o no número de factura).
 
 ## Pendientes del usuario
 
@@ -20,9 +20,10 @@ Con el OK, PRs hermanos del cambio de arriba (merge del FT y después del BK) y 
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
-- Facturación: después de la carga, revisar en la pantalla Unidad de medida por defecto las unidades del maestro que parecen raras (6 tareas, vistas en la simulación del 2026-10-11) y completar las que quedan Sin definir.
-- Facturación: armar en Administración el rol de las contadoras con Editar en Unidad de medida por defecto (BK #88, FT #72).
-- Facturación: confirmar con las contadoras si en pulverización con dos tractores se facturan también las horas del segundo (plan, sección 4; BK #78).
+- Facturación, la Unidad sugerida desde el campo (BK #94, FT #76; sin deploy): la `facturacion/002` ya está en `testing` y el smoke de `main` pasó (2026-10-12). Falta el deploy con OK (front, backend con reinicio y recién después la 002, con respaldo), según la etapa 3 del plan `docs/superpowers/plans/2026-10-12-unidad-desde-campo.md` (S4 y S5).
+- Avisarle a Pitu que haga pull de `main` en los dos repos: `testing` ya no tiene la tabla de la Unidad sugerida, y un `main` anterior al BK #94 arranca contra `testing` avisando que faltan tablas (2026-10-12).
+- Facturación: revisar en la app de campo las tareas facturables que quedan Sin definir (la Unidad sugerida ahora se define allá; BK #94).
+- Facturación: el rol de las contadoras ya existe en producción; no asignarlo a nadie hasta que esté la primera versión completa del módulo (decisión del usuario, 2026-10-12).
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
 - Avisarle a Pitu que el esquema nuevo de permisos ya está en producción (BK #83 y #86, FT #70; deploy del 2026-10-11): el glosario de Terceros suma sus cinco pantallas con qué es ver y editar; Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py`; cada ruta pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla; sus tests usan el rol "Liquidador de terceros". Que confirme las filas 25 y 28 del plan y qué pantallas usan `ver_inicio_o_quincena`, y que rebase sus ramas abiertas sobre `terceros.py`.
 
@@ -31,7 +32,7 @@ Con el OK, PRs hermanos del cambio de arriba (merge del FT y después del BK) y 
 - Revisar por qué el planificador tardó cerca de una hora en un plan mediano (plan del 2026-10-12, unidad desde el campo); el usuario lo quiere ver más adelante (2026-10-12).
 - Inicio del núcleo del front, deuda vista con `/impeccable audit` el 2026-10-12: el foco de la Tarjeta casi no se ve (halo y borde por debajo de 3:1, WCAG 1.4.11); el estado sin pantallas es un párrafo chico y gris, sin título ni a quién pedir acceso, y "Elegí dónde trabajar" se muestra igual (2026-10-12).
 - Deuda del núcleo del front vista en la revisión de la Facturación E1: el encabezado de la tabla de Mantenimiento no queda fijo (2026-10-11).
-- Ningún test controla que el rollback comentado de una migración no tenga `;` (2026-10-11).
+- Ningún test controla que el rollback comentado de una migración no tenga `;`, salvo en Facturación (el test de la 002 lo controla para la 001 y la 002; BK #94): falta para el resto de los módulos (2026-10-11).
 - `docs/modulos/GUIA-MODULOS.md` (línea 139 y regla 8) no nombra `traducir_errores_externa()` del núcleo: minor 1 del BK #92 (2026-10-11).
 - Las vistas de `ws12` (marcada `historica`) no están en `000_esquema_base.sql`: una base nueva desde cero queda sin ellas. Visto al planear la regeneración del `000` (2026-10-11).
 - Modo Ver de Preliquidación (FT2 del esquema de permisos): los botones de escritura desaparecen sin aviso. Se evaluó una etiqueta tenue "Consulta" junto al título de Conceptos, Mantenimiento y el panel de la línea; el usuario decidió mirarlo primero en el sitio real y sumarla en un PR chico si confunde (2026-10-11).

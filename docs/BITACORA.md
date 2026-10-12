@@ -3473,3 +3473,87 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Migraciones: ninguna.
 - Pruebas: el bloque común de `AGENTS.md` comparado con `diff` entre los dos repos; cada
   hook devuelve JSON válido con el mensaje nuevo. Sin ronda de revisión, por ser sólo docs.
+
+## 2026-10-12 — Facturación lee la Unidad sugerida del sistema de campo y sale su pantalla
+
+**Mergeado**
+- PR #94 (backend) — la Unidad sugerida y la marca No facturable de cada tarea se leen en vivo
+  del sistema de campo; salen la pantalla Unidad de medida por defecto, sus dos endpoints, su
+  tabla (la borra la migración `facturacion/002`), el script de primera carga y sus tests.
+- PR #76 (frontend) — hermano: sale la página de la pantalla con su CSS y su servicio; las
+  rutas de Facturación quedan vacías, sin menú ni Tarjeta.
+
+**Por frontera**
+- Facturación: `obtener_tareas()` trae la descripción cruda de cada tarea del campo y toma el
+  tercer segmento como Unidad sugerida, traducida contra las nueve unidades. El módulo queda
+  activo con `routers=()`: publica sus cinco pantallas para armar roles y no monta rutas hasta
+  la E2. En el front, `rutas.jsx` queda con `rutas = []` (una URL tipeada, también
+  `/facturacion/unidad`, vuelve al Inicio) y `unidades.js` conserva sólo las nueve unidades y
+  sus etiquetas, para la E2. `PRODUCT.md` dice que la Unidad sugerida se define en el sistema
+  de campo.
+- Núcleo: `tests/core/test_registro_modulos.py` admite un módulo activo sin rutas.
+- Prod y Datos: la migración `facturacion/002` borra la tabla de la Unidad sugerida y los
+  permisos guardados de la pantalla `unidad`; anotada en `ORDEN.txt` y en el `LEEME.md` del
+  módulo. `scripts/refrescar_testing.py` deja de copiar esa tabla.
+- Docs: `GUIA-MODULOS.md` suma cómo se retira una pantalla y que un módulo activo puede no
+  tener rutas, y cambia los moldes de Facturación por los de Terceros; el glosario de
+  Facturación saca la pantalla y dice que la Unidad sugerida y No facturable se definen en el
+  sistema de campo; `pantallas.md` y `plan-facturacion.md` se ajustan, y este último anota que
+  en pulverización con dos tractores se cuenta uno solo (cuál, lo confirma la etapa 3). El
+  plan de la E2 pasa a la migración 003 y a un `GET /tareas` que crea ella misma. El plan
+  `2026-10-12-unidad-desde-campo.md`.
+
+**Decisiones**
+- La Unidad sugerida se lee del sistema de campo en lugar de guardarse en una tabla propia, y
+  la pantalla sale. Porqué: pedido del usuario, para no desfasarse con las tareas que se crean
+  en la app de campo, que es donde se actualiza la unidad. Descartado: dejar una pantalla de
+  sólo lectura, porque el dato se cambia en la app de campo y la primera pantalla de uso de
+  Facturación llega con la E2.
+- El tercer segmento se corta en Python, sólo si hay tres o más. Porqué: con dos segmentos,
+  `SUBSTRING_INDEX` en SQL devolvería el segundo, el grupo de pago, como si fuera la unidad.
+- La traducción no tiene alias: compara el texto normalizado (sin acentos, espacios
+  colapsados, mayúsculas) contra las nueve unidades, "NO FACTURABLE" marca No facturable y lo
+  demás queda Sin definir. Porqué: lo que no coincide se corrige en la app de campo, que es la
+  única fuente.
+- La clave `unidad` se retira y no se reutiliza, y la 002 borra sus permisos guardados.
+  Porqué: si quedaran, un rol ganaría la pantalla nueva que algún día usara esa clave. La 002
+  escribe en un permiso del núcleo: es una excepción escrita a la regla 6 de GUIA-MODULOS (en
+  su encabezado y en el plan).
+- Primero el código, después el DROP. Porqué: el chequeo de esquema del núcleo tolera tablas
+  que sobran, así que el backend nuevo arranca con la tabla todavía en la base; el anterior la
+  lee, por eso la vuelta atrás es primero los datos y después el código.
+- El test del núcleo y la regla de la GUIA van en este PR, con commit propio. Porqué: así lo
+  decidió el plan.
+- `normalizar_nombre` y las nueve unidades se conservan. Porqué: las usa la E2.
+- En pulverización con dos tractores se cuentan las horas de un solo tractor; cuál, lo
+  confirma la etapa 3. Porqué no registrado en el PR (está decidido en el plan de la tarea y
+  en `plan-facturacion.md`).
+
+**Estado**
+- Deploy: no. Va con OK: front, backend con reinicio y recién después la 002, con respaldo de
+  la tabla y de los permisos de `unidad` (etapa 3 del plan, S2 a S5). Entra también lo
+  mergeado y sin deployar (BK #90 a #93, FT #74 y #75).
+- Migraciones: la `facturacion/002` se aplicó en `testing` después del merge, con OK y con
+  respaldo previo de la tabla y de los permisos de `unidad`; corrida dos veces, sin error. En
+  producción, no.
+- Pruebas: backend 1203 passed y 1 xfailed (24 menos que `main`, los de lo borrado), cada
+  paso con su test en rojo primero; front 161 pasan (12 menos, los de lo borrado), lint con
+  los mismos 6 errores y 5 warnings de `main`, build OK. Pre-check en `testing` en sólo
+  lectura: ninguna fila editada por una persona, ningún rol con permiso a `unidad`, y el
+  sistema de campo da la misma unidad que la copia salvo en la tarea que estaba sin definir.
+  Smoke en el navegador contra `testing` con las dos ramas: el backend arranca con la tabla
+  todavía en la base, los endpoints de tareas dan 404, el editor de roles muestra las cinco
+  pantallas, el Inicio no muestra Facturación, y Preliquidación y Terceros abren sin errores.
+  Smoke de `main` contra `testing` ya sin la tabla: el backend arranca con el esquema
+  "verificadas", los endpoints de tareas dan 404, `/api/auth/modulos` publica las cinco
+  pantallas, el editor de roles muestra las cinco, `/facturacion/unidad` vuelve al Inicio, y
+  Conceptos y el Inicio de Terceros abren.
+- Revisión: BK #94 con 0 urgent, 0 high y 6 minor sin tocar; FT #76 con 0 urgent, 0 high y
+  2 minor sin tocar, más `/impeccable critique` y `audit` sobre el Inicio. Los minor están en
+  los cuerpos de los PRs.
+
+**Pendiente**
+- El deploy con OK, con la 002 en producción después del código (en `docs/estado.md`).
+- Revisar en la app de campo las tareas facturables que quedan Sin definir (en
+  `docs/estado.md`).
+- La deuda del Inicio que vio el audit, en "A futuro" de `docs/estado.md`.
