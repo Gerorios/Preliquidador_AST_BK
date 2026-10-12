@@ -54,3 +54,4 @@ core/003_borrar_usuario_modulo.sql
 # Facturación (docs/modulos/facturacion/plan-facturacion.md).
 facturacion/001_unidad_por_tarea.sql
 facturacion/002_borrar_unidad_por_tarea.sql
+facturacion/003_comprobantes.sql

@@ -3,6 +3,7 @@
 (ADR-0020). El mapa endpoint → pantalla lo fija
 tests/facturacion/test_mapa_permisos.py."""
 from app.core.modulos import Pantalla
+from app.core.permisos import requiere_pantalla
 
 MODULO = "facturacion"
 
@@ -25,5 +26,12 @@ PANTALLAS = (
 )
 
 # Dependencias con nombre, definidas una sola vez: FastAPI cachea por objeto.
-# Editar incluye Ver; el admin pasa todo. Hoy no hay ninguna: cada pantalla
-# suma las suyas en su etapa, con requiere_pantalla de app.core.permisos.
+# Editar incluye Ver; el admin pasa todo. Cada pantalla suma las suyas en su
+# etapa.
+
+# Comprobantes (E2): el listado, el detalle y las lecturas del campo y de
+# sueldos que usa el alta (clientes, fincas, empresas y tareas) piden Ver;
+# alta, edición y borrado, Editar. Las lecturas del campo van con Comprobantes
+# porque hoy es la única pantalla que las usa.
+ver_comprobantes = requiere_pantalla(MODULO, "comprobantes")
+editar_comprobantes = requiere_pantalla(MODULO, "comprobantes", nivel="editar")

@@ -1,4 +1,5 @@
-"""Las migraciones de Facturación: la 001 creó facturacion_tarea y la 002 la borra.
+"""Las migraciones de Facturación: la 001 creó facturacion_tarea, la 002 la borra
+y la 003 crea las tablas de Comprobantes (E2).
 
 Se leen los `.sql` como texto, sin base, como en tests/core/test_migracion_roles.py.
 Desde el 2026-10-12 la Unidad sugerida se lee del sistema de campo
@@ -20,6 +21,7 @@ RAIZ = Path(__file__).resolve().parents[2]
 CARPETA = RAIZ / "migrations" / "facturacion"
 M001 = CARPETA / "001_unidad_por_tarea.sql"
 M002 = CARPETA / "002_borrar_unidad_por_tarea.sql"
+M003 = CARPETA / "003_comprobantes.sql"
 ORDEN = RAIZ / "migrations" / "ORDEN.txt"
 
 
@@ -45,7 +47,7 @@ def _sentencias(sql: str) -> list[str]:
 # 1. La trampa del aplicador: corta el archivo por `;`, así que lo que siga a un
 #    `;` en una línea comentada quedaría sin `--` y se ejecutaría.
 
-@pytest.mark.parametrize("ruta", [M001, M002], ids=["001", "002"])
+@pytest.mark.parametrize("ruta", [M001, M002, M003], ids=["001", "002", "003"])
 def test_ninguna_linea_comentada_tiene_punto_y_coma(ruta):
     malas = [
         linea for linea in _sql(ruta).splitlines()

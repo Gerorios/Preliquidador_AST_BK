@@ -6,16 +6,19 @@ qué falta facturar y dónde se facturó de más o de menos. Cubre las tareas
 agrícolas; la cosecha queda fuera. Ver docs/modulos/facturacion/.
 
 Activo desde la E1 (2026-10-11), con sus cinco pantallas declaradas para el
-editor de roles y ninguna construida todavía: no monta rutas hasta la E2. La
-pantalla de la E1 se retiró el 2026-10-12."""
+editor de roles. La pantalla de la E1 se retiró el 2026-10-12; la E2 monta
+las rutas de Comprobantes."""
 from app.core.modulos import ModuloInfo
+from app.modulos.facturacion.api import comprobantes
 from app.modulos.facturacion.permisos import PANTALLAS
+
+routers = [comprobantes.router]
 
 MODULO = ModuloInfo(
     clave="facturacion", nombre="Facturación",
     descripcion="Lo que se factura a los clientes por las tareas agrícolas, "
                 "cruzado contra lo trabajado en el campo.",
-    activo=True, routers=(),
+    activo=True, routers=tuple(routers),
     panel_gerencial=False,
     modelos="app.modulos.facturacion.models",
     pantallas=PANTALLAS,

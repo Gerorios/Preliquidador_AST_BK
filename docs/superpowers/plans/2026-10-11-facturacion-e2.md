@@ -179,7 +179,7 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
 | `factura_corregida_id` | INT NULL, FK a la misma tabla | Obligatoria en una NC cargada a mano |
 | `es_historico` | TINYINT(1) NOT NULL DEFAULT 0 | |
 | `pendiente_de_facturar` | TINYINT(1) NOT NULL DEFAULT 0 | Sólo en un histórico sin número posterior al corte: el Cruce (E3) no cuenta sus Líneas como facturado (pregunta 4) |
-| `clave_identidad` | VARCHAR(160) NOT NULL UNIQUE | `E\|<empresa>\|<numero>`; en un histórico, `H\|<cliente_id>\|<numero>`; en un histórico sin número, `S\|<cliente_id>\|<fecha a facturar AAAA-MM-DD>` |
+| `clave_identidad` | VARCHAR(160) NOT NULL UNIQUE | `E\|<empresa>\|<tipo>\|<numero>` (con el tipo desde R3); en un histórico, `H\|<cliente_id>\|<numero>`; en un histórico sin número, `S\|<cliente_id>\|<fecha a facturar AAAA-MM-DD>` |
 | `creado_en`, `creado_por` | DATETIME; INT NULL con FK a `usuarios` | |
 | `actualizado_en`, `actualizado_por` | NULL; INT NULL con FK a `usuarios` | |
 
@@ -231,15 +231,18 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
 2. Alta:
    - Cliente activo (estado distinto de 9);
    - Empresa, número, fecha y tipo obligatorios;
+   - la Empresa normalizada, hasta 100 caracteres; una Factura no lleva `factura_corregida_id` (`comprobante_invalido` en ese campo; agregado en la ejecución, par A4);
+   - el número normalizado tiene hasta 30 caracteres, el largo de la columna; más largo da 422 `comprobante_invalido` con `campo="numero"` (agregado en la ejecución, par A1);
    - al menos una Línea.
 3. Línea:
    - tarea del maestro y unidad entre las 9;
    - finca opcional, pero del Cliente;
    - cantidad > 0 y precio >= 0;
    - `importe = round(cantidad × precio, 2)` con ROUND_HALF_UP, calculado en el backend. Los nombres se copian del maestro.
+   - la cantidad admite hasta 2 decimales y 12 cifras enteras, y el precio hasta 4 y 10, como sus columnas; lo que no entra da `linea_invalida` en ese campo, y un importe que no entra en la suya, en `importe` (agregado en la ejecución, par A4).
 4. Repetidos:
-   - una Empresa con un número que ya existe da 409 `comprobante_repetido`;
-   - un Cliente con un número que ya tiene un histórico da 409 `historico_mismo_numero`. Evita contar dos veces mientras la planilla siga viva (pregunta 13).
+   - una Empresa con un número que ya existe **en el mismo tipo** da 409 `comprobante_repetido`: Facturas y Notas de crédito numeran aparte (decisión del usuario, 2026-10-12, revisión de BK-A; paso R3);
+   - una **Factura** de un Cliente con un número que ya tiene un histórico da 409 `historico_mismo_numero`. Evita contar dos veces mientras la planilla siga viva (pregunta 13). Los históricos son siempre Facturas, así que una Nota de crédito no choca con ellos (R3).
 5. Nota de crédito:
    - `factura_corregida_id` es obligatorio y apunta a una **Factura del mismo Cliente**, que puede ser histórica;
    - la Empresa no se valida;
@@ -249,7 +252,8 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
    - el PUT reemplaza la cabecera y todas las Líneas;
    - un histórico no se edita ni se borra (409 `historico_no_editable`, pregunta 6); sus adjuntos sí se pueden subir y quitar;
    - una Factura con Notas de crédito no cambia de Cliente ni de tipo, y no se borra (409 `factura_con_notas`);
-   - conservar un Cliente que pasó a baja se permite;
+   - conservar un Cliente que pasó a baja se permite; lo mismo una tarea que pasó a baja en una Línea, si esa tarea ya estaba en el Comprobante;
+   - edición simultánea (pregunta 18): el PUT trae `actualizado_en` tal como lo devolvió el detalle (null si nunca se editó); si no coincide con el de la base, otra persona lo cambió y responde 409 `comprobante_modificado`, sin tocar nada;
    - el DELETE borra también los adjuntos, archivos incluidos (pregunta 15).
 8. Lecturas del campo:
    - clientes activos, fincas por cliente y empresas, cada una con caché de proceso de 10 minutos, como `preliquidacion.py:102-128`;
@@ -368,7 +372,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 **Entrada de POST y PUT:**
 ```json
 {"tipo": "factura", "cliente_id": 12, "empresa_emisora": "TEXTO", "numero": "TEXTO",
- "fecha": "2026-10-05", "factura_corregida_id": null,
+ "fecha": "2026-10-05", "factura_corregida_id": null, "actualizado_en": null,
  "lineas": [{"fecha": "2026-09-16", "tarea_id": 7, "unidad": "plantas", "finca_id": null,
              "cantidad": "1234.50", "precio_unitario": "98.1234"}]}
 ```
@@ -399,7 +403,8 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 | 409 | `{tipo: "comprobante_repetido", mensaje, comprobante_id}` |
 | 409 | `{tipo: "historico_mismo_numero", mensaje, comprobante_id}` |
 | 409 | `{tipo: "historico_no_editable", mensaje}` |
-| 409 | `{tipo: "factura_con_notas", mensaje}` |
+| 409 | `{tipo: "factura_con_notas", mensaje}` (también si la base frena el borrado porque otra persona le cargó una Nota en ese momento) |
+| 409 | `{tipo: "comprobante_modificado", mensaje}`: el PUT trae un `actualizado_en` viejo (pregunta 18) |
 | 409 | `{tipo: "limite_adjuntos", mensaje}` |
 | 422 | `{tipo: "comprobante_invalido", mensaje, campo}` |
 | 422 | `{tipo: "linea_invalida", mensaje, fila, campo}`, con `fila` desde 1 |
@@ -512,6 +517,14 @@ Todo arranca de `main` con la E1 mergeada.
   - `detalle()` trae Líneas, `factura_corregida` y `notas_credito`.
 - Verificación: correr el archivo de tests.
 
+**A5b. Par: lo que A5 dejó a la vista (agregado en la ejecución)**
+- Archivos: los mismos que en A4 y A5.
+- Rojo:
+  - el PUT con un `actualizado_en` distinto del de la base da `ComprobanteModificado` (409 `comprobante_modificado`) y no toca nada; con el mismo, o null en uno nunca editado, pasa; en el alta el campo se ignora;
+  - una Línea cuya tarea pasó a baja se conserva al editar si esa tarea ya estaba en el Comprobante; una tarea de baja nueva da `linea_invalida`;
+  - si la base frena el DELETE de una Factura por una Nota cargada en ese momento (`IntegrityError`), sale `FacturaConNotas`, no un 500 (el test simula el `IntegrityError`).
+- Verificación: `python -m pytest tests/facturacion -q`.
+
 **A6. Par: router y mapa de permisos**
 - Archivos:
   - `app/modulos/facturacion/api/comprobantes.py`;
@@ -529,6 +542,50 @@ Todo arranca de `main` con la E1 mergeada.
 **A7. Paso: suite completa**
 - `python -m pytest -q`, con los números en el reporte.
 - Después, **F1**: el DDL en `testing`, y el backend de la rama arrancando con "verificadas".
+
+**R1. Par: dos guardados a la vez no mezclan las Líneas (revisión de BK-A, urgent)**
+- Hallazgo: `editar` lee la fila sin bloquearla y el UPDATE no depende del `actualizado_en` que se comparó. Entre la comparación y el commit se consulta el campo (`obtener_tareas()` no tiene caché), así que la ventana dura lo que tarde esa base.
+- Escenario de falla: A y B abren el mismo Comprobante y guardan casi a la vez. Las dos pasan la comparación. B borra por id las Líneas que leyó, que A ya reemplazó (borra 0), y suma las suyas: el Comprobante queda con las Líneas de A y las de B, con el total inflado, y sin ningún 409.
+- Arreglo: justo antes de reemplazar las Líneas, un UPDATE de la cabecera condicionado a `id` y al `actualizado_en` leído (null-safe: un Comprobante nunca editado tiene null). Si no afecta exactamente 1 fila, `ComprobanteModificado` y rollback. En MySQL el UPDATE toma el lock de la fila y evalúa contra el último valor confirmado, así que el segundo guardado espera al primero y recibe el 409. La comparación del principio se queda, para cortar antes sin consultar el campo.
+- Archivos: `app/modulos/facturacion/services/comprobantes_service.py` y `tests/facturacion/test_comprobantes_service.py`.
+- Rojo: el guardado de A se intercala dentro de la consulta de tareas de B (monkeypatch, como en A4); B tiene que recibir `ComprobanteModificado` y el Comprobante quedar exactamente con las Líneas de A.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
+**R2. Par: una finca dada de baja no traba la edición (revisión de BK-A, high)**
+- Hallazgo: la regla 7 conserva el Cliente y la tarea de baja, pero no la finca. Las fincas de un Cliente se leen sin las de baja.
+- Escenario de falla: un Comprobante tiene una Línea con una finca que después se dio de baja en el campo. Al corregir sólo el número, esa Línea da `linea_invalida` ("Esa finca no es del Cliente") y la única salida es quitarle la finca.
+- Arreglo: igual que `tareas_previas`. Si el Cliente no cambia, las fincas que ya tenían las Líneas del Comprobante se aceptan aunque el campo ya no las liste. Su nombre es el que estaba guardado. Una finca de baja nueva sigue dando `linea_invalida`.
+- Archivos: `app/modulos/facturacion/services/comprobantes_service.py` y `tests/facturacion/test_comprobantes_service.py`.
+- Rojo: editar un Comprobante cuya finca ya no figura en las fincas del Cliente, conservando esa Línea, pasa; una finca de baja que el Comprobante no tenía da `linea_invalida` (una finca previa se acepta en cualquier Línea, como las tareas: el PUT no distingue Líneas viejas de nuevas); cambiar de Cliente con esa finca da `linea_invalida`.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
+**R3. Par: Facturas y Notas de crédito numeran aparte (decisión del usuario en la revisión de BK-A)**
+- Pregunta que abrió la revisión: con la clave `E|<empresa>|<numero>`, una Nota de crédito con el mismo número que una Factura de la misma Empresa daba 409 `comprobante_repetido`. El usuario confirmó que numeran aparte (2026-10-12).
+- Cambio:
+  - la clave de un Comprobante cargado a mano pasa a `E|<empresa>|<tipo>|<numero>`, con el tipo tal cual (`factura` o `nota_credito`). Las formas `H` y `S` no cambian: los históricos son siempre Facturas. El largo entra en la columna (2 + 100 + 1 + 12 + 1 + 30 < 160);
+  - `historico_mismo_numero` se controla sólo en una Factura;
+  - el comentario de la `003_comprobantes.sql` y la docstring de `clave_identidad` se actualizan. La 003 todavía no está en producción y en `testing` sus tablas están vacías: el DDL no cambia, sólo el comentario.
+- Archivos: `app/modulos/facturacion/services/reglas_comprobante.py`, `app/modulos/facturacion/services/comprobantes_service.py`, `migrations/facturacion/003_comprobantes.sql` (sólo el comentario), `tests/facturacion/test_reglas_comprobante.py` y `tests/facturacion/test_comprobantes_service.py`.
+- Rojo:
+  - la clave manual incluye el tipo, y un tipo que no sea `factura` ni `nota_credito` da `ValueError`;
+  - una Nota de crédito con el mismo número y la misma Empresa que una Factura se da de alta;
+  - dos Facturas, o dos Notas, con el mismo número y la misma Empresa siguen dando `ComprobanteRepetido`;
+  - una Nota de crédito con el número de un histórico del mismo Cliente se da de alta, y una Factura sigue dando `HistoricoMismoNumero`;
+  - al editar, pasar una Factura a Nota de crédito con un número que ya tiene otra Nota de la misma Empresa da `ComprobanteRepetido`.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
+**R4. Par: una Nota cargada a la vez no queda colgada de algo que ya no es Factura (segunda ronda de revisión de BK-A, high)**
+- Hallazgo: la regla 7 (una Factura con Notas no cambia de Cliente ni de tipo) y la regla 5 (la Nota apunta a una Factura del mismo Cliente) se controlan con lecturas sin bloqueo. Crear una Nota no cambia el `actualizado_en` de la Factura, así que el UPDATE condicionado de R1 no lo ve.
+- Escenario de falla: A pasa la Factura F a Nota de crédito, o a otro Cliente. Al mismo tiempo, B carga la Nota N sobre F. Las dos pasan sus controles. N queda corrigiendo algo que ya no es Factura, o una Factura de otro Cliente. Ningún importe sale mal, pero el vínculo queda inválido y N da 422 al editarla.
+- Arreglo (el mínimo del verificador, los dos lados):
+  1. En `editar`, si cambian el tipo o el Cliente, después del UPDATE condicionado se repite `_tiene_notas` con lectura bloqueante (`with_for_update(read=True)`). Si hay Notas, `FacturaConNotas` y rollback.
+  2. En `_validar_factura_corregida`, la Factura se lee con `with_for_update(read=True)`.
+  - En MySQL, el que llega segundo espera al primero y ve lo que confirmó. En SQLite no hay bloqueo: el test prueba el orden, no la espera.
+- Archivos: `app/modulos/facturacion/services/comprobantes_service.py` y `tests/facturacion/test_comprobantes_service.py`.
+- Rojo, con dos sesiones (como el fixture `dos_sesiones` de R1):
+  - la Nota de B se confirma después del primer `_tiene_notas` de A y antes de su UPDATE (monkeypatch dentro de la consulta de tareas de A); A tiene que recibir `FacturaConNotas`, y F seguir siendo Factura del mismo Cliente;
+  - lo mismo cuando A cambia de Cliente.
+- Verificación: `python -m pytest tests/facturacion -q`. Sin tercera ronda de revisión: la regla es dos como máximo.
 
 ### 3.6 FT-A: listado y alta/edición (front)
 
@@ -581,7 +638,7 @@ Todo arranca de `main` con la E1 mergeada.
 - Verificación: `npm run build` y `npm run lint`.
 
 **FA5. Paso visual: listado `pages/Comprobantes.jsx`**
-- La barra común y `TablaOrdenable` (PR-0).
+- La barra común y `TablaOrdenable` (PR-0). La barra recibe `campos`, `alertas` (la de "Sin adjunto") y su propio `placeholderBusqueda` (por número o Cliente): sin él, muestra el texto por defecto de Preliquidación (revisión del PR-0).
 - Marca "Histórico"; NC en negativo.
 - "Nuevo comprobante" sólo si `puedeEditar(usuario, 'facturacion', 'comprobantes')`.
 - Filtros guardados con `useEstadoPantalla('facturacion.comprobantes.filtros', {})`.
@@ -599,6 +656,7 @@ Todo arranca de `main` con la E1 mergeada.
 - Guardar con `useMutation`: el overlay es global y hay toasts.
 - Ante `comprobante_repetido` o `historico_mismo_numero`, aviso con enlace al existente.
 - Ante `linea_invalida`, se marca la fila.
+- El PUT reenvía `actualizado_en` tal cual lo trajo el detalle (texto, sin zona horaria). Ante `comprobante_modificado`, aviso de que otra persona lo cambió y opción de volver a abrirlo.
 - `CargandoContenido` mientras cargan clientes, tareas, fincas y empresas.
 - Un histórico, o alguien sin Editar, ven todo en sólo lectura.
 - Borrar pide confirmación. En `nuevo` sin Editar, se vuelve al listado.
