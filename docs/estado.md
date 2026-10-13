@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Facturación E2 (Comprobantes, adjuntos e histórico), carril completo: BK-C (histórico) mergeado (BK #99); faltan F7 (deploy y carga del histórico en producción, con OK) y F8 (el smoke). Plan: `docs/superpowers/plans/2026-10-11-facturacion-e2.md`.
+- Nada en curso de Facturación: la E2 está mergeada y deployada, y el histórico está cargado en producción (2026-10-13). Queda el smoke del usuario (abajo, en sus pendientes).
 
 ## Próximo paso
 
-F7, con OK del usuario: deploy del backend (BK #99, sin migraciones) y carga del histórico en producción con `scripts/migrar_historico_facturacion.py`: subir la planilla al servidor, simular y mostrar el informe, `--aplicar --confirmar-base <nombre>`, volver a simular (tiene que dar 0) y borrar la planilla del servidor. Después, F8: el smoke. El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
+Que el usuario elija la próxima tarea. El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
 
 ## Pendientes del usuario
 
@@ -25,7 +25,8 @@ F7, con OK del usuario: deploy del backend (BK #99, sin migraciones) y carga del
 - Avisarle a Pitu que la subida de archivos de las estaciones de Terceros (`subirArchivoEstacion` en `src/modulos/terceros/services/terceros.js` del front) probablemente manda JSON en vez del archivo: la instancia `api` del núcleo trae `Content-Type: application/json` por defecto y, con ese header, axios convierte el FormData en JSON. En Facturación pasó lo mismo y se arregló pasando `multipart/form-data` explícito (FT-B). No se probó en su pantalla (2026-10-13).
 - Avisarle a Pitu que haga pull de `main` en los dos repos: `testing` ya no tiene la tabla de la Unidad sugerida, y un `main` anterior al BK #94 arranca contra `testing` avisando que faltan tablas (2026-10-12).
 - Facturación: revisar en la app de campo las tareas facturables que quedan Sin definir (la Unidad sugerida ahora se define allá; BK #94).
-- Facturación: el usuario cargó en producción una Factura de prueba con número 0000 (2026-10-13). Borrarla cuando termine de probar, para que no cuente en el Cruce de la E3.
+- Facturación: el smoke del histórico en producción (F8 del plan de la E2): que el listado de Comprobantes cargue con los 353 históricos y uno abra en sólo lectura. Hace falta entrar con un usuario real. El primer adjunto real lo sube el usuario (deploy del 2026-10-13).
+- Facturación: borrar del servidor el respaldo de la Factura de prueba 0000, ya borrada de la base, cuando no haga falta (deploy del 2026-10-13).
 - Facturación: el rol de las contadoras ya existe en producción; no asignarlo a nadie hasta que esté la primera versión completa del módulo (decisión del usuario, 2026-10-12). Al asignarlo, probar una subida real de adjunto: en el deploy del 2026-10-13 no se pudo, porque nadie tiene el rol.
 - Facturación: corregir en la planilla del histórico 3 Comprobantes que quedaron afuera (una UM vacía, dos FECHA FAC distintas en un mismo Comprobante y un precio ilegible) para sumarlos con otra corrida del script (BK #99, 2026-10-13).
 - Facturación: las tareas de cosecha que no están en el maestro del campo quedaron migradas con tarea 0 y su nombre; hablar con el personal que carga en el campo y, cuando el campo las tenga, una corrida con `--reemplazar-cambiados` las pasa a su id (BK #99, 2026-10-13).

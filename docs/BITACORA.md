@@ -4039,3 +4039,25 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Los 3 Comprobantes que el usuario corrige en la planilla, con otra corrida.
 - Las tareas sin maestro: cuando el campo las tenga, una corrida con `--reemplazar-cambiados`
   las pasa a su id.
+
+## 2026-10-13 — Deploy del histórico de facturación (Facturación E2, BK #99)
+
+**Estado**
+- Deploy: sí, a producción, con OK del usuario. Sólo backend, de `3e4a4f1` (BK #98) a `59304b2`
+  (`main` con el merge del BK #99). Sin dependencias nuevas y reinicio del servicio. Facturación
+  sigue escondida: nadie tiene su rol.
+- Migraciones: ninguna; usa las tablas de la `facturacion/003`.
+- Histórico, con OK del usuario: la planilla subida al servidor, simulada (igual que en
+  `testing`: 353 Comprobantes a migrar, 4 omitidos, diferencias 0), aplicada con
+  `--aplicar --confirmar-base` (353 nuevos) y simulada otra vez (353 iguales, diferencias 0,
+  salida 0). La planilla y los informes se borraron del servidor.
+- A pedido del usuario se borró la Factura de prueba 0000, la única cargada a mano, con sus
+  Líneas y su adjunto, con respaldo previo en el servidor.
+- Smoke sin escribir: `/health` ok, la ruta de Comprobantes sin sesión responde 401 y el log
+  queda sin errores. No probado: la pantalla con un usuario logueado.
+- Vuelta atrás: el código anterior y reinicio; los históricos se distinguen por su marca y se
+  pueden borrar con sus Líneas mientras no tengan adjuntos, con respaldo antes.
+
+**Pendiente**
+- El smoke del usuario en producción: el listado con los históricos y uno abierto en sólo
+  lectura (en `docs/estado.md`).
