@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-BK-B (adjuntos en el backend), en ejecución. Después siguen FT-B (adjuntos en el front) y BK-C (histórico). La `facturacion/003` está en `testing` y no en producción: va con el deploy único al final de la E2, con OK.
+BK-B (adjuntos en el backend), en ejecución. Después siguen FT-B (adjuntos en el front) y BK-C (histórico). La `facturacion/003` está en `testing` y no en producción. Facturación no se deploya hasta que el módulo esté terminado entero, con todas sus etapas (decisión del usuario, 2026-10-12). Si antes hay que deployar otra cosa, Facturación viaja escondida: sin nadie con su rol no se ve, y ese deploy lleva la 003 (tablas nuevas, vacías). Todo deploy, con OK.
 
 ## Pendientes del usuario
 
