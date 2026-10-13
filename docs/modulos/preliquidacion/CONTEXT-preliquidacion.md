@@ -143,6 +143,10 @@ _Avoid_: valor jornal (se carga la hora; el jornal es ×8); confundir con Valor 
 Valor hora base (el del tractorista) que el liquidador carga **por quincena**. Es la referencia del control Tancadas vs Jornal: se le suma un 30 % (×1,3, fijo) y contra eso se compara el valor hora efectivamente pagado por hora de máquina en las tareas pagadas por tancada.
 _Avoid_: cargarlo ya recargado (el ×1,3 lo pone el sistema)
 
+**Rendimiento de tancada**:
+Cuántos minutos de máquina lleva una tancada en las tareas pagadas por tancada: horas de máquina × 60 ÷ tancadas, con la tancada tal como se registra (no se divide por 2; ver Tancada). Es un dato del control Tancadas vs Jornal (columna "Min/tancada"), no una comparación: no tiene referencia ni se carga. Sin horas de máquina o sin tancadas no hay rendimiento. El de varias filas juntas (el total) sale de las sumas de horas y de tancadas de las filas que lo tienen, no del promedio de sus rendimientos.
+_Avoid_: calcularlo con las horas de jornal (son de presencia, no de máquina); "rendimiento" a secas (en Plantas vs Jornal son plantas por hora, donde más es más rápido; acá más minutos es más lento); promediar los rendimientos de las filas.
+
 **Personas mensualizadas**:
 Personas que cobran un sueldo mensual fijo, no por jornal. Sus líneas quedan excluidas de **toda** Verificación (excesos, resumen por empleado, Plantas/Tancadas vs Jornal) y de **todos** los cálculos de Mano de obra gastada de la Vista gerencial: esos controles miden razonabilidad del pago jornalizado y no aplican a un sueldo fijo. Se identifican por CUIL y la lista es configuración del servidor, no editable desde la app.
 _Avoid_: excluirlas de Revisión (ahí siguen visibles y editables, porque igual hay que liquidarles el sueldo; la exclusión es solo para los controles de razonabilidad de jornal).
