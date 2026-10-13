@@ -274,10 +274,14 @@ class AdjuntosService:
               archivo: BinaryIO, usuario_id: int | None = None) -> Adjunto:
         """Guarda el archivo y su fila, o nada.
 
-        El límite se cuenta con el Comprobante bloqueado: dos subidas a la vez
-        no pasan las dos con 4 adjuntos (en SQLite el bloqueo no hace nada).
-        El archivo se escribe antes del commit y, si algo falla después, se
-        borra: nunca queda un archivo sin su fila."""
+        El límite se cuenta con el Comprobante bloqueado y con un conteo
+        bloqueante: en MySQL una lectura común ve la foto del principio de la
+        transacción, y dos subidas a la vez pasarían las dos con 4 adjuntos;
+        la bloqueante ve lo último confirmado (en SQLite no hace nada). El
+        orden, primero el Comprobante y después sus adjuntos, es el mismo de
+        `quitar` y de `ComprobantesService.borrar`, para que no se traben
+        entre ellas. El archivo se escribe antes del commit y, si algo falla
+        después, se borra: nunca queda un archivo sin su fila."""
         destino = None
         try:
             comprobante = (self.db.query(Comprobante)
@@ -289,6 +293,7 @@ class AdjuntosService:
             carpeta = carpeta_adjuntos()
             cantidad = (self.db.query(func.count(Adjunto.id))
                         .filter(Adjunto.comprobante_id == comprobante_id)
+                        .with_for_update()
                         .scalar())
             if cantidad >= MAXIMO_POR_COMPROBANTE:
                 raise LimiteAdjuntos()
@@ -334,7 +339,16 @@ class AdjuntosService:
     def quitar(self, comprobante_id: int, adjunto_id: int) -> None:
         """Primero la fila y después el archivo, tolerando que falte. La
         carpeta se controla antes de tocar nada: sin ella, el archivo no se
-        podría borrar y quedaría huérfano sin necesidad."""
+        podría borrar y quedaría huérfano sin necesidad.
+
+        Bloquea el Comprobante antes de tocar el adjunto: el mismo orden que
+        `subir` y `ComprobantesService.borrar`."""
+        comprobante = (self.db.query(Comprobante.id)
+                       .filter(Comprobante.id == comprobante_id)
+                       .with_for_update()
+                       .first())
+        if comprobante is None:
+            raise AdjuntoNoEncontrado("No existe ese comprobante.")
         adjunto = self._adjunto(comprobante_id, adjunto_id)
         carpeta = carpeta_adjuntos()
         nombre = adjunto.nombre_en_disco

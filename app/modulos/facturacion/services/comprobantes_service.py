@@ -253,13 +253,20 @@ class ComprobantesService:
         Como al quitar un Adjunto, primero las filas y después los archivos:
         si el commit falla, los archivos siguen ahí con sus filas. Sin la
         carpeta de adjuntos, uno que tiene Adjuntos no se borra (503): sus
-        archivos quedarían huérfanos. Uno sin Adjuntos no la necesita."""
-        comprobante = self._modificable(comprobante_id)
+        archivos quedarían huérfanos. Uno sin Adjuntos no la necesita.
+
+        Bloquea primero el Comprobante y después sus Adjuntos, el mismo orden
+        que `AdjuntosService.subir` y `quitar`: así no se traban entre ellas,
+        y una subida a la vez no deja un archivo sin borrar."""
+        comprobante = self._modificable(comprobante_id, bloquear=True)
         if self._tiene_notas(comprobante.id):
             raise FacturaConNotas()
         # Las filas de los Adjuntos se borran a mano: la relación no tiene
         # cascada a propósito (ver Comprobante.adjuntos).
-        adjuntos = list(comprobante.adjuntos)
+        adjuntos = (self.db.query(Adjunto)
+                    .filter(Adjunto.comprobante_id == comprobante.id)
+                    .with_for_update()
+                    .all())
         carpeta = carpeta_adjuntos() if adjuntos else None
         nombres_en_disco = [a.nombre_en_disco for a in adjuntos]
         for adjunto in adjuntos:
@@ -279,10 +286,13 @@ class ComprobantesService:
         if adjuntos:
             borrar_archivos(carpeta, nombres_en_disco)
 
-    def _modificable(self, comprobante_id: int) -> Comprobante:
+    def _modificable(self, comprobante_id: int, bloquear: bool = False) -> Comprobante:
         """El Comprobante a editar o borrar: existe y no es histórico (la
-        idempotencia de la migración depende de que no cambie, pregunta 6)."""
-        comprobante = self.db.get(Comprobante, comprobante_id)
+        idempotencia de la migración depende de que no cambie, pregunta 6).
+        Con `bloquear`, lectura bloqueante: `get` consulta la base aunque la
+        fila ya esté en la sesión (en SQLite no hace nada)."""
+        comprobante = self.db.get(Comprobante, comprobante_id,
+                                  with_for_update=True if bloquear else None)
         if comprobante is None:
             raise ComprobanteNoEncontrado()
         if comprobante.es_historico:

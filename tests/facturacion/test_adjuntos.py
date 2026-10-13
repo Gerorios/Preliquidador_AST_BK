@@ -26,7 +26,8 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
@@ -623,3 +624,97 @@ def test_sin_carpeta_un_comprobante_con_adjuntos_no_se_borra(
     assert db.get(Comprobante, c.id) is not None
     assert db.query(Adjunto).count() == 1
     assert archivos(carpeta) == [a.nombre_en_disco]
+
+
+# ═══ RB1: el mismo orden de bloqueo en las tres escrituras ══════════════════
+# En MySQL (REPEATABLE READ) el conteo sin bloqueo lee una foto vieja y deja
+# pasar un 6.º adjunto con dos subidas a la vez. Con el conteo bloqueante, las
+# tres escrituras sobre los adjuntos de un Comprobante tienen que bloquear en
+# el mismo orden, primero el Comprobante y después sus adjuntos, o pueden
+# trabarse entre ellas (deadlock). SQLite no bloquea ni reproduce la carrera:
+# estos tests controlan qué lecturas piden el bloqueo y en qué orden.
+
+def _sql_emitido(db) -> list[str]:
+    """Las consultas de la sesión, compiladas con el dialecto de MySQL (el
+    de SQLite descarta el FOR UPDATE), y los INSERT y DELETE, en el orden en
+    que se emiten."""
+    emitido = []
+
+    @event.listens_for(db, "do_orm_execute")
+    def _consulta(estado):
+        if estado.is_select:
+            emitido.append(str(estado.statement.compile(dialect=mysql.dialect())))
+
+    @event.listens_for(db.get_bind(), "before_cursor_execute")
+    def _escritura(conexion, cursor, sql, parametros, contexto, varios):
+        if sql.lstrip().upper().startswith(("INSERT", "DELETE")):
+            emitido.append(sql)
+
+    return emitido
+
+
+def _primera(emitido, *partes) -> int:
+    for i, sql in enumerate(emitido):
+        if all(parte in sql for parte in partes):
+            return i
+    raise AssertionError(f"ninguna consulta con {partes}: {emitido}")
+
+
+BLOQUEA_COMPROBANTE = ("FROM facturacion_comprobante", "FOR UPDATE")
+
+
+def test_subir_cuenta_los_adjuntos_con_lectura_bloqueante_despues_del_comprobante(
+        servicio, db, carpeta):
+    c = comprobante(db)
+    emitido = _sql_emitido(db)
+
+    subir(servicio, c)
+
+    comprobante_ = _primera(emitido, *BLOQUEA_COMPROBANTE)
+    conteo = _primera(emitido, "count(", "FROM facturacion_adjunto", "FOR UPDATE")
+    alta = _primera(emitido, "INSERT INTO facturacion_adjunto")
+    assert comprobante_ < conteo < alta
+
+
+def test_quitar_bloquea_el_comprobante_antes_de_borrar_el_adjunto(
+        servicio, db, carpeta):
+    c = comprobante(db)
+    a = subir(servicio, c)
+    emitido = _sql_emitido(db)
+
+    servicio.quitar(c.id, a.id)
+
+    assert (_primera(emitido, *BLOQUEA_COMPROBANTE)
+            < _primera(emitido, "DELETE FROM facturacion_adjunto"))
+
+
+def test_quitar_de_un_comprobante_que_no_existe(servicio, carpeta):
+    with pytest.raises(AdjuntoNoEncontrado):
+        servicio.quitar(999, 1)
+
+
+def test_borrar_bloquea_el_comprobante_y_despues_lee_sus_adjuntos_bloqueando(
+        servicio, db, carpeta):
+    c = comprobante(db)
+    subir(servicio, c)
+    db.expire_all()
+    emitido = _sql_emitido(db)
+
+    ComprobantesService(db, consulta=None).borrar(c.id)
+
+    comprobante_ = _primera(emitido, *BLOQUEA_COMPROBANTE)
+    adjuntos = _primera(emitido, "FROM facturacion_adjunto", "FOR UPDATE")
+    baja = _primera(emitido, "DELETE FROM facturacion_adjunto")
+    assert comprobante_ < adjuntos < baja
+
+
+def test_borrar_bloquea_el_comprobante_aunque_ya_este_en_la_sesion(
+        servicio, db, carpeta):
+    # Con db.get, uno ya cargado en la sesión no se vuelve a pedir a la base,
+    # y entonces no se bloquea.
+    c = comprobante(db)
+    emitido = _sql_emitido(db)
+
+    ComprobantesService(db, consulta=None).borrar(c.id)
+
+    _primera(emitido, *BLOQUEA_COMPROBANTE)
