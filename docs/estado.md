@@ -21,6 +21,7 @@ FT-B (adjuntos en el front, sección 3.8 del plan), sobre las rutas de adjuntos 
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
 - Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: borrar del servidor el respaldo de la `facturacion/002` cuando ya no haga falta como vuelta atrás (deploy del 2026-10-12).
+- Avisarle a Pitu que la subida de archivos de las estaciones de Terceros (`subirArchivoEstacion` en `src/modulos/terceros/services/terceros.js` del front) probablemente manda JSON en vez del archivo: la instancia `api` del núcleo trae `Content-Type: application/json` por defecto y, con ese header, axios convierte el FormData en JSON. En Facturación pasó lo mismo y se arregló pasando `multipart/form-data` explícito (FT-B). No se probó en su pantalla (2026-10-13).
 - Avisarle a Pitu que haga pull de `main` en los dos repos: `testing` ya no tiene la tabla de la Unidad sugerida, y un `main` anterior al BK #94 arranca contra `testing` avisando que faltan tablas (2026-10-12).
 - Facturación: revisar en la app de campo las tareas facturables que quedan Sin definir (la Unidad sugerida ahora se define allá; BK #94).
 - Facturación: el rol de las contadoras ya existe en producción; no asignarlo a nadie hasta que esté la primera versión completa del módulo (decisión del usuario, 2026-10-12).
