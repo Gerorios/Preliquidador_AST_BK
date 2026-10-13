@@ -862,6 +862,12 @@ Todo arranca de `main` con la E1 mergeada.
   - la finca no encontrada, que da aviso;
   - la cantidad 0.
 - Verificación: correr el archivo de tests.
+- Hecho (ejecutor, 2026-10-13): 36 tests; `tests/facturacion` da 535. Lo que el plan no fijaba y quedó así:
+  - cantidad, precio o importe vacíos omiten el grupo, con su motivo; un precio negativo también (como la regla 3 de la carga a mano);
+  - una fila con número y sin FECHA A FACTURAR omite su grupo, porque la fecha de la Línea es obligatoria;
+  - una finca ambigua dentro del Cliente deja la Línea sin finca y da aviso, como una no encontrada; los avisos de finca salen sólo de los Comprobantes que se migran;
+  - `no_resueltos` cuenta por motivo y nombre normalizado, también en las filas de un grupo omitido por otro motivo.
+  - **A mirar en C7 y F3:** el maestro de fincas trae sólo las activas, así que una finca de baja nombrada en la planilla da aviso y la Línea queda sin finca; y no se controla que un valor entre en las cifras enteras de su columna: si no entra, falla MySQL al aplicar (se vería en F3, en `testing`).
 
 **C4. Par: aplicar**
 - Rojo (SQLite):
