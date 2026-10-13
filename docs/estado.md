@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-FT-A: las pantallas de Comprobantes en el front, con `impeccable`. La `facturacion/003` está en `testing` y no en producción: va con el deploy único al final de la E2, con OK.
+BK-B (adjuntos en el backend), en ejecución. Después siguen FT-B (adjuntos en el front) y BK-C (histórico). La `facturacion/003` está en `testing` y no en producción: va con el deploy único al final de la E2, con OK.
 
 ## Pendientes del usuario
 
@@ -29,6 +29,7 @@ FT-A: las pantallas de Comprobantes en el front, con `impeccable`. La `facturaci
 
 ## A futuro
 
+- En desarrollo, después de un rato sin uso, la primera lectura de la base de campo de Facturación (las tareas) tardó cerca de un minuto, como si esperara el `read_timeout` sobre una conexión muerta antes de reconectar; otra vez el proxy de Vite dejó colgados pedidos que nunca llegaron al backend. Se vio varias veces en el smoke de FT-A. Mirar en el VPS si la primera carga de Comprobantes tarda así antes de dárselo a las contadoras (2026-10-12).
 - Revisar por qué el planificador tardó cerca de una hora en un plan mediano (plan del 2026-10-12, unidad desde el campo); el usuario lo quiere ver más adelante (2026-10-12).
 - Inicio del núcleo del front, deuda vista con `/impeccable audit` el 2026-10-12: el foco de la Tarjeta casi no se ve (halo y borde por debajo de 3:1, WCAG 1.4.11); el estado sin pantallas es un párrafo chico y gris, sin título ni a quién pedir acceso, y "Elegí dónde trabajar" se muestra igual (2026-10-12).
 - Deuda del núcleo del front vista en la revisión de la Facturación E1: el encabezado de la tabla de Mantenimiento no queda fijo (2026-10-11).

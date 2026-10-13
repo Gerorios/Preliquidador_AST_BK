@@ -3690,3 +3690,61 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
   `placeholderBusqueda` a la barra (minor del FT #77, anotado en el plan). Después siguen BK-B
   y FT-B (adjuntos) y BK-C (histórico).
 - El deploy de la E2 con OK, con la 003 en producción.
+
+## 2026-10-12 — Pantallas de Comprobantes en el front (Facturación E2)
+
+**Mergeado**
+- PR #78 (front) — FA3b de la E2: un campo de la barra de filtros del núcleo puede traer un
+  comparador `orden` para sus opciones.
+- PR #79 (front) — FT-A de la E2: las pantallas de Comprobantes (listado, alta y edición),
+  encima del #78. Usa el backend del BK #96; sin PR hermano en el backend.
+
+**Por frontera**
+- Núcleo (front): `opcionesCascada` ordena las opciones de cada campo con su `orden` y, sin
+  él, como texto, como antes; la nueva `opcionesConElegidos` hace lo que antes calculaba
+  `FiltroMultiSelect` adentro, con el mismo orden del campo. Preliquidación no cambia: ninguno
+  de sus campos trae `orden`.
+- Facturación (front): listado en `/facturacion/comprobantes` con la barra de filtros del
+  núcleo (Cliente, Empresa emisora, Tipo, Mes, Adjunto), búsqueda, orden por columna y la
+  etiqueta "Sin adjunto"; las Notas de crédito en negativo. Alta y edición en
+  `/facturacion/comprobantes/nuevo` y `/:id`, con la cabecera y la grilla de Líneas; la tarea
+  trae su Unidad sugerida y avisa si no es facturable. Sólo lectura para un histórico o para
+  quien tiene Ver sin Editar en `comprobantes`. Manejo de los 7 `tipo` de error del BK #96,
+  borrado con confirmación y la lógica sin interfaz aparte (`formulario.js`, `lineas.js`,
+  `listado.js`, `numeros.js`), con 82 tests nuevos.
+
+**Decisiones**
+- El `orden` va en la barra del núcleo, en un PR aparte antes que el del módulo. Porqué: el
+  filtro de Mes muestra los meses como texto y salían desordenados; la barra es del núcleo
+  (GUIA-MODULOS, 4.1, regla 4). Descartado: ordenar en Facturación por fuera de la barra,
+  porque la cascada vuelve a ordenar como texto en cada cambio de filtro.
+- El aviso de número repetido mira el número dentro del mismo tipo. Porqué: Facturas y Notas
+  de crédito numeran aparte (decisión del usuario en BK-A).
+- El importe se calcula en el front con la misma cuenta del backend, para que la grilla
+  responda al tipear, pero no se manda: vale el que devuelve la API. Descartado: mandarlo,
+  porque serían dos fuentes de la misma cuenta.
+- Quitar una Línea no pregunta: muestra "Se quitó la línea N" con Deshacer (RA1). Descartado:
+  la confirmación, porque frena la carga, que es lo que más se hace en la pantalla.
+- Salir con cambios sin guardar pide confirmación en "← Comprobantes" y al cerrar o recargar
+  la pestaña (RA2). El menú lateral no se frena: el router no tiene `useBlocker` y hacerlo
+  obliga a tocar el núcleo; queda documentado en el código.
+- Las cargas esperan con `isPending` en vez de `isLoading` (RA4). Porqué: una lectura en pausa
+  sin datos dejaba la pantalla en blanco y el listado decía "Todavía no hay comprobantes".
+
+**Estado**
+- Deploy: no. Va con el deploy único al final de la E2, con OK.
+- Migraciones: ninguna.
+- Pruebas: `npm test` 247 passed (165 sólo con el #78), build OK, lint con los 6 errores
+  conocidos de `main` y los 5 warnings de Terceros. Smoke en el navegador contra `testing` del
+  alta, la edición, los avisos, los filtros y el borrado, también después de RA1 a RA4; el
+  usuario lo probó en local contra `testing` y dio el OK. Los Comprobantes de prueba se
+  borraron.
+- Revisión: dos ejes más `/impeccable critique` y `/impeccable audit`, con verificador: 0
+  urgent, 3 high arreglados (RA1 a RA3), 14 minor sin tocar y 9 descartados; RA4 salió del
+  smoke. Los minor y la deuda previa del núcleo vista en la revisión están en el cuerpo del
+  FT #79.
+
+**Pendiente**
+- Sin smoke con un usuario que tenga sólo Ver en `comprobantes`: lo cubre el código, sin
+  prueba en el navegador.
+- Siguen BK-B y FT-B (adjuntos) y BK-C (histórico), y el deploy de la E2 con OK.
