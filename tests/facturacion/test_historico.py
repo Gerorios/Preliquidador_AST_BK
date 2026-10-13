@@ -950,6 +950,70 @@ def test_cuando_el_maestro_suma_la_tarea_el_comprobante_cambia_y_el_flag_lo_pasa
     ]
 
 
+def test_renombrar_una_tarea_sin_maestro_cuenta_como_cambio_y_el_flag_la_renombra(db):
+    # Paso R1: con tarea_id 0, el nombre es lo único que distingue la tarea.
+    _aplicar(db, _fila(2, numero="10", tarea="Cosecha Inventada X"), _fila(3, numero="10"))
+
+    renombrada = (_fila(2, numero="10", tarea="Cosecha Inventada Y"), _fila(3, numero="10"))
+    sin_flag = _aplicar(db, *renombrada)
+
+    assert sin_flag.cambiados == ["H|1|10"]
+    assert sin_flag.iguales == []
+    db.expire_all()
+    assert [li.tarea_nombre for li in _por_clave(db, "H|1|10").lineas] == [
+        "Cosecha Inventada X", "TAREA A",
+    ]
+
+    con_flag = _aplicar(db, *renombrada, reemplazar_cambiados=True)
+
+    assert con_flag.reemplazados == ["H|1|10"]
+    db.expire_all()
+    assert [(li.tarea_id, li.tarea_nombre) for li in _por_clave(db, "H|1|10").lineas] == [
+        (0, "Cosecha Inventada Y"), (10, "TAREA A"),
+    ]
+
+
+def test_un_sin_numero_con_la_tarea_sin_maestro_renombrada_se_recalcula(db):
+    _aplicar(db, _fila(2, numero="", tarea="Cosecha Inventada X"))
+
+    resultado = _aplicar(db, _fila(2, numero="", tarea="Cosecha Inventada Y"))
+
+    assert resultado.reemplazados == ["S|1|2025-09-01"]
+    db.expire_all()
+    assert [li.tarea_nombre for li in _por_clave(db, "S|1|2025-09-01").lineas] == [
+        "Cosecha Inventada Y",
+    ]
+
+
+def test_la_misma_planilla_con_tareas_sin_maestro_sigue_dando_igual(db):
+    # El nombre se compara recortado a 150, como se guardó.
+    filas = (
+        _fila(2, numero="10", tarea="  Cosecha   Inventada "),
+        _fila(3, numero="10", tarea="X" * 200),
+        _fila(4, numero="", tarea="Cosecha Inventada"),
+    )
+    _aplicar(db, *filas)
+
+    resultado = _aplicar(db, *filas)
+
+    assert resultado.iguales == ["H|1|10", "S|1|2025-09-01"]
+    assert resultado.cambiados == [] and resultado.reemplazados == []
+
+
+def test_una_tarea_con_maestro_renombrada_en_el_campo_sigue_dando_igual(db):
+    # Renombrar en el campo no es un cambio de la planilla: con maestro, el
+    # nombre guardado no entra en la comparación.
+    _aplicar(db, _fila(2, numero="10"))
+    linea = _por_clave(db, "H|1|10").lineas[0]
+    linea.tarea_nombre = "TAREA A CON OTRO NOMBRE"
+    db.commit()
+
+    resultado = _aplicar(db, _fila(2, numero="10"))
+
+    assert resultado.iguales == ["H|1|10"]
+    assert resultado.cambiados == []
+
+
 def _cargado_a_mano(db, tipo, numero="10", cliente_id=1):
     c = Comprobante(
         tipo=tipo, cliente_id=cliente_id, cliente_nombre="CLIENTE UNO",

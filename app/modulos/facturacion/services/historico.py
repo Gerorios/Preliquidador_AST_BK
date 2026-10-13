@@ -727,23 +727,28 @@ def clave_de_grupo(grupo: GrupoHistorico) -> str:
     )
 
 
-def _firma_de_linea(fecha, tarea_id, unidad, finca_id, cantidad, precio, importe) -> tuple:
-    """Lo que se compara de una Línea. Sin los nombres: son copias del maestro,
-    y renombrar una tarea en el campo no es un cambio de la planilla. Los
-    Decimal se comparan por valor ("25" es igual a "25.00")."""
-    return (fecha, tarea_id, unidad, finca_id, Decimal(cantidad), Decimal(precio),
-            Decimal(importe))
+def _firma_de_linea(fecha, tarea_id, tarea_nombre, unidad, finca_id, cantidad,
+                    precio, importe) -> tuple:
+    """Lo que se compara de una Línea. Con una tarea del maestro, sin los
+    nombres: son copias del maestro, y renombrar una tarea en el campo no es
+    un cambio de la planilla. Con TAREA_SIN_MAESTRO, el nombre de la tarea sí
+    entra, porque es lo único que la distingue (paso R1); se compara recortado
+    a LARGO_TAREA_NOMBRE, como se guarda. Los Decimal se comparan por valor
+    ("25" es igual a "25.00")."""
+    nombre = tarea_nombre[:LARGO_TAREA_NOMBRE] if tarea_id == TAREA_SIN_MAESTRO else None
+    return (fecha, tarea_id, nombre, unidad, finca_id, Decimal(cantidad),
+            Decimal(precio), Decimal(importe))
 
 
 def _cambio(existente: Comprobante, grupo: GrupoHistorico) -> bool:
     """Cambió la fecha o el multiconjunto de Líneas (el orden no cuenta)."""
     en_base = Counter(
-        _firma_de_linea(li.fecha, li.tarea_id, li.unidad, li.finca_id,
+        _firma_de_linea(li.fecha, li.tarea_id, li.tarea_nombre, li.unidad, li.finca_id,
                         li.cantidad, li.precio_unitario, li.importe)
         for li in existente.lineas
     )
     en_csv = Counter(
-        _firma_de_linea(li.fecha, li.tarea_id, li.unidad, li.finca_id,
+        _firma_de_linea(li.fecha, li.tarea_id, li.tarea_nombre, li.unidad, li.finca_id,
                         li.cantidad, li.precio_unitario, li.importe)
         for li in grupo.lineas
     )

@@ -944,6 +944,15 @@ Todo arranca de `main` con la E1 mergeada.
 - Hecho (ejecutor, 2026-10-13): 7 tests; `tests/facturacion` da 612. Una TAREA vacía no es un nombre que se pueda guardar: omite el grupo con el motivo nuevo `tarea_vacia`. El aviso de tarea sale sólo de los Comprobantes que se migran.
 - La planilla exportada de nuevo el 2026-10-13 vino en la codificación de Windows, con `;` y el punto como decimal ("116.64"): no se lee, porque "4776.752" no se distingue de un número con puntos de miles. Se pidió exportarla otra vez como la primera, desde Google Sheets.
 
+**Paso R1. Par: renombrar una tarea sin maestro cuenta como cambio** (revisión, high)
+- Hallazgo: `_firma_de_linea` compara `tarea_id` y deja afuera el nombre. En una tarea sin maestro el id es siempre `TAREA_SIN_MAESTRO` (0), así que el nombre es lo único que la distingue.
+- Escenario de falla: se migra "COSECHA X" con `tarea_id` 0; el usuario corrige la planilla a "COSECHA Y", que tampoco está en el maestro; la corrida siguiente la cuenta como igual y sale con 0, y la base queda con el nombre viejo, aun con `--reemplazar-cambiados` (y en un sin número, que sólo se recalcula si cambió). Pasa justo ahora: el usuario está corrigiendo la planilla para volver a correr.
+- Arreglo mínimo: en la firma de la Línea, sumar el nombre sólo cuando `tarea_id == TAREA_SIN_MAESTRO` (para las tareas con maestro sigue sin nombre: renombrar en el campo no es un cambio de la planilla). El nombre se compara ya recortado a `LARGO_TAREA_NOMBRE`, igual que se guarda, así los 353 de `testing` siguen dando iguales.
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: una tarea sin maestro migrada con un nombre y renombrada en la planilla (otra vez sin maestro) da cambiado; con `--reemplazar-cambiados` la Línea queda con el nombre nuevo; un sin número con la tarea renombrada se recalcula; la misma planilla dos veces sigue dando igual; una tarea con maestro cuyo nombre guardado difiere del maestro sigue dando igual.
+- Verificación: `python -m pytest tests/facturacion -q`.
+- Hecho (ejecutor, 2026-10-13): 4 tests (2 en rojo antes del arreglo, los del bug; los otros 2 protegen lo que no cambia); `tests/facturacion` da 616. La simulación contra `testing` después del arreglo sigue dando 353 iguales y diferencias 0. Un cambio sólo de mayúsculas o espacios en el nombre de una tarea sin maestro también cuenta como cambio: se guarda tal cual.
+
 ### 3.10 Pasos FRENADOS (los hace la sesión principal, con OK del usuario)
 
 - **F1. DDL en `testing`** (BK-A):
