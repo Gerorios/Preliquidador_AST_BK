@@ -346,7 +346,7 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
   - `--informe <ruta>` escribe la tabla completa en CSV. Se recomienda dejarla dentro de `fuentes/`, que está fuera de git.
   - **Sale con 0** sólo si no queda nada nuevo, nada cambiado y todas las diferencias son 0.
 - **Guarda de escritura**
-  - `--aplicar` se permite si la base es `testing`, o si es la de producción **y** `permitir_base_produccion` está activo, es decir, en el VPS. En producción, además, pide tipear el nombre de la base. Cualquier otra base se rechaza.
+  - `--aplicar` se permite si la base es `testing`, o si es la de producción **y** `permitir_base_produccion` está activo, es decir, en el VPS. En producción, además, pide `--confirmar-base <nombre>` con el nombre exacto, la convención del script de la E1 (ver la alineación con la E1). Cualquier otra base se rechaza.
   - Esto se aparta a propósito del script de tarifas, que sólo escribe en `testing`, porque el histórico tiene que quedar en producción. Va en el cuerpo del PR.
 - **La salida tiene nombres de clientes:** nunca se pega en PRs, en la bitácora ni en `estado.md`. En el PR van sólo los conteos y "diferencias: 0".
 
@@ -905,6 +905,10 @@ Todo arranca de `main` con la E1 mergeada.
   - la simulación no escribe (filas antes y después);
   - `--informe` escribe la tabla completa.
 - Verificación: `python -m pytest tests/facturacion -q`, y después `python -m pytest -q`.
+- Hecho (ejecutor, 2026-10-13): 26 tests; `tests/facturacion` da 587 y la suite completa, antes del ajuste de la guarda, 1731 passed y 1 xfailed. La sección 3.1 decía tipear el nombre de la base y la alineación con la E1, posterior, decía `--confirmar-base`: vale la alineación y se corrigieron 3.1, la sección 4 y F7. Lo que el plan no fijaba y quedó así:
+  - la guarda corre después de leer la planilla y antes de leer los maestros, y con `--aplicar` en una base no permitida sale con 1 sin simular;
+  - el informe es un CSV para Excel (`;`, coma decimal, UTF-8 con BOM), con una columna por motivo de omisión;
+  - los maestros salen sólo de la base de campo; la ruta por defecto de la planilla sale de la ubicación del script, y en el VPS se pasa como argumento.
 
 **C7. Paso con el usuario: simulación real contra `testing`, sin escribir**
 - Correrlo con el CSV local, sin `--aplicar`.
@@ -938,7 +942,7 @@ Todo arranca de `main` con la E1 mergeada.
 - **F6. Deploy** del backend y del front (swap de carpeta).
 - **F7. Histórico en producción**:
   - el CSV por scp a una ruta fuera del código;
-  - simular, revisar con el usuario, `--aplicar` tipeando el nombre de la base y volver a simular, que tiene que salir con 0;
+  - simular, revisar con el usuario, `--aplicar --confirmar-base <nombre>` y volver a simular, que tiene que salir con 0;
   - **borrar el CSV del VPS**.
 - **F8. Smoke en producción**:
   - el listado carga y un histórico abre en sólo lectura;
@@ -963,7 +967,7 @@ Todo arranca de `main` con la E1 mergeada.
    - Vuelta atrás de la base, sólo si no hay datos reales: `DROP TABLE facturacion_adjunto; DROP TABLE facturacion_linea; DROP TABLE facturacion_comprobante;`, en ese orden.
    - Con datos reales: restaurar el respaldo.
 2. **Carga del histórico en producción (alto).** Escribe dato real en lote.
-   - Mitigación: simulación revisada, `--aplicar` con confirmación tipeada y una segunda simulación que sale con 0.
+   - Mitigación: simulación revisada, `--aplicar --confirmar-base <nombre>` y una segunda simulación que sale con 0.
    - Vuelta atrás, justo después de la carga: `DELETE FROM facturacion_comprobante WHERE es_historico = 1;`. Las Líneas caen por cascada, y si algún histórico ya tiene adjunto la FK lo frena, a propósito.
 3. **Datos de terceros.**
    - El CSV y la salida del script tienen nombres.
