@@ -890,6 +890,12 @@ Todo arranca de `main` con la E1 mergeada.
   - después de aplicar, todas las diferencias dan 0 y `codigo_de_salida()` da 0;
   - si se borra un Comprobante de la base, aparece la diferencia y la salida da 1.
 - Verificación: correr el archivo de tests.
+- Hecho (ejecutor, 2026-10-13): 11 tests; `tests/facturacion` da 561. Lo que el plan no fijaba y quedó así:
+  - la celda es (nombre normalizado del Cliente, mes): así una fila con un Cliente sin resolver tiene su celda y cierra; las filas sin fecha legible van al mes "sin mes", siempre omitidas;
+  - una fila con importe vacío o ilegible no es planilla (el resto de su grupo sí, como omitido); una fila anterior a `desde` no es planilla, y las de su grupo desde `desde` cuentan como omitidas;
+  - lo cargado a mano cuenta como omitido `cargado_a_mano`;
+  - la salida da 1 con nuevos, cambiados, reemplazados, sin número borrados, `bloqueado` o alguna diferencia; los ausentes del CSV y los sin número omitidos se ven por la diferencia;
+  - `conciliar` lee la sesión: el script la llama después de `aplicar` y antes del `commit` o el `rollback`. La primera corrida con `--aplicar` sale con 1 por los nuevos; la que tiene que dar 0 es la simulación siguiente.
 
 **C6. Par: script y guarda**
 - Archivos: `scripts/migrar_historico_facturacion.py` y `tests/facturacion/test_script_historico.py`.
