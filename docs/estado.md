@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-BK-B (adjuntos en el backend), en ejecución. Después siguen FT-B (adjuntos en el front) y BK-C (histórico). La `facturacion/003` está en `testing` y no en producción. Facturación no se deploya hasta que el módulo esté terminado entero, con todas sus etapas (decisión del usuario, 2026-10-12). Si antes hay que deployar otra cosa, Facturación viaja escondida: sin nadie con su rol no se ve, y ese deploy lleva la 003 (tablas nuevas, vacías). Todo deploy, con OK.
+BK-B (adjuntos en el backend), en pausa a pedido del usuario: B1 a B4 hechos y en verde (Facturación 405 passed), sin commitear, en el worktree `.claude/worktrees/facturacion-e2-bkb` (rama `feature/facturacion-e2-adjuntos`, con un `.env` ficticio). Falta B5 (`.env.example`, nginx y `PUESTA-A-PUNTO.md`; `DOCUMENTACION.md` no lista variables), la suite completa y la revisión (dos rondas, recibe archivos de usuarios). Después siguen FT-B (adjuntos en el front) y BK-C (histórico). La `facturacion/003` está en `testing` y no en producción. Facturación no se deploya hasta que el módulo esté terminado entero, con todas sus etapas (decisión del usuario, 2026-10-12). Si antes hay que deployar otra cosa, Facturación viaja escondida: sin nadie con su rol no se ve, y ese deploy lleva la 003 (tablas nuevas, vacías). Todo deploy, con OK.
 
 ## Pendientes del usuario
 
