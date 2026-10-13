@@ -418,6 +418,40 @@ def test_el_importe_es_el_de_la_planilla_sin_recalcular():
     assert grupo.lineas[0].importe == Decimal("299.99")
 
 
+@pytest.mark.parametrize("texto, esperada", [
+    ("5046,557", Decimal("5046.56")),
+    ("4776,755", Decimal("4776.76")),
+    ("1.234,5649", Decimal("1234.56")),
+    ("1,5", Decimal("1.5")),
+    ("1,25", Decimal("1.25")),
+])
+def test_la_cantidad_con_mas_de_dos_decimales_se_redondea_mitad_hacia_arriba(texto, esperada):
+    # La planilla trae bins con 3 decimales (paso C7b). El importe sigue
+    # siendo el de la planilla, sin recalcular.
+    resultado = _clasificar(_fila(2, cantidad=texto, precio="2,5", importe="12.616,39"))
+
+    assert resultado.omitidos == []
+    [linea] = resultado.grupos[0].lineas
+    assert linea.cantidad == esperada
+    assert linea.cantidad.as_tuple().exponent >= -2
+    assert linea.importe == Decimal("12616.39")
+
+
+@pytest.mark.parametrize("cambios, motivo", [
+    ({"precio": "2,12345"}, h.PRECIO_ILEGIBLE),
+    ({"importe": "25,001"}, h.IMPORTE_ILEGIBLE),
+    ({"cantidad": "10,5a"}, h.CANTIDAD_ILEGIBLE),
+    # Redondear no la vuelve 0: un negativo, por chico que sea, se omite.
+    ({"cantidad": "-0,001"}, h.VALOR_NEGATIVO),
+])
+def test_precio_e_importe_con_decimales_de_mas_siguen_ilegibles(cambios, motivo):
+    resultado = _clasificar(_fila(2, **cambios))
+
+    assert resultado.grupos == []
+    [omitido] = resultado.omitidos
+    assert omitido.motivo == motivo
+
+
 def test_el_mismo_numero_con_dos_clientes_son_dos_comprobantes():
     resultado = _clasificar(
         _fila(2, numero="10", cliente="CLIENTE UNO"),

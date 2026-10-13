@@ -21,7 +21,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -429,6 +429,16 @@ def _leer_valor(texto, decimales, vacio, ilegible) -> Decimal:
     return valor
 
 
+def _redondear_cantidad(cantidad: Decimal) -> Decimal:
+    """La cantidad con más decimales que su columna se redondea a esos, mitad
+    hacia arriba: la planilla trae bins con 3 (paso C7b). Con los que entran,
+    queda tal cual. El importe no se recalcula."""
+    escala = Decimal(1).scaleb(-CANTIDAD[1])
+    if cantidad.as_tuple().exponent >= -CANTIDAD[1]:
+        return cantidad
+    return cantidad.quantize(escala, rounding=ROUND_HALF_UP)
+
+
 def _leer_fecha(texto, ilegible) -> date | None:
     try:
         return leer_fecha(texto)
@@ -499,15 +509,21 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
         if unidad is None:
             raise _LineaMala(UM_NO_TRADUCIBLE, fila.um.strip())
 
-        cantidad = _leer_valor(fila.cantidad, CANTIDAD[1], CANTIDAD_VACIA, CANTIDAD_ILEGIBLE)
+        # La cantidad se lee con todos sus decimales y se redondea más abajo
+        # (paso C7b); precio e importe con decimales de más son ilegibles. El
+        # largo del texto es una cota de cuántos decimales puede traer.
+        cantidad = _leer_valor(fila.cantidad, len(fila.cantidad or ""),
+                               CANTIDAD_VACIA, CANTIDAD_ILEGIBLE)
         precio = _leer_valor(fila.precio, PRECIO[1], PRECIO_VACIO, PRECIO_ILEGIBLE)
         importe = _leer_valor(fila.importe, IMPORTE[1], IMPORTE_VACIO, IMPORTE_ILEGIBLE)
         # Todo histórico entra como Factura: un negativo sería una Nota de
-        # crédito que la planilla no distingue (pregunta 7).
+        # crédito que la planilla no distingue (pregunta 7). Va antes de
+        # redondear, para que un negativo chico no pase como 0.
         for valor, texto in ((cantidad, fila.cantidad), (precio, fila.precio),
                              (importe, fila.importe)):
             if valor < 0:
                 raise _LineaMala(VALOR_NEGATIVO, texto.strip())
+        cantidad = _redondear_cantidad(cantidad)
 
         # En FECHA FAC, "-" es el vacío que muestra la planilla: el Comprobante
         # queda sin fecha (paso C7a). En FECHA A FACTURAR sigue ilegible.
