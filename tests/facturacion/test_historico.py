@@ -558,7 +558,9 @@ def test_dos_fechas_fac_distintas_en_el_grupo_lo_omiten():
     ({"importe": "-25"}, h.VALOR_NEGATIVO),
     ({"cantidad": "-10"}, h.VALOR_NEGATIVO),
     ({"precio": "-2,5"}, h.VALOR_NEGATIVO),
-    ({"tarea": "TAREA Z"}, h.TAREA_NO_ENCONTRADA),
+    # Una tarea que no está en el maestro ya no omite (paso C7c); vacía, sí.
+    ({"tarea": ""}, h.TAREA_VACIA),
+    ({"tarea": "   "}, h.TAREA_VACIA),
     ({"tarea": "tarea doble"}, h.TAREA_AMBIGUA),
     ({"fecha_a_facturar": "x"}, h.FECHA_A_FACTURAR_ILEGIBLE),
     ({"fecha_a_facturar": ""}, h.FECHA_A_FACTURAR_VACIA),
@@ -717,6 +719,52 @@ def test_la_finca_del_cliente_se_resuelve_y_la_no_encontrada_da_aviso_sin_frenar
     ]
 
 
+def test_una_tarea_que_no_esta_en_el_maestro_se_migra_con_tarea_0_y_su_nombre():
+    # Decisión del usuario (paso C7c): se migra "forzada", con el nombre de la
+    # planilla, y queda a la vista como aviso y en los no resueltos.
+    resultado = _clasificar(
+        _fila(2, numero="10", tarea="  Tarea   Nueva "),
+        _fila(3, numero="10", tarea="TAREA A"),
+    )
+
+    assert resultado.omitidos == []
+    [grupo] = resultado.grupos
+    assert h.TAREA_SIN_MAESTRO == 0
+    assert [(li.tarea_id, li.tarea_nombre) for li in grupo.lineas] == [
+        (0, "Tarea   Nueva"), (10, "TAREA A"),
+    ]
+    assert resultado.avisos == [
+        h.Aviso(fila=2, motivo=h.TAREA_NO_ENCONTRADA, detalle="Tarea   Nueva"),
+    ]
+    assert resultado.no_resueltos == {(h.TAREA_NO_ENCONTRADA, "TAREA NUEVA"): 1}
+
+
+def test_el_nombre_de_la_tarea_sin_maestro_se_recorta_a_150():
+    [grupo] = _clasificar(_fila(2, tarea="X" * 200)).grupos
+
+    assert grupo.lineas[0].tarea_nombre == "X" * 150
+
+
+def test_una_tarea_ambigua_sigue_omitiendo_el_comprobante():
+    resultado = _clasificar(_fila(2, numero="10", tarea="tarea doble"))
+
+    assert resultado.grupos == []
+    [omitido] = resultado.omitidos
+    assert omitido.motivo == h.TAREA_AMBIGUA
+    assert resultado.avisos == []
+
+
+def test_el_aviso_de_tarea_es_solo_de_los_comprobantes_que_se_migran():
+    # Como el de finca: si el grupo se omite por otra cosa, sólo queda su
+    # motivo; el nombre igual cuenta en los no resueltos.
+    resultado = _clasificar(_fila(2, numero="10", tarea="TAREA Z", um="KG"))
+
+    [omitido] = resultado.omitidos
+    assert omitido.motivo == h.UM_NO_TRADUCIBLE
+    assert resultado.avisos == []
+    assert resultado.no_resueltos == {(h.TAREA_NO_ENCONTRADA, "TAREA Z"): 1}
+
+
 def test_la_cantidad_cero_se_migra_tal_cual():
     [grupo] = _clasificar(_fila(2, cantidad="0", importe="0")).grupos
 
@@ -867,6 +915,39 @@ def test_con_el_flag_el_cambiado_se_reemplaza_conservando_id_y_adjuntos(db):
     assert len(despues.adjuntos) == 1
     # El reemplazo no es una edición de una persona.
     assert despues.actualizado_en is None
+
+
+MAESTROS_CON_TAREA_Z = Maestros(
+    clientes=MAESTROS.clientes,
+    tareas=[*MAESTROS.tareas,
+            {"tarea_id": 14, "nombre": "TAREA Z", "grupo_tarea": None,
+             "unidad_sugerida": None, "no_facturable": False}],
+    fincas=MAESTROS.fincas,
+)
+
+
+def test_cuando_el_maestro_suma_la_tarea_el_comprobante_cambia_y_el_flag_lo_pasa_al_id(db):
+    filas = [_fila(2, numero="10", tarea="Tarea Z"), _fila(3, numero="10")]
+    primera = aplicar(db, clasificar(filas, MAESTROS, desde=DESDE))
+    db.commit()
+    assert primera.nuevos == ["H|1|10"]
+    assert [li.tarea_id for li in _por_clave(db, "H|1|10").lineas] == [0, 10]
+
+    # El campo ya tiene la tarea: sin el flag, se informa y no se toca.
+    sin_flag = aplicar(db, clasificar(filas, MAESTROS_CON_TAREA_Z, desde=DESDE))
+    db.commit()
+    assert sin_flag.cambiados == ["H|1|10"]
+    db.expire_all()
+    assert [li.tarea_id for li in _por_clave(db, "H|1|10").lineas] == [0, 10]
+
+    con_flag = aplicar(db, clasificar(filas, MAESTROS_CON_TAREA_Z, desde=DESDE),
+                       reemplazar_cambiados=True)
+    db.commit()
+    assert con_flag.reemplazados == ["H|1|10"]
+    db.expire_all()
+    assert [(li.tarea_id, li.tarea_nombre) for li in _por_clave(db, "H|1|10").lineas] == [
+        (14, "TAREA Z"), (10, "TAREA A"),
+    ]
 
 
 def _cargado_a_mano(db, tipo, numero="10", cliente_id=1):

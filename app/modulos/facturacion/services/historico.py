@@ -249,7 +249,7 @@ SIN_NUMERO_SIN_FECHA = "sin_numero_sin_fecha_a_facturar"
 FECHA_A_FACTURAR_VACIA = "fecha_a_facturar_vacia"
 FECHA_A_FACTURAR_ILEGIBLE = "fecha_a_facturar_ilegible"
 ANTERIOR_A_DESDE = "anterior_a_desde"
-TAREA_NO_ENCONTRADA = "tarea_no_encontrada"
+TAREA_VACIA = "tarea_vacia"
 TAREA_AMBIGUA = "tarea_ambigua"
 UM_NO_TRADUCIBLE = "um_no_traducible"
 CANTIDAD_VACIA = "cantidad_vacia"
@@ -262,9 +262,19 @@ VALOR_NEGATIVO = "valor_negativo"
 FECHA_FACTURA_ILEGIBLE = "fecha_factura_ilegible"
 FECHA_FACTURA_EN_CONFLICTO = "fecha_factura_en_conflicto"
 
-# Avisos: no omiten nada, la Línea queda sin finca.
+# Avisos: no omiten nada. Con la finca, la Línea queda sin finca; con la
+# tarea, va con TAREA_SIN_MAESTRO y el nombre de la planilla (paso C7c).
 FINCA_NO_ENCONTRADA = "finca_no_encontrada"
 FINCA_AMBIGUA = "finca_ambigua"
+TAREA_NO_ENCONTRADA = "tarea_no_encontrada"
+
+# El tarea_id de una Línea cuya tarea no está en el maestro del campo: 0 no es
+# un id del maestro. Cuando el campo la tenga, una corrida con
+# --reemplazar-cambiados la pasa a su id real (el cambio de tarea_id cuenta
+# como Comprobante cambiado).
+TAREA_SIN_MAESTRO = 0
+# El largo de la columna `tarea_nombre`.
+LARGO_TAREA_NOMBRE = 150
 
 
 @dataclass(frozen=True)
@@ -468,7 +478,9 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
     """Lee y resuelve una fila. Se queda con el primer problema, en este orden:
     Cliente, número, FECHA A FACTURAR (y `desde`), tarea, UM, cantidad,
     precio, importe, negativos y FECHA FAC. Los nombres no resueltos se
-    cuentan siempre, aunque la fila ya tenga otro problema."""
+    cuentan siempre, aunque la fila ya tenga otro problema. Una tarea vacía o
+    ambigua es un problema; una que no está en el maestro, no: la Línea va con
+    TAREA_SIN_MAESTRO y el nombre de la planilla, y da un aviso."""
     clientes, tareas, fincas = indices
     analisis = _Analisis(fila=fila)
     cliente = tarea = tarea_mala = None
@@ -477,12 +489,23 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
     except _LineaMala as error:
         no_resueltos[(error.motivo, error.detalle)] += 1
         analisis.error = error
-    try:
-        tarea = _resolver(tareas, normalizar_texto(fila.tarea),
-                          TAREA_NO_ENCONTRADA, TAREA_AMBIGUA)
-    except _LineaMala as error:
-        no_resueltos[(error.motivo, error.detalle)] += 1
-        tarea_mala = error
+    nombre_tarea = normalizar_texto(fila.tarea)
+    tarea_sin_maestro = False
+    if not nombre_tarea:
+        tarea_mala = _LineaMala(TAREA_VACIA, "")
+    else:
+        try:
+            tarea = _resolver(tareas, nombre_tarea, TAREA_NO_ENCONTRADA, TAREA_AMBIGUA)
+        except _LineaMala as error:
+            no_resueltos[(error.motivo, error.detalle)] += 1
+            if error.motivo == TAREA_AMBIGUA:
+                tarea_mala = error
+            else:
+                # No está en el maestro: se migra igual, con el nombre de la
+                # planilla, y da un aviso (paso C7c).
+                tarea_sin_maestro = True
+                tarea = {"tarea_id": TAREA_SIN_MAESTRO,
+                         "nombre": fila.tarea.strip()[:LARGO_TAREA_NOMBRE]}
     if analisis.error:
         return analisis
 
@@ -533,6 +556,11 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
         analisis.error = error
         return analisis
 
+    if tarea_sin_maestro:
+        analisis.avisos.append(Aviso(
+            fila=fila.fila, motivo=TAREA_NO_ENCONTRADA, detalle=tarea["nombre"],
+        ))
+
     finca_id = finca_nombre = None
     nombre_finca = normalizar_texto(fila.finca)
     if nombre_finca:
@@ -581,8 +609,9 @@ def clasificar(filas: list[FilaPlanilla], maestros: Maestros, desde: date) -> Cl
       motivo. También lo omiten una Línea anterior a `desde` y dos FECHA FAC
       distintas en el grupo.
     - Una finca que no se encuentra entre las del Cliente deja la Línea sin
-      finca y da un aviso; los avisos son sólo de los Comprobantes que se
-      migran."""
+      finca y da un aviso. Una tarea que no está en el maestro va con
+      TAREA_SIN_MAESTRO y el nombre de la planilla, y también da un aviso
+      (paso C7c). Los avisos son sólo de los Comprobantes que se migran."""
     indices = (
         _indice(maestros.clientes),
         _indice(maestros.tareas),

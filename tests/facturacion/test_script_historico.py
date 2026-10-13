@@ -318,6 +318,23 @@ def test_por_consola_solo_las_celdas_con_diferencia(script, fabrica, tmp_path, c
     assert "CLIENTE TRES" not in diferencias
 
 
+def test_la_tarea_sin_maestro_sale_en_los_avisos_y_en_los_no_resueltos(
+        script, fabrica, tmp_path, capsys):
+    filas = [list(f) for f in FILAS]
+    filas[2][3] = "TAREA NUEVA"
+    ruta = _planilla(tmp_path / "planilla.csv", filas)
+
+    _correr(script, fabrica, ruta)
+
+    consola = capsys.readouterr().out
+    avisos = consola.split("Avisos por motivo:")[1].split("Nombres no resueltos")[0]
+    assert "tarea_no_encontrada: 1" in avisos
+    no_resueltos = consola.split("Nombres no resueltos")[1].split("Aplicar:")[0]
+    assert "tarea_no_encontrada  TAREA NUEVA: 1" in no_resueltos
+    # El Comprobante se migra igual: siguen siendo 2 nuevos.
+    assert "nuevos: 2" in consola
+
+
 def test_sin_diferencias_la_consola_lo_dice(script, fabrica, tmp_path, capsys):
     ruta = _planilla(tmp_path / "planilla.csv")
     _correr(script, fabrica, ruta, "--aplicar")
