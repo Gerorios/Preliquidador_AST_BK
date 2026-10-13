@@ -7,7 +7,6 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 ## En curso
 
 - Facturación E2 (Comprobantes, adjuntos e histórico), fase 3 (ejecución), carril completo. Plan: `docs/superpowers/plans/2026-10-11-facturacion-e2.md`.
-- Preliquidación: columna "Min/tancada" (rendimiento de tancada) en Tancadas vs Jornal, fase 4 (revisión), carril completo. Plan: `docs/superpowers/plans/2026-10-13-rendimiento-tancadas.md` (está en la rama `feature/rendimiento-tancadas` del backend; llega a `main` con el PR 1). Worktrees `.claude/worktrees/rendimiento-tancadas` en los dos repos. Revisión terminada: 0 urgent, 0 high, 6 minor sin tocar. Próximo paso: mostrar el cambio y esperar el OK del usuario para los PRs hermanos (BK primero).
 
 ## Próximo paso
 
@@ -15,6 +14,7 @@ BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del bac
 
 ## Pendientes del usuario
 
+- Preliquidación: dar el OK para deployar Min/tancada en Tancadas vs Jornal (BK #98 y FT #81, mergeados el 2026-10-13), backend primero: el front sin el backend nuevo muestra "—".
 - Cargar `TALLER_SHEET_URL` en el `.env` del servidor y reiniciar el backend: hasta entonces las alertas de Terceros responden 502 a propósito (deploy del 2026-09-30).
 - Asignar el rol "Liquidador de terceros" desde Administración a quienes liquiden Terceros (nace sin personas; BK #83, deploy del 2026-10-11).
 - Avisarle a Pitu que sumar las tablas `terceros_*` a `TABLAS` de `scripts/refrescar_testing.py` queda para él: el próximo refresco de `testing` pisaría sus datos de prueba de Terceros con los de producción (el usuario lo decidió así, 2026-10-11).
@@ -33,6 +33,8 @@ BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del bac
 
 ## A futuro
 
+- Limpieza y prolijidad de código de Min/tancada en Tancadas vs Jornal, minors de la revisión sin tocar: la palabra "rendimiento" sola, que el glosario pide evitar (ayuda, un test y un comentario); el redondeo repetido cuatro veces; nombres cortos de los acumuladores; `fmtMin` repite `fmt`; el encabezado sin `title` con la fórmula. El detalle va en los cuerpos del BK #98 y el FT #81 (2026-10-13).
+- Deuda previa vista en la revisión de Min/tancada: `GET /{preliq_id}/control-tancadas-jornal` sin `response_model` (regla 16 de GUIA-MODULOS); la tabla Tancadas vs Jornal desborda a lo ancho y cliente, finca y tarea no quedan fijas; encabezados numéricos a la derecha y celdas `mono` a la izquierda; `.pjAlto` con rgba sin token, el badge con `marginLeft` inline y `key={i}` en filas reordenables (2026-10-13).
 - Servidor, visto en el deploy del 2026-10-13 (detalle en `docs/DEPLOY.md`, local): nginx tiene dos configuraciones, la activa (con HTTPS y el límite de 12 MB) y una vieja sin HTTPS que figuraba como la instalada; dejar una sola, para que una reinstalación no pierda el HTTPS ni el límite. Borrar los respaldos viejos que quedaron en el servidor cuando ya no sirvan de vuelta atrás, primero la copia de la configuración del sistema del 2026-09-30, que puede tener contraseñas. Todo con OK, porque toca el servidor (el usuario lo dejó para más adelante, 2026-10-13).
 - Limpieza y prolijidad de código de Facturación FT-B (adjuntos en el front), minors de la revisión sin tocar: un 409 o 404 por cambios concurrentes no refresca la lista; Escape no cancela "Quitar", falta "Quitando…" y el foco se pierde si quitar falla; detalles de diseño (ubicación en pantallas anchas, "2 de 5" sin "adjuntos", "Cerrar" chico); colores rgba sin token en `Adjuntos.module.css`; textos y estilos repetidos, nombres ambiguos y la descarga repetida en tres módulos. El detalle va en el cuerpo del PR de FT-B (2026-10-13).
 - Deuda del núcleo del front vista en la revisión de FT-B: `.btn-danger` no llega al contraste mínimo (3,49:1, usado en 15 lugares) y `.btn` no tiene `:focus-visible` (2026-10-13).

@@ -3895,3 +3895,50 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Una subida real de adjunto en producción, cuando alguien tenga el rol.
 - El respaldo de la carpeta de adjuntos, junto con el de la base (en `docs/estado.md`).
 - Sigue BK-C (histórico).
+
+## 2026-10-13 — Min/tancada en Tancadas vs Jornal (Preliquidación)
+
+**Mergeado**
+- PR #98 (Preliquidador_AST_BK) — el control Tancadas vs Jornal suma `minutos_por_tancada` por
+  fila y en el total; glosario y ayuda nuevos; plan de la tarea.
+- PR #81 (Preliquidador_AST_FT) — columna "Min/tancada" en la tabla Tancadas vs Jornal
+  (`ControlesJornal.jsx`), que se ve en Verificación y en Gerencial.
+
+**Por frontera**
+- Preliquidación: por fila, hs máquina × 60 ÷ tancadas, redondeado a 2 decimales, y `null` si
+  la fila no tiene hs máquina o no tiene tancadas; el total sale de las sumas de las filas con
+  valor. En el front, la columna va después de "Hs máquina", se puede ordenar, muestra hasta 1
+  decimal y "—" cuando llega `null`; la nota al pie aclara que las filas sin hs máquina no
+  entran en los minutos por tancada. Ningún campo ni total existente cambia.
+- Docs: término nuevo **Rendimiento de tancada** en `CONTEXT-preliquidacion.md`; `docs/AYUDA.md`
+  explica la columna; plan en `docs/superpowers/plans/2026-10-13-rendimiento-tancadas.md`.
+
+**Decisiones**
+- El cálculo vive en el backend. Porqué: Verificación y Gerencial leen el mismo número del
+  mismo endpoint, y la regla de qué filas entran al total queda en un solo lugar. Descartado:
+  calcularlo en el front (dos pantallas, dos cálculos).
+- Sin el ÷2 de la pulverización. Porqué: mide el tiempo de máquina de una tancada, no el valor
+  que se paga. Descartado: un valor por tancada pulverizada.
+- El total sale de las sumas, no del promedio de las filas, y una fila con hs máquina y 0
+  tancadas no entra. Porqué: una finca chica no pesa lo mismo que una grande, y sin tancada que
+  medir sus horas inflarían el promedio de las demás.
+- 1 decimal en pantalla (el backend manda 2). Porqué: alcanza para comparar fincas sin ruido.
+- Con un backend sin el campo, la columna muestra "—" en vez de romper; por eso el deploy va
+  backend primero.
+
+**Estado**
+- Deploy: no. Queda con OK, backend primero.
+- Migraciones: ninguna.
+- Pruebas: backend `python -m pytest` 1562 passed y 1 xfailed antes del rebase, y 19 passed en
+  el test del control después; front `npm test` 262 de 262 y `npm run build` OK después del
+  rebase; `npm run lint` con los 6 errores y 5 warnings que ya tiene `main`. Smoke en el
+  navegador contra `testing`: la fila y el Total coinciden con la cuenta a mano, el orden anda,
+  Gerencial igual; el usuario lo probó en local. No probado en pantalla: filas sin hs máquina
+  o sin tancadas (no hay en `testing`; las cubren los tests).
+- Revisión: dos ejes, más `/impeccable critique` (20/28) y `/impeccable audit` (17/20), detector
+  sin hallazgos, con verificador: 0 urgent, 0 high, 6 minor sin tocar y 5 descartados. Una sola
+  ronda, porque no hubo arreglos. El detalle de los minor y de la deuda previa vista, en los
+  cuerpos del BK #98 y el FT #81.
+
+**Pendiente**
+- El deploy, con OK, backend primero.
