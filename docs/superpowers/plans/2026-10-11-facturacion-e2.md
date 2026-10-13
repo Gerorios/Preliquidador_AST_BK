@@ -346,7 +346,7 @@ Se da por buena cuando el histórico migrado suma lo mismo que la planilla, por 
   - `--informe <ruta>` escribe la tabla completa en CSV. Se recomienda dejarla dentro de `fuentes/`, que está fuera de git.
   - **Sale con 0** sólo si no queda nada nuevo, nada cambiado y todas las diferencias son 0.
 - **Guarda de escritura**
-  - `--aplicar` se permite si la base es `testing`, o si es la de producción **y** `permitir_base_produccion` está activo, es decir, en el VPS. En producción, además, pide tipear el nombre de la base. Cualquier otra base se rechaza.
+  - `--aplicar` se permite si la base es `testing`, o si es la de producción **y** `permitir_base_produccion` está activo, es decir, en el VPS. En producción, además, pide `--confirmar-base <nombre>` con el nombre exacto, la convención del script de la E1 (ver la alineación con la E1). Cualquier otra base se rechaza.
   - Esto se aparta a propósito del script de tarifas, que sólo escribe en `testing`, porque el histórico tiene que quedar en producción. Va en el cuerpo del PR.
 - **La salida tiene nombres de clientes:** nunca se pega en PRs, en la bitácora ni en `estado.md`. En el PR van sólo los conteos y "diferencias: 0".
 
@@ -782,9 +782,12 @@ Todo arranca de `main` con la E1 mergeada.
 **FB1. Par: reglas de adjuntos**
 - Archivos: `src/modulos/facturacion/adjuntos.js` y su test.
 - Rojo:
-  - `validarArchivo(file, cantidad)`: extensión, menos de 10 MB y menos de 5 adjuntos, con mensajes en español;
+  - `validarArchivo(file, cantidad)`: extensión, hasta 10 MB (exactamente 10 MB sirve, como en el backend) y menos de 5 adjuntos, con mensajes en español;
   - `mensajeDeAdjunto(error)` por `status` (403, 404, 413, 503 y otro), porque el `detail` de un blob no se puede leer.
 - Verificación: `npm test`.
+- Lo decidido al ejecutarlo (sesión principal, 2026-10-13):
+  - El status se lee de `error.status` (el interceptor de `src/core/api.js` reemplaza el error de axios) y, si no está, de `error.response.status`.
+  - `mensajeDeAdjunto` prefiere `error.detail.mensaje` cuando existe y cae al mensaje por status cuando no. El `detail` sólo falta en la descarga, que se pide como blob. Al subir o al quitar, el backend explica el error: con el mensaje por status, un `.pdf` falso (422 `adjunto_invalido`) diría "Probá de nuevo en un rato". Se descartó resolverlo en `Adjuntos.jsx`, porque serían dos lugares que eligen el mensaje.
 
 **FB2. Paso visual: `components/Adjuntos.jsx` en el detalle**
 - La lista, "Subir" (`accept=".pdf,.png,.jpg,.jpeg"`), "Ver" (pestaña nueva y revocar la URL al rato) y "Quitar" con confirmación.
@@ -800,9 +803,31 @@ Todo arranca de `main` con la E1 mergeada.
   - un archivo de más de 10 MB;
   - ver y quitar;
   - un rol de sólo Ver.
+- Lo decidido al ejecutarlo (sesión principal, 2026-10-13):
+  - El servicio manda el header `multipart/form-data` explícito: la instancia `api` del núcleo trae `Content-Type: application/json` por defecto y, sin él, axios convierte el FormData en JSON.
+  - Después de subir o quitar se cambian sólo `adjuntos` y `cantidad_adjuntos` del detalle en la caché, y se invalida el listado: volver a pedir el detalle reiniciaría el formulario y se perderían los cambios sin guardar.
+  - "Ver" abre la pestaña en el mismo clic y le asigna el archivo cuando llega: un `window.open` después del `await` lo frena el bloqueador. Si el navegador la bloquea igual, el archivo se descarga con un aviso.
+  - El foco, después de subir, quitar o cancelar, vuelve con un efecto en el render que ya muestra la lista nueva, y no con `requestAnimationFrame`. Visto en el smoke: con la lista vieja, "Subir archivo" seguía deshabilitado y el foco se iba al título.
+  - Smoke contra `testing`, hecho: los tres tipos, un `.pdf` falso, el 6.º archivo, uno de más de 10 MB y uno `.txt` (estos dos sin llamar a la API), guardar después de subir sin perder cambios ni dar 409, ver, quitar y cancelar, el listado sin recargar (cantidad y "Sin adjunto"), un histórico con Editar y un nombre largo a 1280 px. Sin probar: un rol de sólo Ver, porque no hay un usuario así en `testing` (lo cubre el código: sin Editar no se dibujan "Subir" ni "Quitar").
 
 **FB3. Paso: revisión visual**
 - `/impeccable critique` y `/impeccable audit` del detalle con adjuntos.
+
+**Revisión de FT-B (sesión principal, 2026-10-13): 0 urgent, 0 high, 9 minor, 6 descartados.** De los minor, el usuario eligió arreglar tres de diseño antes del PR, después de verlos en un antes y después (RF-B1 a RF-B3). El resto va al cuerpo del PR y a "A futuro".
+
+**RF-B1. Paso visual: un Comprobante sin adjunto lo marca (minor 3 de la revisión)**
+- Archivos: `components/Adjuntos.jsx`, `components/Adjuntos.module.css` y `pages/Comprobante.jsx`.
+- Con 0 adjuntos y un Comprobante que no es histórico, el estado vacío pasa a tono de aviso: fondo `var(--warn-dim)`, borde `var(--warn)`, texto `var(--text-primary)` y el ícono `alerta` en `var(--warn)` (la convención de `.badge-warn`). Texto: "Falta el adjunto." y, con Editar, " Subí el PDF o la imagen del comprobante.". Un histórico sin adjuntos sigue con el estado neutro de hoy ("Sin adjuntos."), igual que en el listado, donde un histórico nunca dice "Sin adjunto".
+- En el alta, el aviso de guardado suma la guía: "<Tipo> guardada. Ahora adjuntá el comprobante, abajo.". La edición no cambia ("<Tipo> actualizada").
+- Verificación en el navegador: un Comprobante sin adjuntos, uno histórico sin adjuntos y un alta.
+
+**RF-B2. Paso visual: la ayuda aclara que se guardan al subirlos (minor 4)**
+- Archivo: `components/Adjuntos.jsx`.
+- La ayuda pasa a "PDF, PNG o JPG, de hasta 10 MB. Se guardan al subirlos.". Sin "sin tocar Guardar": en el detalle de un histórico no hay botón Guardar.
+
+**RF-B3. Paso visual: la nota del histórico no se contradice (minor 2)**
+- Archivo: `pages/Comprobante.jsx`.
+- Con Editar, la nota dice "Comprobante histórico, migrado de la planilla: no se edita ni se borra, pero sí se le pueden subir y quitar adjuntos. Sus importes son los de la planilla, tal cual.". Sin Editar queda como hoy.
 
 ### 3.9 BK-C: Histórico (backend)
 
@@ -814,6 +839,11 @@ Todo arranca de `main` con la E1 mergeada.
   - `leer_planilla` en un `tmp_path` con BOM, CRLF y `;`;
   - un encabezado faltante da un error que lo nombra.
 - Verificación: `python -m pytest tests/facturacion/test_historico.py -q`.
+- Hecho (ejecutor, 2026-10-13): 50 tests; `tests/facturacion` da 461. Cómo quedó:
+  - una celda vacía da `None` y lo que no se puede leer lanza `ValorIlegible`: C3 decide qué hacer con cada caso;
+  - "-", "$ -", "#VALUE!", "12.5" (punto sin grupos de 3) y más decimales que los de la columna son ilegibles; un negativo sí se lee, para que C3 omita su grupo;
+  - se exigen los 10 encabezados que se usan, FINCA incluida (la celda es opcional); "FACT N°" se busca con el signo de grado; `aa` se lee como `20aa`.
+  - **A mirar en C7:** si el export trae "Nº" en vez de "N°", la lectura frena nombrándolo; y si un importe "-" es el 0 que muestra Excel, hoy cae como ilegible y omite su Comprobante (se ve en los conteos por motivo).
 
 **C2. Par: UM y número**
 - Rojo:
@@ -832,6 +862,12 @@ Todo arranca de `main` con la E1 mergeada.
   - la finca no encontrada, que da aviso;
   - la cantidad 0.
 - Verificación: correr el archivo de tests.
+- Hecho (ejecutor, 2026-10-13): 36 tests; `tests/facturacion` da 535. Lo que el plan no fijaba y quedó así:
+  - cantidad, precio o importe vacíos omiten el grupo, con su motivo; un precio negativo también (como la regla 3 de la carga a mano);
+  - una fila con número y sin FECHA A FACTURAR omite su grupo, porque la fecha de la Línea es obligatoria;
+  - una finca ambigua dentro del Cliente deja la Línea sin finca y da aviso, como una no encontrada; los avisos de finca salen sólo de los Comprobantes que se migran;
+  - `no_resueltos` cuenta por motivo y nombre normalizado, también en las filas de un grupo omitido por otro motivo.
+  - **A mirar en C7 y F3:** el maestro de fincas trae sólo las activas, así que una finca de baja nombrada en la planilla da aviso y la Línea queda sin finca; y no se controla que un valor entre en las cifras enteras de su columna: si no entra, falla MySQL al aplicar (se vería en F3, en `testing`).
 
 **C4. Par: aplicar**
 - Rojo (SQLite):
@@ -842,6 +878,11 @@ Todo arranca de `main` con la E1 mergeada.
   - un histórico que salió del CSV se informa y no se borra;
   - una fila sin número que gana número pasa a su Comprobante numerado en la misma corrida, y el sin número vacío se borra; uno con Adjuntos se informa y no se toca.
 - Verificación: correr el archivo de tests.
+- Hecho (ejecutor, 2026-10-13): 15 tests; `tests/facturacion` da 550. `aplicar` hace `flush` y no `commit`: confirma o deshace el script. Lo que el plan no fijaba y quedó así:
+  - sólo una Factura cargada a mano omite el grupo, no una Nota de crédito (la misma lectura de R3 que el servicio);
+  - para decir si cambió se comparan la fecha y el multiconjunto de Líneas, sin los nombres, que son copias del maestro;
+  - un sin número con Adjuntos que pierde una fila queda bloqueado y la fila cuenta dos veces hasta resolverlo; `bloqueado` hace que la salida no sea 0;
+  - **un sin número cuyas filas siguen en el CSV pero salieron omitidas no se borra** (decisión de la sesión principal): se conserva, se informa en `sin_numero_omitidos` y la conciliación muestra la diferencia, como con un histórico con número cuyo grupo se omite. Sólo se borra uno sin Adjuntos al que no le cae ninguna fila del CSV. Excepción: si sus filas pierden el Cliente o la FECHA A FACTURAR, no hay clave para reconocerlo y se borra; las filas quedan listadas como omitidas.
 
 **C5. Par: conciliación**
 - Rojo:
@@ -849,6 +890,12 @@ Todo arranca de `main` con la E1 mergeada.
   - después de aplicar, todas las diferencias dan 0 y `codigo_de_salida()` da 0;
   - si se borra un Comprobante de la base, aparece la diferencia y la salida da 1.
 - Verificación: correr el archivo de tests.
+- Hecho (ejecutor, 2026-10-13): 11 tests; `tests/facturacion` da 561. Lo que el plan no fijaba y quedó así:
+  - la celda es (nombre normalizado del Cliente, mes): así una fila con un Cliente sin resolver tiene su celda y cierra; las filas sin fecha legible van al mes "sin mes", siempre omitidas;
+  - una fila con importe vacío o ilegible no es planilla (el resto de su grupo sí, como omitido); una fila anterior a `desde` no es planilla, y las de su grupo desde `desde` cuentan como omitidas;
+  - lo cargado a mano cuenta como omitido `cargado_a_mano`;
+  - la salida da 1 con nuevos, cambiados, reemplazados, sin número borrados, `bloqueado` o alguna diferencia; los ausentes del CSV y los sin número omitidos se ven por la diferencia;
+  - `conciliar` lee la sesión: el script la llama después de `aplicar` y antes del `commit` o el `rollback`. La primera corrida con `--aplicar` sale con 1 por los nuevos; la que tiene que dar 0 es la simulación siguiente.
 
 **C6. Par: script y guarda**
 - Archivos: `scripts/migrar_historico_facturacion.py` y `tests/facturacion/test_script_historico.py`.
@@ -858,12 +905,53 @@ Todo arranca de `main` con la E1 mergeada.
   - la simulación no escribe (filas antes y después);
   - `--informe` escribe la tabla completa.
 - Verificación: `python -m pytest tests/facturacion -q`, y después `python -m pytest -q`.
+- Hecho (ejecutor, 2026-10-13): 26 tests; `tests/facturacion` da 587 y la suite completa, antes del ajuste de la guarda, 1731 passed y 1 xfailed. La sección 3.1 decía tipear el nombre de la base y la alineación con la E1, posterior, decía `--confirmar-base`: vale la alineación y se corrigieron 3.1, la sección 4 y F7. Lo que el plan no fijaba y quedó así:
+  - la guarda corre después de leer la planilla y antes de leer los maestros, y con `--aplicar` en una base no permitida sale con 1 sin simular;
+  - el informe es un CSV para Excel (`;`, coma decimal, UTF-8 con BOM), con una columna por motivo de omisión;
+  - los maestros salen sólo de la base de campo; la ruta por defecto de la planilla sale de la ubicación del script, y en el VPS se pasa como argumento.
 
 **C7. Paso con el usuario: simulación real contra `testing`, sin escribir**
 - Correrlo con el CSV local, sin `--aplicar`.
 - Revisar con el usuario los conteos por motivo y lo no resuelto, en la consola, sin que nada vaya a git.
 - Si el usuario corrige la planilla, vuelve a exportar y se repite.
 - Después viene **F3**.
+- Primera simulación (2026-10-13), sin escribir: 991 filas, 216 Comprobantes a migrar, diferencias 0. Lo omitido salía de tres causas, y el usuario decidió:
+  - **Cliente repetido en el maestro**, uno activo y otro de baja con el mismo nombre normalizado (50 Comprobantes): si entre los candidatos hay **uno solo activo, se usa ese**; si hay dos o más activos, o ninguno, sigue siendo `cliente_ambiguo`. Sólo para el Cliente. Va como paso **C7a** (par).
+  - **FECHA FAC "-"** cuenta como vacía (el Comprobante queda con fecha NULL, como con la celda vacía). Las demás fechas ilegibles (texto, sin año, dos fechas) las corrige el usuario en la planilla. Va en C7a.
+  - **Tareas que no están en el maestro** (cuatro de cosecha y una renombrada en el campo): el usuario corrige la planilla con nombres que existan y la vuelve a exportar.
+
+**C7a. Par: Cliente activo y FECHA FAC "-"**
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: un Cliente con dos candidatos (uno activo y otro de baja) se resuelve al activo; con dos activos, o con todos de baja, sigue ambiguo; FECHA FAC "-" (también con espacios) cuenta como vacía; FECHA A FACTURAR "-" sigue como hoy.
+- Verificación: `python -m pytest tests/facturacion -q`. Después, otra simulación con la planilla corregida.
+- Hecho (ejecutor, 2026-10-13): 9 tests; `tests/facturacion` da 596. La segunda simulación, con la planilla todavía sin corregir, da 241 Comprobantes a migrar y diferencias 0. Aparecieron dos casos más y el usuario decidió:
+  - **Cantidad con más de 2 decimales** (7 filas de bins con 3): se **redondea a 2**, mitad hacia arriba. El importe sigue siendo el de la planilla. Sólo la cantidad: el precio y el importe con decimales de más siguen siendo ilegibles. Va como paso **C7b** (par).
+  - Una fila con precio "-" e importe "#VALUE!" omite un Comprobante de 22 filas: la corrige el usuario en la planilla.
+
+**C7b. Par: la cantidad se redondea a 2 decimales**
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: "5046,557" da 5046,56 y "4776,755" da 4776,76 (mitad hacia arriba); "1,5" sigue igual; un precio o un importe con decimales de más siguen siendo ilegibles.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
+**C7c. Par: la tarea que no está en el maestro se migra igual**
+- Decisión del usuario (2026-10-13): las tareas de la planilla que no están en el maestro del campo (en su mayoría de cosecha) se migran igual, "forzado". Se corrige después en la forma de cargar en el campo, con el personal asignado.
+- Cómo: la Línea va con `tarea_id = 0` (constante `TAREA_SIN_MAESTRO`) y `tarea_nombre` = el nombre de la planilla tal cual, recortado a 150. No hace falta DDL: la columna es NOT NULL y 0 no es un id del maestro. El histórico no se edita, y el front muestra el nombre guardado.
+- La tarea no encontrada deja de omitir el grupo y pasa a ser un **aviso** (`tarea_no_encontrada`), contado por nombre en "no resueltos" como hoy, así sigue a la vista. Una tarea **ambigua** sigue omitiendo el grupo.
+- Cuando el campo tenga esas tareas, una corrida con `--reemplazar-cambiados` las pasa a su id real: el cambio de `tarea_id` cuenta como Comprobante cambiado.
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: una fila con tarea no encontrada se migra con `tarea_id` 0 y el nombre de la planilla, da el aviso y cuenta en no resueltos; una tarea ambigua sigue omitiendo; cuando el maestro suma la tarea, la corrida siguiente la informa como cambiada y con el flag la reemplaza al id real.
+- Verificación: `python -m pytest tests/facturacion -q`. Después, la simulación con la planilla corregida.
+- Hecho (ejecutor, 2026-10-13): 7 tests; `tests/facturacion` da 612. Una TAREA vacía no es un nombre que se pueda guardar: omite el grupo con el motivo nuevo `tarea_vacia`. El aviso de tarea sale sólo de los Comprobantes que se migran.
+- La planilla exportada de nuevo el 2026-10-13 vino en la codificación de Windows, con `;` y el punto como decimal ("116.64"): no se lee, porque "4776.752" no se distingue de un número con puntos de miles. Se pidió exportarla otra vez como la primera, desde Google Sheets.
+
+**Paso R1. Par: renombrar una tarea sin maestro cuenta como cambio** (revisión, high)
+- Hallazgo: `_firma_de_linea` compara `tarea_id` y deja afuera el nombre. En una tarea sin maestro el id es siempre `TAREA_SIN_MAESTRO` (0), así que el nombre es lo único que la distingue.
+- Escenario de falla: se migra "COSECHA X" con `tarea_id` 0; el usuario corrige la planilla a "COSECHA Y", que tampoco está en el maestro; la corrida siguiente la cuenta como igual y sale con 0, y la base queda con el nombre viejo, aun con `--reemplazar-cambiados` (y en un sin número, que sólo se recalcula si cambió). Pasa justo ahora: el usuario está corrigiendo la planilla para volver a correr.
+- Arreglo mínimo: en la firma de la Línea, sumar el nombre sólo cuando `tarea_id == TAREA_SIN_MAESTRO` (para las tareas con maestro sigue sin nombre: renombrar en el campo no es un cambio de la planilla). El nombre se compara ya recortado a `LARGO_TAREA_NOMBRE`, igual que se guarda, así los 353 de `testing` siguen dando iguales.
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: una tarea sin maestro migrada con un nombre y renombrada en la planilla (otra vez sin maestro) da cambiado; con `--reemplazar-cambiados` la Línea queda con el nombre nuevo; un sin número con la tarea renombrada se recalcula; la misma planilla dos veces sigue dando igual; una tarea con maestro cuyo nombre guardado difiere del maestro sigue dando igual.
+- Verificación: `python -m pytest tests/facturacion -q`.
+- Hecho (ejecutor, 2026-10-13): 4 tests (2 en rojo antes del arreglo, los del bug; los otros 2 protegen lo que no cambia); `tests/facturacion` da 616. La simulación contra `testing` después del arreglo sigue dando 353 iguales y diferencias 0. Un cambio sólo de mayúsculas o espacios en el nombre de una tarea sin maestro también cuenta como cambio: se guarda tal cual.
 
 ### 3.10 Pasos FRENADOS (los hace la sesión principal, con OK del usuario)
 
@@ -891,7 +979,7 @@ Todo arranca de `main` con la E1 mergeada.
 - **F6. Deploy** del backend y del front (swap de carpeta).
 - **F7. Histórico en producción**:
   - el CSV por scp a una ruta fuera del código;
-  - simular, revisar con el usuario, `--aplicar` tipeando el nombre de la base y volver a simular, que tiene que salir con 0;
+  - simular, revisar con el usuario, `--aplicar --confirmar-base <nombre>` y volver a simular, que tiene que salir con 0;
   - **borrar el CSV del VPS**.
 - **F8. Smoke en producción**:
   - el listado carga y un histórico abre en sólo lectura;
@@ -916,7 +1004,7 @@ Todo arranca de `main` con la E1 mergeada.
    - Vuelta atrás de la base, sólo si no hay datos reales: `DROP TABLE facturacion_adjunto; DROP TABLE facturacion_linea; DROP TABLE facturacion_comprobante;`, en ese orden.
    - Con datos reales: restaurar el respaldo.
 2. **Carga del histórico en producción (alto).** Escribe dato real en lote.
-   - Mitigación: simulación revisada, `--aplicar` con confirmación tipeada y una segunda simulación que sale con 0.
+   - Mitigación: simulación revisada, `--aplicar --confirmar-base <nombre>` y una segunda simulación que sale con 0.
    - Vuelta atrás, justo después de la carga: `DELETE FROM facturacion_comprobante WHERE es_historico = 1;`. Las Líneas caen por cascada, y si algún histórico ya tiene adjunto la FK lo frena, a propósito.
 3. **Datos de terceros.**
    - El CSV y la salida del script tienen nombres.
