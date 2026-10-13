@@ -3960,3 +3960,82 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 
 **Pendiente**
 - Que el usuario mire la columna Min/tancada en producción (en `docs/estado.md`).
+
+## 2026-10-13 — Migración del histórico de facturación (Facturación E2, BK-C)
+
+**Mergeado**
+- PR #99 (Preliquidador_AST_BK) — servicio y script para migrar el histórico de facturación
+  desde la planilla exportada (CSV) a Comprobantes históricos, con sus tests y el plan
+  actualizado. Sin PR hermano en el front: FT-A ya muestra los históricos en sólo lectura con
+  la marca "Histórico".
+
+**Por frontera**
+- Facturación: `app/modulos/facturacion/services/historico.py`, funciones puras sin acceso a
+  la base: lectura de la planilla (UTF-8, números es-AR), unidad y número con
+  `traducir_unidad` y `normalizar_numero`, agrupado por Cliente y FACT N° (o por Cliente y
+  FECHA A FACTURAR si no hay número), omitidos con motivo y fila, aplicar sin duplicar con la
+  misma clave de identidad que la carga a mano, y conciliación por Cliente y mes.
+  `scripts/migrar_historico_facturacion.py`: simula por defecto y saca un informe CSV;
+  `--aplicar` escribe (en producción exige además `--confirmar-base <nombre>`);
+  `--reemplazar-cambiados` reemplaza los históricos que cambiaron en la planilla; `--desde`
+  fija la fecha de corte (por defecto, 2025-04-01). Tests en `tests/facturacion/`.
+- Prod y Datos: sin migraciones; usa las tablas de la `facturacion/003`, ya en producción. El
+  histórico se aplicó sólo en `testing`.
+- Docs: plan `docs/superpowers/plans/2026-10-11-facturacion-e2.md`, secciones 3.1 y 3.9 (C1 a
+  C7c y R1).
+
+**Decisiones**
+- Simular por defecto y escribir sólo con `--aplicar`, con `--confirmar-base` en producción.
+  Porqué: es la guarda del script de la E1, la convención más nueva del módulo. Descartado:
+  la del script de tarifas, que pide tipear el nombre de la base.
+- La simulación corre la misma lógica que la carga, escribe dentro de la transacción y la
+  deshace. Porqué: no queda nada en la base; sólo se pierden números de autoincremento.
+  Descartado (en la revisión): una simulación que no escriba nada, porque no tiene escenario
+  de falla.
+- Idempotente: una segunda corrida no crea nada; un histórico que ya no está en la planilla
+  no se borra, se informa; un Comprobante cargado a mano con la misma clave hace omitir el
+  grupo; uno sin número se recalcula siempre, salvo que tenga adjuntos. Porqué no registrado
+  en el PR, más allá de no duplicar.
+- La comparación mira la fecha y el conjunto de Líneas, sin nombres. Porqué: los nombres son
+  copias del maestro. Excepción: la tarea sin maestro (R1).
+- Una tarea que no está en el maestro del campo se migra igual, con `tarea_id` 0 y el nombre
+  de la planilla, como aviso contado en "no resueltos". Porqué: decisión del usuario; son en
+  su mayoría tareas de cosecha que se van a corregir en la forma de cargar en el campo.
+  Descartado: omitir esos Comprobantes, que eran 84.
+- Un Cliente repetido en el maestro con uno solo activo usa el activo; si no hay uno solo
+  activo, el grupo se omite como ambiguo. FECHA FAC "-" cuenta como vacía. Porqué no
+  registrado en el PR.
+- Una cantidad con más de 2 decimales se redondea a 2, mitad hacia arriba; los negativos se
+  controlan antes. Un valor ilegible omite el grupo, no se adivina. Porqué no registrado en el
+  PR para el redondeo.
+- La planilla se descarga de Google Sheets como CSV (UTF-8, comas, números es-AR), sin pasar
+  por Excel. Porqué: con la codificación de Windows y el punto como decimal, un número con
+  decimales no se distingue de uno con puntos de miles.
+
+**Estado**
+- Deploy: no. Queda con OK (F7).
+- Migraciones: ninguna.
+- Pruebas: `python -m pytest` 1757 passed y 1 xfailed antes de la revisión; después del
+  arreglo R1, `tests/facturacion` 616 passed. Contra `testing`, con OK del usuario: simulación,
+  `--aplicar` y nueva simulación; 353 Comprobantes con 938 Líneas (14 sin número, 4 de ellos
+  pendientes de facturar; 134 Líneas con tarea sin maestro); la simulación siguiente da 0
+  nuevos, 353 iguales y diferencias 0, también después de R1. Quedan afuera 4 Comprobantes:
+  1 NO FACTURABLE, a propósito, y 3 por datos de la planilla. Smoke en el navegador contra
+  `testing`: listado con la marca "Histórico" y detalle en sólo lectura con el nombre de la
+  tarea sin maestro.
+- Revisión: dos ejes con verificador, una ronda (no toca zonas sensibles): 0 urgent, 1 high
+  arreglado, 9 minor sin tocar y 1 descartado. R1: renombrar en la planilla una tarea sin
+  maestro no contaba como cambio (su id es siempre 0); ahora el nombre entra en la
+  comparación sólo para esas tareas, con 4 tests. El detalle de los minor, en el cuerpo del
+  BK #99.
+- Vuelta atrás: revertir el merge (el script no corre solo y nada lo importa). Los históricos
+  migrados se distinguen por su marca y se pueden borrar con sus Líneas antes de que tengan
+  adjuntos; en producción, con respaldo y con OK.
+
+**Pendiente**
+- F7, con OK: deploy del backend y carga del histórico en producción (subir la planilla,
+  simular y revisar el informe, `--aplicar --confirmar-base`, simular otra vez, que tiene que
+  dar 0, y borrar la planilla del servidor). Después, F8: el smoke.
+- Los 3 Comprobantes que el usuario corrige en la planilla, con otra corrida.
+- Las tareas sin maestro: cuando el campo las tenga, una corrida con `--reemplazar-cambiados`
+  las pasa a su id.
