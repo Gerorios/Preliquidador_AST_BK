@@ -274,16 +274,24 @@ class AdjuntosService:
               archivo: BinaryIO, usuario_id: int | None = None) -> Adjunto:
         """Guarda el archivo y su fila, o nada.
 
-        El límite se cuenta con el Comprobante bloqueado y con un conteo
-        bloqueante: en MySQL una lectura común ve la foto del principio de la
-        transacción, y dos subidas a la vez pasarían las dos con 4 adjuntos;
-        la bloqueante ve lo último confirmado (en SQLite no hace nada). El
-        orden, primero el Comprobante y después sus adjuntos, es el mismo de
-        `quitar` y de `ComprobantesService.borrar`, para que no se traben
-        entre ellas. El archivo se escribe antes del commit y, si algo falla
-        después, se borra: nunca queda un archivo sin su fila."""
+        El límite se cuenta con el Comprobante bloqueado, en una transacción
+        nueva: dos subidas al mismo Comprobante no pasan las dos con 4
+        adjuntos (en SQLite el bloqueo no hace nada). Como `quitar` y
+        `ComprobantesService.borrar`, bloquea primero el Comprobante. El
+        archivo se escribe antes del commit y, si algo falla después, se
+        borra: nunca queda un archivo sin su fila."""
         destino = None
         try:
+            # Cierra la transacción que abrió la sesión del request (la
+            # lectura del usuario). En MySQL, la foto de REPEATABLE READ la
+            # arma la primera lectura común y una bloqueante no la crea: así
+            # el conteo de abajo, la primera lectura común después del
+            # bloqueo, ve lo último confirmado aunque otra subida haya
+            # commiteado mientras se esperaba. Contar con FOR UPDATE también
+            # lo veía, pero toma bloqueos de hueco en el índice de la FK y
+            # dos subidas a Comprobantes vecinos se trababan (error 1213).
+            # No se pierde nada: hasta acá la sesión sólo leyó.
+            self.db.rollback()
             comprobante = (self.db.query(Comprobante)
                            .filter(Comprobante.id == comprobante_id)
                            .with_for_update()
@@ -293,7 +301,6 @@ class AdjuntosService:
             carpeta = carpeta_adjuntos()
             cantidad = (self.db.query(func.count(Adjunto.id))
                         .filter(Adjunto.comprobante_id == comprobante_id)
-                        .with_for_update()
                         .scalar())
             if cantidad >= MAXIMO_POR_COMPROBANTE:
                 raise LimiteAdjuntos()

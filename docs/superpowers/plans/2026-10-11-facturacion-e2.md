@@ -767,6 +767,16 @@ Todo arranca de `main` con la E1 mergeada.
 - Ajuste del ejecutor, aceptado: el conteo bloqueante solo deja un deadlock posible en MySQL contra `quitar` y `ComprobantesService.borrar`, que bloquean en otro orden. Por eso las tres escrituras sobre los adjuntos de un Comprobante toman el mismo orden: primero el Comprobante (`with_for_update()`), después sus adjuntos. `quitar` bloquea el Comprobante antes de borrar la fila; `borrar` toma el Comprobante con `with_for_update()` y lee sus adjuntos con lectura bloqueante (si no, podría no ver uno recién subido y chocar con la FK). Suma `app/modulos/facturacion/services/comprobantes_service.py`. Se descartó cerrar la transacción antes del bloqueo con un `rollback()`: no agrega bloqueos, pero el porqué no se ve en el código.
 - Verificación: `python -m pytest tests/facturacion -q`.
 
+**Revisión de BK-B, ronda 2, sólo RB1 (sesión principal, 2026-10-13):** 0 urgent, 1 high, 4 minor (van al PR), 0 descartados.
+
+**RB2. Par: dos subidas a Comprobantes vecinos se traban (high)**
+- Hallazgo: el conteo bloqueante de RB1 (`SELECT COUNT ... WHERE comprobante_id = ? FOR UPDATE`) recorre el índice de la FK, secundario y no único. En REPEATABLE READ toma bloqueos de hueco, que no chocan entre sí, y el `INSERT` siguiente pide un bloqueo de intención de inserción, que choca con el hueco de la otra transacción.
+- Escenario: dos contadoras suben a la vez a los dos Comprobantes más nuevos. Las dos cuentan sobre el mismo hueco final y cada `INSERT` espera al de la otra: MySQL corta una con el error 1213 y ese pedido da 500. No se pierden datos (el archivo se borra en el `except`).
+- Arreglo mínimo: en `subir`, cerrar la transacción con `self.db.rollback()` antes del `FOR UPDATE` del Comprobante y volver a contar con una lectura común, sin `.with_for_update()`, con un comentario que diga el porqué. InnoDB arma la foto de REPEATABLE READ en la primera lectura común y una lectura bloqueante no la crea: el conteo que sigue al bloqueo del Comprobante ve lo último confirmado. Entre el cierre y el bloqueo no se lee nada (`usuario_id` llega como int) y `get_usuario_actual` sólo lee, así que el `rollback()` no pierde nada. Se corrige también el docstring de `subir` ("no se traben"). `quitar` y `borrar` no cambian: el mismo orden (primero el Comprobante) sigue valiendo y no insertan adjuntos. Archivos: `app/modulos/facturacion/services/adjuntos_service.py` y `tests/facturacion/test_adjuntos.py`.
+- Se reabre lo descartado en RB1 (el `rollback()` antes del bloqueo) porque el conteo bloqueante resultó tener este costo; el comentario en el código cubre el porqué que antes no se veía.
+- Test: SQLite no reproduce el deadlock. El test controla con el SQL compilado para MySQL que el conteo ya no lleva `FOR UPDATE`, y que antes del `SELECT ... FOR UPDATE` del Comprobante hay un `rollback`, con un espía sobre la sesión. Los cuatro tests de orden de RB1 se ajustan a esto.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
 ### 3.8 FT-B: Adjuntos (front)
 
 **FB1. Par: reglas de adjuntos**

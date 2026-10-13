@@ -626,13 +626,15 @@ def test_sin_carpeta_un_comprobante_con_adjuntos_no_se_borra(
     assert archivos(carpeta) == [a.nombre_en_disco]
 
 
-# ═══ RB1: el mismo orden de bloqueo en las tres escrituras ══════════════════
-# En MySQL (REPEATABLE READ) el conteo sin bloqueo lee una foto vieja y deja
-# pasar un 6.º adjunto con dos subidas a la vez. Con el conteo bloqueante, las
-# tres escrituras sobre los adjuntos de un Comprobante tienen que bloquear en
-# el mismo orden, primero el Comprobante y después sus adjuntos, o pueden
-# trabarse entre ellas (deadlock). SQLite no bloquea ni reproduce la carrera:
-# estos tests controlan qué lecturas piden el bloqueo y en qué orden.
+# ═══ RB1 y RB2: el orden de bloqueo en las tres escrituras ══════════════════
+# En MySQL (REPEATABLE READ) el conteo de `subir` con una foto vieja deja pasar
+# un 6.º adjunto con dos subidas a la vez (RB1). Contarlo con FOR UPDATE toma
+# bloqueos de hueco en el índice de la FK, y dos subidas a Comprobantes
+# vecinos se traban (RB2): por eso `subir` cierra la transacción antes de
+# bloquear el Comprobante y cuenta con una lectura común, que así ve lo último
+# confirmado. Las tres escrituras bloquean primero el Comprobante. SQLite no
+# bloquea ni reproduce las carreras: estos tests controlan qué lecturas piden
+# el bloqueo y en qué orden.
 
 def _sql_emitido(db) -> list[str]:
     """Las consultas de la sesión, compiladas con el dialecto de MySQL (el
@@ -660,10 +662,22 @@ def _primera(emitido, *partes) -> int:
     raise AssertionError(f"ninguna consulta con {partes}: {emitido}")
 
 
+def _espiar_rollback(db, emitido) -> None:
+    """Anota cada `rollback()` de la sesión en la misma lista. Con un espía
+    y no con el evento: sin transacción abierta, el evento no salta."""
+    original = db.rollback
+
+    def _rollback():
+        emitido.append("ROLLBACK")
+        original()
+
+    db.rollback = _rollback
+
+
 BLOQUEA_COMPROBANTE = ("FROM facturacion_comprobante", "FOR UPDATE")
 
 
-def test_subir_cuenta_los_adjuntos_con_lectura_bloqueante_despues_del_comprobante(
+def test_subir_bloquea_el_comprobante_y_cuenta_sus_adjuntos_sin_bloquear(
         servicio, db, carpeta):
     c = comprobante(db)
     emitido = _sql_emitido(db)
@@ -671,9 +685,25 @@ def test_subir_cuenta_los_adjuntos_con_lectura_bloqueante_despues_del_comprobant
     subir(servicio, c)
 
     comprobante_ = _primera(emitido, *BLOQUEA_COMPROBANTE)
-    conteo = _primera(emitido, "count(", "FROM facturacion_adjunto", "FOR UPDATE")
+    conteo = _primera(emitido, "count(", "FROM facturacion_adjunto")
     alta = _primera(emitido, "INSERT INTO facturacion_adjunto")
     assert comprobante_ < conteo < alta
+    assert "FOR UPDATE" not in emitido[conteo]
+
+
+def test_subir_cierra_la_transaccion_antes_de_bloquear_el_comprobante(
+        servicio, db, carpeta):
+    c = comprobante(db)
+    # Como `get_usuario_actual` en el request: una lectura común antes, que
+    # en MySQL fijaría la foto.
+    db.query(Comprobante).count()
+    emitido = _sql_emitido(db)
+    _espiar_rollback(db, emitido)
+
+    subir(servicio, c)
+
+    assert "ROLLBACK" in emitido, emitido
+    assert emitido.index("ROLLBACK") < _primera(emitido, *BLOQUEA_COMPROBANTE)
 
 
 def test_quitar_bloquea_el_comprobante_antes_de_borrar_el_adjunto(
