@@ -1,6 +1,6 @@
 """Migración del histórico: lectura de la planilla y clasificación de sus
-filas, y su aplicación a la base (plan de la E2, sección 3.1, "Migración del
-histórico", y pares C1 a C4 de la sección 3.9).
+filas, su aplicación a la base y la conciliación (plan de la E2, sección 3.1,
+"Migración del histórico", y pares C1 a C5 de la sección 3.9).
 
 Lo que cuidan estos tests:
 - que un número es-AR se lea igual venga como venga ("1.234,56", "$ 1.234,56",
@@ -14,7 +14,9 @@ Lo que cuidan estos tests:
   así nunca queda un Comprobante a medias y la conciliación cuadra;
 - que aplicar dos veces no duplique, que lo cambiado no se pise sin el flag y
   que una fila nunca cuente dos veces (sin número que gana número, o el mismo
-  número cargado a mano).
+  número cargado a mano);
+- que la conciliación cierre en cada Cliente y mes (planilla = migrable +
+  omitido) y que la salida sea 0 sólo sin nada pendiente ni diferencias.
 
 Datos inventados.
 """
@@ -38,6 +40,8 @@ from app.modulos.facturacion.services.historico import (
     ValorIlegible,
     aplicar,
     clasificar,
+    codigo_de_salida,
+    conciliar,
     leer_fecha,
     leer_numero_ar,
     leer_numero_comprobante,
@@ -915,3 +919,148 @@ def test_un_sin_numero_cuyas_filas_salen_omitidas_no_se_borra(db):
     assert resultado.conteos()["sin_numero_omitidos"] == 1
     db.expire_all()
     assert [li.tarea_id for li in _por_clave(db, "S|1|2025-09-01").lineas] == [10, 11]
+
+
+# ─── Conciliación ───────────────────────────────────────────────────────────
+
+def _corrida(db, *filas):
+    """Una corrida con --aplicar: clasifica, aplica, concilia y confirma."""
+    clasificacion = _clasificar(*filas)
+    resultado = aplicar(db, clasificacion)
+    conciliacion = conciliar(db, clasificacion, resultado, desde=DESDE)
+    db.commit()
+    return resultado, conciliacion
+
+
+def _celdas(conciliacion):
+    return {
+        clave: (c.planilla, c.sin_numero, c.pendiente, dict(c.omitido),
+                c.migrable, c.en_base, c.diferencia)
+        for clave, c in conciliacion.celdas.items()
+    }
+
+
+CERO = Decimal("0")
+
+PLANILLA_CONCILIACION = (
+    # Migrables.
+    _fila(2, numero="10", importe="25"),
+    _fila(3, numero="10", importe="1.000,50", fecha_a_facturar="16/9/2025"),
+    _fila(4, numero="", importe="7"),
+    _fila(5, numero="", importe="11", fecha_a_facturar="1/8/2026"),
+    # Grupo omitido por UM: sus dos filas, con la buena incluida.
+    _fila(6, numero="11", importe="3"),
+    _fila(7, numero="11", importe="4", um="KG"),
+    # Importe ilegible: esa fila no es planilla; la otra sí, y omitida.
+    _fila(8, numero="12", importe="5"),
+    _fila(9, numero="12", importe="#VALUE!"),
+    # Cliente sin resolver: su celda es la del nombre de la planilla.
+    _fila(10, numero="13", importe="2", cliente="cliente  z"),
+    # Antes de desde: esa fila no es planilla; la otra del grupo sí, omitida.
+    _fila(11, numero="14", importe="100", fecha_a_facturar="16/3/2025"),
+    _fila(12, numero="14", importe="6", fecha_a_facturar="1/4/2025"),
+    # Sin FECHA A FACTURAR: no tiene mes, va a la celda "sin mes".
+    _fila(13, numero="", importe="9", fecha_a_facturar=""),
+)
+
+
+def test_planilla_es_migrable_mas_omitido_en_cada_cliente_y_mes(db):
+    _resultado, conciliacion = _corrida(db, *PLANILLA_CONCILIACION)
+
+    assert _celdas(conciliacion) == {
+        ("CLIENTE UNO", "2025-09"): (
+            Decimal("1044.50"), Decimal("7"), CERO,
+            {h.UM_NO_TRADUCIBLE: Decimal("7"), h.IMPORTE_ILEGIBLE: Decimal("5")},
+            Decimal("1032.50"), Decimal("1032.50"), CERO,
+        ),
+        ("CLIENTE UNO", "2026-08"): (
+            Decimal("11"), Decimal("11"), Decimal("11"), {},
+            Decimal("11"), Decimal("11"), CERO,
+        ),
+        ("CLIENTE Z", "2025-09"): (
+            Decimal("2"), CERO, CERO, {h.CLIENTE_NO_ENCONTRADO: Decimal("2")},
+            CERO, CERO, CERO,
+        ),
+        ("CLIENTE UNO", "2025-04"): (
+            Decimal("6"), CERO, CERO, {h.ANTERIOR_A_DESDE: Decimal("6")},
+            CERO, CERO, CERO,
+        ),
+        ("CLIENTE UNO", h.SIN_MES): (
+            Decimal("9"), CERO, CERO, {h.SIN_NUMERO_SIN_FECHA: Decimal("9")},
+            CERO, CERO, CERO,
+        ),
+    }
+    for celda in conciliacion.celdas.values():
+        assert celda.planilla == celda.migrable + sum(celda.omitido.values())
+
+
+def test_despues_de_aplicar_no_hay_diferencias_y_la_salida_es_0(db):
+    _corrida(db, *PLANILLA_CONCILIACION)
+
+    resultado, conciliacion = _corrida(db, *PLANILLA_CONCILIACION)
+
+    assert resultado.nuevos == []
+    assert conciliacion.con_diferencia() == []
+    assert codigo_de_salida(resultado, conciliacion) == 0
+
+
+def test_la_primera_corrida_sale_con_1_por_los_nuevos(db):
+    resultado, conciliacion = _corrida(db, *PLANILLA_CONCILIACION)
+
+    assert conciliacion.con_diferencia() == []
+    assert codigo_de_salida(resultado, conciliacion) == 1
+
+
+def test_un_comprobante_borrado_de_la_base_deja_diferencia_y_salida_1(db):
+    _corrida(db, *PLANILLA_CONCILIACION)
+    clasificacion = _clasificar(*PLANILLA_CONCILIACION)
+    resultado = aplicar(db, clasificacion)
+    assert resultado.nuevos == []
+
+    db.delete(_por_clave(db, "H|1|10"))
+    db.flush()
+    conciliacion = conciliar(db, clasificacion, resultado, desde=DESDE)
+
+    [(clave, celda)] = conciliacion.con_diferencia()
+    assert clave == ("CLIENTE UNO", "2025-09")
+    assert celda.en_base == Decimal("7")
+    assert celda.diferencia == Decimal("1025.50")
+    assert codigo_de_salida(resultado, conciliacion) == 1
+
+
+def test_un_sin_numero_con_filas_omitidas_deja_diferencia_y_salida_1(db):
+    _corrida(db, _fila(2, numero="", importe="7"))
+
+    resultado, conciliacion = _corrida(db, _fila(2, numero="", importe="7", um="KG"))
+
+    assert resultado.sin_numero_omitidos == ["S|1|2025-09-01"]
+    [(_clave, celda)] = conciliacion.con_diferencia()
+    assert (celda.migrable, celda.en_base, celda.diferencia) == (
+        CERO, Decimal("7"), Decimal("-7"))
+    assert codigo_de_salida(resultado, conciliacion) == 1
+
+
+def test_lo_cargado_a_mano_cuenta_como_omitido_y_no_deja_diferencia(db):
+    _cargado_a_mano(db, "factura")
+
+    _corrida(db, _fila(2, numero="10", importe="25"))
+    resultado, conciliacion = _corrida(db, _fila(2, numero="10", importe="25"))
+
+    celda = conciliacion.celdas[("CLIENTE UNO", "2025-09")]
+    assert dict(celda.omitido) == {h.CARGADO_A_MANO: Decimal("25")}
+    assert celda.diferencia == CERO
+    assert codigo_de_salida(resultado, conciliacion) == 0
+
+
+@pytest.mark.parametrize("pendiente", [
+    {"nuevos": ["H|1|10"]},
+    {"cambiados": ["H|1|10"]},
+    {"reemplazados": ["H|1|10"]},
+    {"sin_numero_borrados": ["S|1|2025-09-01"]},
+    {"sin_numero_bloqueados": ["S|1|2025-09-01"]},
+])
+def test_algo_pendiente_en_la_base_hace_que_la_salida_no_sea_0(db, pendiente):
+    sin_diferencias = conciliar(db, _clasificar(), h.ResultadoAplicar(), desde=DESDE)
+    assert codigo_de_salida(h.ResultadoAplicar(), sin_diferencias) == 0
+
+    assert codigo_de_salida(h.ResultadoAplicar(**pendiente), sin_diferencias) == 1

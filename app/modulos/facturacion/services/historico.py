@@ -3,7 +3,7 @@ sección 3.1, "Migración del histórico").
 
 Toda la lógica vive acá, sin base de campo, para probarla con datos
 inventados y SQLite; el script `scripts/migrar_historico_facturacion.py` es
-una capa fina encima. Tiene tres partes:
+una capa fina encima. Tiene cuatro partes:
 - la lectura de la planilla exportada: el CSV, los números es-AR, las fechas,
   la UM y el número del Comprobante. Lo que no se puede leer se marca ilegible
   y no se adivina;
@@ -11,7 +11,10 @@ una capa fina encima. Tiene tres partes:
   maestros que recibe y agrupa las filas en Comprobantes. Una Línea mala omite
   su Comprobante entero con su motivo, y queda listado;
 - la aplicación (`aplicar`): lleva los grupos a la base propia sin duplicar,
-  por `clave_identidad`. No confirma la transacción: lo decide el script.
+  por `clave_identidad`. No confirma la transacción: lo decide el script;
+- la conciliación (`conciliar` y `codigo_de_salida`): planilla, omitido y
+  base por Cliente y mes, que es como se acepta la migración. No imprime
+  nada: la consola y el informe son del script.
 """
 import csv
 import re
@@ -787,3 +790,139 @@ def aplicar(db: Session, clasificacion: Clasificacion,
 
     db.flush()
     return resultado
+
+
+# ─── Conciliación por (Cliente, mes) ────────────────────────────────────────
+
+# Motivo de omisión que pone aplicar, no la clasificación: el mismo Cliente y
+# número ya tiene una Factura cargada a mano.
+CARGADO_A_MANO = "cargado_a_mano"
+
+# La celda de las filas sin FECHA A FACTURAR legible: no tienen mes, y sin
+# ellas la planilla de su Cliente no cerraría. Siempre están omitidas.
+SIN_MES = "sin mes"
+
+
+@dataclass
+class Celda:
+    """Las sumas de importe de un Cliente en un mes (el de FECHA A FACTURAR,
+    pregunta 10).
+
+    - `planilla`: las filas con importe legible, desde la fecha de inicio;
+    - `sin_numero`: la parte de lo migrable que va a un Comprobante sin
+      número, y `pendiente`, la parte de esa posterior al corte (informativa);
+    - `omitido`: por motivo;
+    - `en_base`: las Líneas de los históricos de la base."""
+
+    planilla: Decimal = Decimal("0")
+    sin_numero: Decimal = Decimal("0")
+    pendiente: Decimal = Decimal("0")
+    omitido: Counter = field(default_factory=Counter)
+    en_base: Decimal = Decimal("0")
+
+    @property
+    def migrable(self) -> Decimal:
+        return self.planilla - sum(self.omitido.values(), Decimal("0"))
+
+    @property
+    def diferencia(self) -> Decimal:
+        return self.migrable - self.en_base
+
+
+@dataclass
+class Conciliacion:
+    """Las celdas por (Cliente, mes). El Cliente es el nombre normalizado
+    (sin acentos, espacios colapsados, mayúsculas): el de la planilla para
+    las filas, y la copia guardada para la base, que coinciden porque el
+    Cliente se resuelve por ese mismo nombre. Así una fila con un Cliente que
+    no se resolvió también tiene su celda. El mes es "AAAA-MM", o SIN_MES."""
+
+    celdas: dict[tuple[str, str], Celda] = field(default_factory=dict)
+
+    def celda(self, cliente: str, mes: str) -> Celda:
+        return self.celdas.setdefault((cliente, mes), Celda())
+
+    def con_diferencia(self) -> list[tuple[tuple[str, str], Celda]]:
+        """Sólo las celdas con diferencia distinta de 0, ordenadas."""
+        return sorted(
+            ((clave, c) for clave, c in self.celdas.items() if c.diferencia != 0),
+            key=lambda par: par[0],
+        )
+
+
+def _mes(fecha: date) -> str:
+    return f"{fecha.year:04d}-{fecha.month:02d}"
+
+
+def conciliar(db: Session, clasificacion: Clasificacion, resultado: ResultadoAplicar,
+              desde: date) -> Conciliacion:
+    """Planilla, omitido y base por Cliente y mes.
+
+    Cada fila del CSV con importe legible cae en una sola celda, como migrable
+    o como omitida, así planilla = migrable + omitido en cada una:
+    - las de los grupos: migrables, salvo las de un grupo que aplicar omitió
+      porque ya estaba cargado a mano (motivo CARGADO_A_MANO);
+    - las de los omitidos, con el motivo de su grupo. Una fila anterior a
+      `desde` no es planilla; una sin FECHA A FACTURAR legible va a SIN_MES.
+    `en_base` lee la sesión: corrida después de aplicar, ve lo que quedaría
+    en la base (confirmado o no)."""
+    conciliacion = Conciliacion()
+    a_mano = {clave_de_grupo(g) for g in resultado.omitidos_por_carga_a_mano}
+
+    for grupo in clasificacion.grupos:
+        cliente = normalizar_texto(grupo.cliente_nombre)
+        a_mano_este = clave_de_grupo(grupo) in a_mano
+        for linea in grupo.lineas:
+            celda = conciliacion.celda(cliente, _mes(linea.fecha))
+            celda.planilla += linea.importe
+            if a_mano_este:
+                celda.omitido[CARGADO_A_MANO] += linea.importe
+                continue
+            if grupo.numero is None:
+                celda.sin_numero += linea.importe
+                if grupo.pendiente_de_facturar:
+                    celda.pendiente += linea.importe
+
+    for omitido in clasificacion.omitidos:
+        for fila in omitido.filas:
+            try:
+                importe = leer_numero_ar(fila.importe, IMPORTE[1])
+            except ValorIlegible:
+                continue
+            if importe is None:
+                continue
+            try:
+                fecha = leer_fecha(fila.fecha_a_facturar)
+            except ValorIlegible:
+                fecha = None
+            if fecha is not None and fecha < desde:
+                continue
+            mes = _mes(fecha) if fecha is not None else SIN_MES
+            celda = conciliacion.celda(normalizar_texto(fila.cliente), mes)
+            celda.planilla += importe
+            celda.omitido[omitido.motivo] += importe
+
+    lineas_en_base = (
+        db.query(Comprobante.cliente_nombre, LineaComprobante.fecha,
+                 LineaComprobante.importe)
+        .join(LineaComprobante, LineaComprobante.comprobante_id == Comprobante.id)
+        .filter(Comprobante.es_historico.is_(True))
+    )
+    for cliente_nombre, fecha, importe in lineas_en_base:
+        celda = conciliacion.celda(normalizar_texto(cliente_nombre), _mes(fecha))
+        celda.en_base += Decimal(importe)
+
+    return conciliacion
+
+
+def codigo_de_salida(resultado: ResultadoAplicar, conciliacion: Conciliacion) -> int:
+    """0 sólo si no queda nada nuevo ni cambiado y todas las diferencias son 0.
+
+    "Cambiado" incluye lo que aplicar reemplazó o borró y los sin número
+    bloqueados por Adjuntos: en una simulación es trabajo pendiente, y una
+    segunda simulación después de aplicar no tiene ninguno."""
+    pendiente = (
+        resultado.nuevos or resultado.cambiados or resultado.reemplazados
+        or resultado.sin_numero_borrados or resultado.bloqueado
+    )
+    return 1 if pendiente or conciliacion.con_diferencia() else 0
