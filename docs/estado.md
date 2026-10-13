@@ -7,6 +7,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 ## En curso
 
 - Facturación E2 (Comprobantes, adjuntos e histórico), fase 3 (ejecución), carril completo. Plan: `docs/superpowers/plans/2026-10-11-facturacion-e2.md`.
+- Preliquidación: columna "Min/tancada" (rendimiento de tancada) en Tancadas vs Jornal, fase 3 (ejecución), carril completo. Plan: `docs/superpowers/plans/2026-10-13-rendimiento-tancadas.md` (está en la rama `feature/rendimiento-tancadas` del backend; llega a `main` con el PR 1). Worktrees `.claude/worktrees/rendimiento-tancadas` en los dos repos. Próximo paso: A0 a A2 (back) y B1 y B2 (front); las 4 preguntas del plan quedaron con sus defaults (OK del usuario, 2026-10-13).
 
 ## Próximo paso
 
