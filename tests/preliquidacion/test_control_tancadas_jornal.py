@@ -47,7 +47,10 @@ def _linea(db, preliq, tarea, cliente, finca, tancadas, hsjornal, hsmaquina, nom
     l = PreliquidacionLinea(
         preliquidacion_id=preliq.id,
         nombre_tarea=tarea, nombre_cliente=cliente, nombre_finca=finca,
-        tancadas=Decimal(tancadas), hsjornal=Decimal(hsjornal),
+        # tancadas también es nullable en el modelo: None se guarda como null
+        # (una línea pagada por tancada puede no traer tancadas cargadas).
+        tancadas=Decimal(tancadas) if tancadas is not None else None,
+        hsjornal=Decimal(hsjornal),
         # hsmaquina es nullable en el modelo: None se guarda como null.
         hsmaquina=Decimal(hsmaquina) if hsmaquina is not None else None,
         unidades=Decimal("0"), importe_total=Decimal("0"), linea_incompleta=False,
@@ -119,6 +122,10 @@ def test_ejemplo_planilla_valor_hora_maquina_vs_referencia(db):
             assert campo not in d
     assert fila["sin_hs_maquina"] is False
     assert tot["filas_sin_hs_maquina"] == 0
+    # Rendimiento de tancada: 34 hs máquina × 60 ÷ 60 tancadas = 34 min. Con
+    # ÷2 daría 68,0 y con las hs de jornal 54,0: ninguna de las dos va.
+    assert fila["minutos_por_tancada"] == 34.0
+    assert tot["minutos_por_tancada"] == 34.0
 
 
 def test_control_tancadas_calcula_valores_y_diff(db):
@@ -185,6 +192,9 @@ def test_sin_valor_hora_pulv_devuelve_null_no_error(db):
         assert d["valor_hora_maquina"] == 8000.0
     assert tot["valor_hora_referencia"] is None
     assert tot["variacion"] is None
+    # los minutos por tancada no dependen del valor hora: 5 × 60 ÷ 40 = 7,5
+    assert fila["minutos_por_tancada"] == 7.5
+    assert tot["minutos_por_tancada"] == 7.5
 
 
 def test_valor_hora_pulv_cero_deja_variacion_en_null(db):
@@ -250,6 +260,8 @@ def test_fila_sin_hs_maquina_no_entra_en_la_variacion(db, hsmaquina_b):
 
     assert fila_a["sin_hs_maquina"] is False
     assert fila_a["valor_hora_maquina"] == 10000.0
+    # A: 10 hs máquina × 60 ÷ 50 tancadas = 12 min
+    assert fila_a["minutos_por_tancada"] == 12.0
 
     # B: datos crudos presentes
     assert fila_b["tancadas"] == 20.0
@@ -261,6 +273,8 @@ def test_fila_sin_hs_maquina_no_entra_en_la_variacion(db, hsmaquina_b):
     assert fila_b["valor_hora_maquina"] is None
     assert fila_b["variacion"] is None
     assert fila_b["sin_hs_maquina"] is True
+    # sin hs máquina no hay minutos por tancada: null, no 0
+    assert fila_b["minutos_por_tancada"] is None
     # la referencia se repite igual en todas las filas
     assert fila_b["valor_hora_referencia"] == 6500.0
 
@@ -273,6 +287,92 @@ def test_fila_sin_hs_maquina_no_entra_en_la_variacion(db, hsmaquina_b):
     assert tot["valor_hora_referencia"] == 6500.0
     assert tot["variacion"] == pytest.approx((10000 - 6500) / 6500, abs=1e-4)
     assert tot["filas_sin_hs_maquina"] == 1
+    # minutos por tancada del total sólo con las filas que los tienen: 10 ×
+    # 60 ÷ 50 = 12 (con las 20 tancadas de B adentro daría 8,57)
+    assert tot["minutos_por_tancada"] == 12.0
+
+
+def test_minutos_por_tancada_redondea_a_dos_decimales(db):
+    """1 hs máquina × 60 ÷ 7 tancadas = 8,5714… → 8,57."""
+    preliq = _preliq(db, valor_hora_pulv=None)
+    linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                   tancadas="7", hsjornal="2", hsmaquina="1")
+    _aplicar_tancada(db, linea, precio=Decimal("1000"), cantidad=Decimal("7"))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert res["filas"][0]["minutos_por_tancada"] == 8.57
+
+
+@pytest.mark.parametrize("tancadas_d", ["0", None], ids=["tancadas_cero", "tancadas_null"])
+def test_fila_sin_tancadas_no_tiene_minutos_por_tancada(db, tancadas_d):
+    """El motor paga la tancada aunque la línea no traiga tancadas (concepto
+    con cantidad 0), así que puede haber una fila con hs máquina y sin
+    tancadas (0 o null). No tiene minutos por tancada (null, sin
+    ZeroDivisionError), pero sigue teniendo su valor hora pagado y no queda
+    marcada `sin_hs_maquina`: eso no cambia."""
+    preliq = _preliq(db, valor_hora_pulv=Decimal("5000"))
+    # Fila A: 10 hs máquina, 50 tancadas → 12 min por tancada
+    la = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                tancadas="50", hsjornal="12", hsmaquina="10")
+    _aplicar_tancada(db, la, cantidad=Decimal("50"))
+    # Fila D: 4 hs máquina, sin tancadas; el concepto de tancada con cantidad 0
+    ld = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 3",
+                tancadas=tancadas_d, hsjornal="5", hsmaquina="4")
+    _aplicar_tancada(db, ld, cantidad=Decimal("0"))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    fila_a = next(f for f in res["filas"] if f["nombre_finca"] == "FINCA 1")
+    fila_d = next(f for f in res["filas"] if f["nombre_finca"] == "FINCA 3")
+    assert fila_a["minutos_por_tancada"] == 12.0
+    assert fila_d["minutos_por_tancada"] is None
+    assert fila_d["sin_hs_maquina"] is False
+    # importe 0 ÷ 4 hs máquina: el valor hora existe y es 0, como hoy
+    assert fila_d["valor_hora_maquina"] == 0.0
+    # el total usa sólo las filas con minutos por tancada: 10 × 60 ÷ 50 = 12
+    # (con las 4 hs máquina de D adentro daría 16,8)
+    assert res["totales"]["minutos_por_tancada"] == 12.0
+
+
+def test_minutos_por_tancada_del_total_sale_de_las_sumas(db):
+    """El total sale de Σ hs máquina × 60 ÷ Σ tancadas, no del promedio de
+    las filas: A (10 hs, 50 tancadas → 12) y C (6 hs, 10 tancadas → 36) dan
+    16 × 60 ÷ 60 = 16 (el promedio daría 24)."""
+    preliq = _preliq(db, valor_hora_pulv=None)
+    la = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                tancadas="50", hsjornal="12", hsmaquina="10")
+    _aplicar_tancada(db, la, cantidad=Decimal("50"))
+    lc = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 2",
+                tancadas="10", hsjornal="8", hsmaquina="6")
+    _aplicar_tancada(db, lc, cantidad=Decimal("10"))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert res["totales"]["minutos_por_tancada"] == 16.0
+
+
+@pytest.mark.parametrize(
+    "tancadas, hsmaquina",
+    [("20", "0"), ("0", "4")],
+    ids=["sin_hs_maquina", "sin_tancadas"],
+)
+def test_minutos_por_tancada_del_total_es_null_sin_filas_con_rendimiento(db, tancadas, hsmaquina):
+    """Si ninguna fila tiene minutos por tancada, el total es null (no 0) y
+    no hay ZeroDivisionError."""
+    preliq = _preliq(db, valor_hora_pulv=None)
+    linea = _linea(db, preliq, "PULV", "CLIENTE A", "FINCA 1",
+                   tancadas=tancadas, hsjornal="5", hsmaquina=hsmaquina)
+    _aplicar_tancada(db, linea, cantidad=Decimal(tancadas))
+    svc = PreliquidacionService(db)
+
+    res = svc.control_tancadas_jornal(preliq.id)
+
+    assert res["filas"][0]["minutos_por_tancada"] is None
+    assert res["totales"]["minutos_por_tancada"] is None
 
 
 def test_solo_incluye_lineas_pagadas_por_tancada(db):
@@ -307,6 +407,8 @@ def test_excluye_lineas_de_empleados_mensualizados(db, mensualizado):
     assert res["filas"] == []
     # su pago tampoco entra en el total
     assert res["totales"]["importe_pagado"] == 0.0
+    # tabla vacía: sin con qué calcular, null
+    assert res["totales"]["minutos_por_tancada"] is None
 
 
 def test_linea_sin_cuit_no_se_excluye(db, mensualizado):

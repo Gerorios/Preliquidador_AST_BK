@@ -1267,7 +1267,10 @@ class PreliquidacionService:
         pago la toma tal como viene y el control hace lo mismo: no hay ningún
         ÷2 (ver glosario: Tancada). Las hs de jornal se muestran como dato y no
         entran en la cuenta. Una fila sin hs máquina (0 o null) se muestra,
-        marcada `sin_hs_maquina`, sin valor hora pagado ni variación."""
+        marcada `sin_hs_maquina`, sin valor hora pagado ni variación.
+        También da los minutos de máquina por tancada (hs máquina × 60 ÷
+        tancadas, sin ÷2): null en una fila sin hs máquina o sin tancadas, y en
+        el total salen de las sumas de las filas que los tienen."""
         preliq = self.db.query(Preliquidacion).filter(
             Preliquidacion.id == preliq_id
         ).first()
@@ -1329,6 +1332,11 @@ class PreliquidacionService:
         # Sólo filas con hs máquina > 0: son las únicas que tienen valor hora
         # pagado; meter el importe de las otras inflaría el total (ADR-0017).
         timporte_con_hsm = thm_con_hsm = 0.0
+        # Sólo filas con minutos por tancada (hs máquina > 0 y tancadas > 0),
+        # mismo criterio que el valor hora (ADR-0017): las sin hs máquina lo
+        # deflacionarían (suman tancadas sin horas) y las sin tancadas lo
+        # inflarían (suman horas sin tancadas).
+        thm_con_min = tt_con_min = 0.0
         filas_sin_hsm = 0
         for cliente, finca, tarea, suma_tancadas, suma_hsjornal, suma_hsmaquina in agregados:
             importe_pagado, cantidad_pagada = pagos.get((cliente, finca, tarea), [0.0, 0.0])
@@ -1342,6 +1350,15 @@ class PreliquidacionService:
             sin_hs_maquina = not hsmaquina > 0
             # Importe pagado tal como lo pagó el motor, sin ÷2 (ADR-0017).
             valor_hora_maquina = None if sin_hs_maquina else importe_pagado / hsmaquina
+            # Rendimiento de tancada: minutos de máquina por tancada, con la
+            # tancada tal como se registra (sin ÷2, ver glosario: Tancada).
+            # Sin hs máquina o sin tancadas no hay rendimiento: null, no 0. El
+            # motor paga la tancada aunque la línea no traiga tancadas, así que
+            # hay filas con hs máquina y tancadas en 0: la guarda evita dividir
+            # por 0 sin tocar su valor hora ni su marca `sin_hs_maquina`.
+            minutos_por_tancada = (
+                hsmaquina * 60 / tancadas if not sin_hs_maquina and tancadas > 0 else None
+            )
 
             tt += tancadas; thj += hsjornal; thm += hsmaquina
             timporte += importe_pagado; tcant += cantidad_pagada
@@ -1349,6 +1366,8 @@ class PreliquidacionService:
                 filas_sin_hsm += 1
             else:
                 timporte_con_hsm += importe_pagado; thm_con_hsm += hsmaquina
+            if minutos_por_tancada is not None:
+                thm_con_min += hsmaquina; tt_con_min += tancadas
 
             filas.append({
                 "nombre_cliente": cliente, "nombre_finca": finca,
@@ -1356,6 +1375,7 @@ class PreliquidacionService:
                 "tancadas": round(tancadas, 2),
                 "hsjornal": round(hsjornal, 2),
                 "hsmaquina": round(hsmaquina, 2),
+                "minutos_por_tancada": round(minutos_por_tancada, 2) if minutos_por_tancada is not None else None,
                 "precio": round(precio, 2),
                 "importe_pagado": round(importe_pagado, 2),
                 "valor_hora_maquina": round(valor_hora_maquina, 2) if valor_hora_maquina is not None else None,
@@ -1371,12 +1391,16 @@ class PreliquidacionService:
         # hs máquina (NO promedio de las variaciones, que mentiría).
         tp = (timporte / tcant) if tcant else 0.0
         tvhm = (timporte_con_hsm / thm_con_hsm) if thm_con_hsm > 0 else None
+        # Minutos por tancada del total sobre las sumas de las filas que los
+        # tienen (NO promedio de las filas); sin ninguna, null.
+        tmin = (thm_con_min * 60 / tt_con_min) if tt_con_min > 0 else None
 
         return {
             "valor_hora_pulv": float(valor_hora_pulv) if valor_hora_pulv is not None else None,
             "filas": filas,
             "totales": {
                 "tancadas": round(tt, 2), "hsjornal": round(thj, 2), "hsmaquina": round(thm, 2),
+                "minutos_por_tancada": round(tmin, 2) if tmin is not None else None,
                 "precio": round(tp, 2),
                 "importe_pagado": round(timporte, 2),
                 "valor_hora_maquina": round(tvhm, 2) if tvhm is not None else None,
