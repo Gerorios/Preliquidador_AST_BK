@@ -941,6 +941,8 @@ Todo arranca de `main` con la E1 mergeada.
 - Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
 - Rojo: una fila con tarea no encontrada se migra con `tarea_id` 0 y el nombre de la planilla, da el aviso y cuenta en no resueltos; una tarea ambigua sigue omitiendo; cuando el maestro suma la tarea, la corrida siguiente la informa como cambiada y con el flag la reemplaza al id real.
 - Verificación: `python -m pytest tests/facturacion -q`. Después, la simulación con la planilla corregida.
+- Hecho (ejecutor, 2026-10-13): 7 tests; `tests/facturacion` da 612. Una TAREA vacía no es un nombre que se pueda guardar: omite el grupo con el motivo nuevo `tarea_vacia`. El aviso de tarea sale sólo de los Comprobantes que se migran.
+- La planilla exportada de nuevo el 2026-10-13 vino en la codificación de Windows, con `;` y el punto como decimal ("116.64"): no se lee, porque "4776.752" no se distingue de un número con puntos de miles. Se pidió exportarla otra vez como la primera, desde Google Sheets.
 
 ### 3.10 Pasos FRENADOS (los hace la sesión principal, con OK del usuario)
 
