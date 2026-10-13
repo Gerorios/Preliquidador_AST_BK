@@ -3942,3 +3942,21 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 
 **Pendiente**
 - El deploy, con OK, backend primero.
+
+## 2026-10-13 — Deploy de Min/tancada en Tancadas vs Jornal (Preliquidación)
+
+**Estado**
+- Deploy: sí, a producción, con OK del usuario, backend primero y después el front, como
+  pedían los PRs. Backend de `5305d26` (BK #97) a `3e4a4f1` (merge del BK #98): entre los dos
+  sólo había Min/tancada y docs, sin dependencias nuevas (`pip install -r requirements.txt`
+  sin cambios), y reinicio del servicio. Frontend a `435d50b` (merge del FT #81), build desde
+  `main` con swap de carpeta: la anterior queda como vuelta atrás.
+- Migraciones: ninguna.
+- Smoke sin escribir datos: `/health` ok con las tres bases; el arranque verifica la base
+  propia y sus tablas y columnas; el bundle del index y el de `ControlesJornal` son iguales en
+  local y en el servidor (57 assets); el sitio responde y sirve el index nuevo; el endpoint del
+  control sin sesión responde 401. No probado: la pantalla con un usuario logueado.
+- Vuelta atrás: el código anterior y reinicio; el front con la carpeta anterior.
+
+**Pendiente**
+- Que el usuario mire la columna Min/tancada en producción (en `docs/estado.md`).

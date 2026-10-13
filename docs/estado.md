@@ -14,7 +14,7 @@ BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del bac
 
 ## Pendientes del usuario
 
-- Preliquidación: dar el OK para deployar Min/tancada en Tancadas vs Jornal (BK #98 y FT #81, mergeados el 2026-10-13), backend primero: el front sin el backend nuevo muestra "—".
+- Preliquidación: mirar en producción la columna Min/tancada de Tancadas vs Jornal, en Verificación y en Gerencial (deploy del 2026-10-13; no se probó con un usuario logueado).
 - Cargar `TALLER_SHEET_URL` en el `.env` del servidor y reiniciar el backend: hasta entonces las alertas de Terceros responden 502 a propósito (deploy del 2026-09-30).
 - Asignar el rol "Liquidador de terceros" desde Administración a quienes liquiden Terceros (nace sin personas; BK #83, deploy del 2026-10-11).
 - Avisarle a Pitu que sumar las tablas `terceros_*` a `TABLAS` de `scripts/refrescar_testing.py` queda para él: el próximo refresco de `testing` pisaría sus datos de prueba de Terceros con los de producción (el usuario lo decidió así, 2026-10-11).
