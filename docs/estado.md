@@ -11,7 +11,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del backend (rama `feature/facturacion-e2-historico`). En marcha, con OK del usuario (2026-10-13): el primer deploy de Facturación, que lleva el FT #80 junto con la `facturacion/003` (tablas nuevas, vacías), la carpeta de adjuntos en el VPS, `FACTURACION_ADJUNTOS_DIR` en su `.env` y el `client_max_body_size` de nginx (BK #97); su entrada en la bitácora va aparte. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
+BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del backend (rama `feature/facturacion-e2-historico`). El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
 
 ## Pendientes del usuario
 
@@ -20,13 +20,13 @@ BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del bac
 - Avisarle a Pitu que sumar las tablas `terceros_*` a `TABLAS` de `scripts/refrescar_testing.py` queda para él: el próximo refresco de `testing` pisaría sus datos de prueba de Terceros con los de producción (el usuario lo decidió así, 2026-10-11).
 - De Pitu, también para el usuario: reinstalar los hooks en su clon del backend (`sh scripts/hooks/instalar.sh`); hasta entonces su `pre-commit` frena `docs/estado.md` en `main` (BK #72, 2026-10-05).
 - De Pitu, también para el usuario: la aceptación de la etapa 7 de Terceros (agosto igual a la liquidación a mano) y la revisión de código de dos ejes del BK #59 (2026-09-30).
-- Facturación: definir el respaldo de la carpeta de adjuntos del VPS, junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
+- Facturación: definir el respaldo de la carpeta de adjuntos del VPS (ya existe en producción desde el deploy del 2026-10-13), junto con el de la base que ya estaba pendiente en `docs/DEPLOY.md` (ADR-0019, BK #78).
 - Facturación: los adjuntos del front (FT #80) no se probaron con un usuario de sólo Ver en `comprobantes`, porque no hay uno así en `testing` (2026-10-13).
 - Facturación: borrar del servidor el respaldo de la `facturacion/002` cuando ya no haga falta como vuelta atrás (deploy del 2026-10-12).
 - Avisarle a Pitu que la subida de archivos de las estaciones de Terceros (`subirArchivoEstacion` en `src/modulos/terceros/services/terceros.js` del front) probablemente manda JSON en vez del archivo: la instancia `api` del núcleo trae `Content-Type: application/json` por defecto y, con ese header, axios convierte el FormData en JSON. En Facturación pasó lo mismo y se arregló pasando `multipart/form-data` explícito (FT-B). No se probó en su pantalla (2026-10-13).
 - Avisarle a Pitu que haga pull de `main` en los dos repos: `testing` ya no tiene la tabla de la Unidad sugerida, y un `main` anterior al BK #94 arranca contra `testing` avisando que faltan tablas (2026-10-12).
 - Facturación: revisar en la app de campo las tareas facturables que quedan Sin definir (la Unidad sugerida ahora se define allá; BK #94).
-- Facturación: el rol de las contadoras ya existe en producción; no asignarlo a nadie hasta que esté la primera versión completa del módulo (decisión del usuario, 2026-10-12).
+- Facturación: el rol de las contadoras ya existe en producción; no asignarlo a nadie hasta que esté la primera versión completa del módulo (decisión del usuario, 2026-10-12). Al asignarlo, probar una subida real de adjunto: en el deploy del 2026-10-13 no se pudo, porque nadie tiene el rol.
 - Avisarle a Pitu que las etiquetas de aviso del núcleo (`.badge-*`) pasan a texto oscuro con el tono en el fondo y el borde, también en Terceros (Tarifario, "sin confirmar"); ya se ve en el sitio (deploy del 2026-10-09).
 - Avisarle a Pitu que el esquema nuevo de permisos ya está en producción (BK #83 y #86, FT #70; deploy del 2026-10-11): el glosario de Terceros suma sus cinco pantallas con qué es ver y editar; Terceros declara `PANTALLAS` en `app/modulos/terceros/permisos.py`; cada ruta pide pantalla y nivel (salen `requiere_operativo` y `requiere_gerencial`); cada ruta de `src/modulos/terceros/rutas.jsx` nombra su pantalla; sus tests usan el rol "Liquidador de terceros". Que confirme las filas 25 y 28 del plan y qué pantallas usan `ver_inicio_o_quincena`, y que rebase sus ramas abiertas sobre `terceros.py`.
 

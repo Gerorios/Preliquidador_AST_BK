@@ -3867,3 +3867,31 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - No probado: un usuario con sólo Ver en `comprobantes` (no hay uno así en `testing`) y la
   subida a través de nginx con el límite de 12m, que se prueba en el deploy.
 - Sigue BK-C (histórico).
+
+## 2026-10-13 — Deploy de Comprobantes y adjuntos (Facturación E2)
+
+**Estado**
+- Deploy: sí, a producción, con OK del usuario. El primero de Facturación por avances:
+  Facturación sigue escondida, nadie tiene su rol. Backend de `2d638fc` hasta el BK #97
+  (`5305d26`; BK #95 a #97: plan de la E2, Comprobantes y adjuntos); frontend a `e604ad1`
+  (FT #78 a #80: orden en la barra de filtros del núcleo, pantallas de Comprobantes y
+  adjuntos), con swap de carpeta.
+- Migraciones: `facturacion/003` en producción, con control previo de que sus tablas no
+  existían: tres tablas nuevas, vacías. Sin respaldo, porque sólo crea tablas.
+- Configuración nueva: la carpeta de adjuntos, fuera del código (ADR-0019), cargada en
+  `FACTURACION_ADJUNTOS_DIR` del servidor; el límite de tamaño de nginx para `/api/` subido a
+  12 MB (antes valía el default de 1 MB, que habría cortado cualquier PDF de más de 1 MB).
+  Hallazgo: la configuración activa de nginx no es la que estaba documentada como instalada;
+  quedó anotado en `docs/DEPLOY.md` (local, fuera de git).
+- Smoke sin escribir datos: arranque con la base y las tablas verificadas, `/health` ok; la
+  carpeta existe y el servicio la puede escribir; sitio con el bundle nuevo; las rutas de
+  Facturación sin sesión responden 401; a través de nginx, una subida de 11 MB pasa (llega al
+  backend) y una de 13 MB la corta nginx (413); journal sin errores. No probado: una subida
+  real con un usuario (nadie tiene el rol en producción).
+- Vuelta atrás: el código anterior y reinicio (las tablas nuevas quedan sin uso), el front con
+  la carpeta anterior y nginx con su copia previa.
+
+**Pendiente**
+- Una subida real de adjunto en producción, cuando alguien tenga el rol.
+- El respaldo de la carpeta de adjuntos, junto con el de la base (en `docs/estado.md`).
+- Sigue BK-C (histórico).
