@@ -19,6 +19,9 @@ from sqlalchemy.orm import Session
 from app.core.models import ahora_utc
 from app.modulos.facturacion.models import Adjunto, Comprobante, LineaComprobante
 from app.modulos.facturacion.schemas import ComprobanteEntrada, LineaEntrada
+from app.modulos.facturacion.services.adjuntos_service import (
+    borrar_archivos, carpeta_adjuntos,
+)
 from app.modulos.facturacion.services.reglas_comprobante import (
     CENTAVO, FACTURA, NOTA_CREDITO, TIPOS, NumeroInvalido, calcular_importe,
     clave_identidad, normalizar_empresa, normalizar_numero, total_firmado,
@@ -244,12 +247,23 @@ class ComprobantesService:
         return comprobante
 
     def borrar(self, comprobante_id: int) -> None:
-        """El DELETE: se lleva el Comprobante y sus Líneas (y, con BK-B, sus
-        Adjuntos con sus archivos; ver _borrar_adjuntos)."""
+        """El DELETE: se lleva el Comprobante, sus Líneas y sus Adjuntos con
+        sus archivos (pregunta 15).
+
+        Como al quitar un Adjunto, primero las filas y después los archivos:
+        si el commit falla, los archivos siguen ahí con sus filas. Sin la
+        carpeta de adjuntos, uno que tiene Adjuntos no se borra (503): sus
+        archivos quedarían huérfanos. Uno sin Adjuntos no la necesita."""
         comprobante = self._modificable(comprobante_id)
         if self._tiene_notas(comprobante.id):
             raise FacturaConNotas()
-        self._borrar_adjuntos(comprobante)
+        # Las filas de los Adjuntos se borran a mano: la relación no tiene
+        # cascada a propósito (ver Comprobante.adjuntos).
+        adjuntos = list(comprobante.adjuntos)
+        carpeta = carpeta_adjuntos() if adjuntos else None
+        nombres_en_disco = [a.nombre_en_disco for a in adjuntos]
+        for adjunto in adjuntos:
+            self.db.delete(adjunto)
         self.db.delete(comprobante)
         try:
             self.db.commit()
@@ -262,13 +276,8 @@ class ComprobantesService:
             if self._tiene_notas(comprobante_id):
                 raise FacturaConNotas() from None
             raise
-
-    def _borrar_adjuntos(self, comprobante: Comprobante) -> None:
-        """Acá engancha BK-B el borrado de los Adjuntos (filas y archivos,
-        pregunta 15). Hasta entonces no hay forma de subirlos, así que no hace
-        nada; y si una fila existiera, el borrado del Comprobante falla en la
-        base (la FK de `facturacion_adjunto` es NOT NULL y sin cascada) en vez
-        de dejar archivos huérfanos."""
+        if adjuntos:
+            borrar_archivos(carpeta, nombres_en_disco)
 
     def _modificable(self, comprobante_id: int) -> Comprobante:
         """El Comprobante a editar o borrar: existe y no es histórico (la
