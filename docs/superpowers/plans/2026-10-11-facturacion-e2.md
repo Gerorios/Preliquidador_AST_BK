@@ -360,7 +360,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 | 2 | `GET /comprobantes/{id}` | ver | 200 `ComprobanteDetalle` · 404 |
 | 3 | `POST /comprobantes` | editar | 201 `ComprobanteDetalle` · 409 · 422 · 503 |
 | 4 | `PUT /comprobantes/{id}` | editar | 200 `ComprobanteDetalle` · 404 · 409 · 422 · 503 |
-| 5 | `DELETE /comprobantes/{id}` | editar | 204 · 404 · 409 |
+| 5 | `DELETE /comprobantes/{id}` | editar | 204 · 404 · 409 · 503 (`adjuntos_sin_configurar`, sólo si tiene adjuntos y la carpeta no está configurada: no se borra nada; decisión del usuario en B3, 2026-10-12) |
 | 6 | `POST /comprobantes/{id}/adjuntos` (multipart, campo `archivo`) | editar | 201 `Adjunto` · 404 · 409 · 413 · 422 · 503 |
 | 7 | `GET /comprobantes/{id}/adjuntos/{adjunto_id}` | ver | 200 el archivo · 404 · 503 |
 | 8 | `DELETE /comprobantes/{id}/adjuntos/{adjunto_id}` | editar | 204 · 404 · 503 |
@@ -421,6 +421,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 3. **BK-B y FT-B, hermanos**: adjuntos. Van después del merge de BK-A.
 4. **BK-C, sólo backend**: el histórico. Va después del merge de BK-A y en paralelo con BK-B.
 5. **Un solo deploy de toda la E2**, con OK (FRENADOS F4 a F8).
+   - **Cambio del 2026-10-12 (decisión del usuario):** Facturación no se deploya al final de la E2 sino cuando el módulo esté terminado entero, con todas sus etapas. Los PRs se siguen mergeando a `main`. Si antes hay que deployar otra cosa, el código de Facturación viaja escondido (nadie tiene su rol, así que no aparece en el menú ni en el Inicio), y ese deploy lleva la 003 a producción (F5), porque crea tablas nuevas y vacías que no tocan nada existente. Se descartó apagar el módulo sólo en producción (trabajo de más) y una rama larga de Facturación fuera de `main` (BK-A y FT-A ya están en `main`, y juntaría choques con el núcleo y con Terceros). F4 a F8 quedan para ese deploy.
 
 Todo arranca de `main` con la E1 mergeada.
 
@@ -629,6 +630,14 @@ Todo arranca de `main` con la E1 mergeada.
   - la búsqueda funciona por número y por Cliente.
 - Verificación: `npm test`.
 
+**FA3b. Par: el filtro Mes en orden de fecha (agregado por la sesión principal al cerrar FA3)**
+- Hallazgo: `opcionesCascada` del núcleo ordena las opciones como texto, así que el filtro Mes queda "abr 2026, ago 2025, …" en lugar de por fecha. `FiltrosBar` hace lo mismo con los valores elegidos que ya no tienen opción.
+- Archivos: `src/core/ui/opcionesCascada.js` y su test, `src/core/ui/FiltrosBar.jsx`, y `src/modulos/facturacion/listado.js` y su test.
+- Rojo:
+  - un campo puede traer un `orden` opcional (un comparador de valores); sin él, el orden sigue siendo el de hoy, y Preliquidación no cambia;
+  - el campo Mes de `CAMPOS_COMPROBANTES` trae un `orden` del más nuevo al más viejo.
+- Verificación: `npm test` (incluye los tests del núcleo).
+
 **FA4. Paso: servicio y rutas**
 - `src/modulos/facturacion/services/comprobantes.js`, con todo por `src/core/api.js`.
 - `rutas.jsx` (E1):
@@ -670,6 +679,36 @@ Todo arranca de `main` con la E1 mergeada.
 
 **FA7. Paso: revisión visual (fase 4)**
 - `/impeccable critique` y `/impeccable audit` sobre las dos pantallas.
+
+**Revisión de FT-A (sesión principal, 2026-10-12): 0 urgent, 3 high, 14 minor.** Los high se arreglan en RA1 a RA3. Además, por la regla 4 de GUIA-MODULOS §4.1, lo del núcleo de FA3b (`opcionesCascada.js`, su test y `FiltrosBar.jsx`) va en un PR aparte y chico, que se mergea antes que el de FT-A. Sin ese PR, el `orden` de `listado.js` se ignora y nada se rompe.
+
+**RA1. Par: quitar una línea se puede deshacer (revisión de FT-A, high)**
+- Hallazgo: el botón Quitar borra la fila sin confirmación ni deshacer (`components/GrillaLineas.jsx`, `pages/Comprobante.jsx`, `quitarFila`).
+- Escenario de falla: después del precio, Tab lleva a Quitar (el importe no recibe foco). Un Enter borra la línea; el foco pasa al Quitar de la fila vecina y otro Enter borra esa también. Se puede guardar con líneas de menos.
+- Arreglo: el quitar y el restaurar pasan a funciones puras de `formulario.js`. En `quitarFila`, si la fila no está vacía, un toast "Se quitó la línea N" con un botón Deshacer que la devuelve a su mismo lugar. Una fila vacía se quita sin toast.
+- Archivos: `src/modulos/facturacion/formulario.js` y su test, y `src/modulos/facturacion/pages/Comprobante.jsx`.
+- Rojo: quitar la fila del índice i y restaurarla la deja en el índice i con los mismos datos, también cuando se quitó la última o la primera.
+- Verificación: `npm test`; el toast con Deshacer, en el navegador.
+
+**RA2. Paso visual: avisar antes de perder lo cargado (revisión de FT-A, high)**
+- Hallazgo: al salir sin guardar se pierde todo sin aviso. La marca "Hay cambios sin guardar" no aparece en el alta (`Comprobante.jsx`, condición `!esNuevo`) y no hay `beforeunload`.
+- Escenario de falla: en un alta se cargan 12 líneas y se toca "← Comprobantes" o se cierra la pestaña: se pierde todo.
+- Arreglo: la marca también en el alta; `beforeunload` mientras haya cambios sin guardar; el enlace "← Comprobantes" pide confirmación si hay cambios (patrón de `src/core/administracion/ListaRoles.jsx`). El menú lateral no se puede frenar con `BrowserRouter` sin tocar el núcleo: queda como límite, anotado en el PR.
+- Archivos: `src/modulos/facturacion/pages/Comprobante.jsx`.
+- Verificación: en el navegador, y `npm run build`.
+
+**RA3. Paso visual: el Tipo se lee completo (revisión de FT-A, high)**
+- Hallazgo: a 1280 px el segmentado del Tipo se corta ("Nota de crédi", "actura"): columna `auto` de la cabecera, `min-width: 0` en el fieldset y `overflow: hidden` en `.segmentado` (`pages/Comprobante.module.css`).
+- Arreglo: que la columna del Tipo tome el ancho de su contenido (`max-content`, o una clase propia del fieldset sin `min-width: 0`), ajustando los mínimos de las otras para que la cabecera siga entrando a 1280 px.
+- Archivos: `src/modulos/facturacion/pages/Comprobante.module.css`.
+- Verificación: en el navegador a 1280 px, y `npm run build`.
+
+**RA4. Paso: la pantalla no queda en blanco si una lectura no trae datos (visto en el smoke de RA1 a RA3, high)**
+- Hallazgo: `Comprobante` (export por defecto de `pages/Comprobante.jsx`) espera con `isLoading` y frena con `isError && !data`. Una consulta en pausa o cancelada sin datos queda en `pending` sin buscar: `isLoading` y `isError` dan falso, y `Formulario` recibe `tareas` (o `clientes`, `empresas`) `undefined` y revienta en `tareas.map`.
+- Escenario de falla: visto en el navegador al reiniciar el backend con la pantalla de alta abierta (`TypeError: Cannot read properties of undefined (reading 'map')`, pantalla en blanco). También puede pasar si se corta la red al abrir la pantalla (React Query pausa las consultas sin conexión).
+- Arreglo: esperar con `isPending` (no hay datos todavía) en lugar de `isLoading`, para las lecturas del campo y para el detalle; el aviso de error sigue igual.
+- Archivos: `src/modulos/facturacion/pages/Comprobante.jsx`.
+- Verificación: `npm run build`; en el navegador, abrir el alta con el backend apagado y volver a prenderlo: se ve el aviso o el "Leyendo…", nunca la pantalla en blanco.
 
 ### 3.7 BK-B: Adjuntos (backend)
 
