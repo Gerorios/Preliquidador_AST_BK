@@ -839,6 +839,11 @@ Todo arranca de `main` con la E1 mergeada.
   - `leer_planilla` en un `tmp_path` con BOM, CRLF y `;`;
   - un encabezado faltante da un error que lo nombra.
 - Verificación: `python -m pytest tests/facturacion/test_historico.py -q`.
+- Hecho (ejecutor, 2026-10-13): 50 tests; `tests/facturacion` da 461. Cómo quedó:
+  - una celda vacía da `None` y lo que no se puede leer lanza `ValorIlegible`: C3 decide qué hacer con cada caso;
+  - "-", "$ -", "#VALUE!", "12.5" (punto sin grupos de 3) y más decimales que los de la columna son ilegibles; un negativo sí se lee, para que C3 omita su grupo;
+  - se exigen los 10 encabezados que se usan, FINCA incluida (la celda es opcional); "FACT N°" se busca con el signo de grado; `aa` se lee como `20aa`.
+  - **A mirar en C7:** si el export trae "Nº" en vez de "N°", la lectura frena nombrándolo; y si un importe "-" es el 0 que muestra Excel, hoy cae como ilegible y omite su Comprobante (se ve en los conteos por motivo).
 
 **C2. Par: UM y número**
 - Rojo:
