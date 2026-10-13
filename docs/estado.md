@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del backend (rama `feature/facturacion-e2-historico`). El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
+BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del backend (rama `feature/facturacion-e2-historico`): C1 a C6 commiteados (lectura, clasificación, aplicar, conciliación y el script). En C7: la primera simulación contra `testing` se hizo; sigue el par C7a (Cliente activo entre repetidos y FECHA FAC "-" como vacía) y, después, otra simulación con la planilla que corrige el usuario. Después siguen F3 (aplicar en `testing`, con OK), la revisión y el PR. El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
 
 ## Pendientes del usuario
 
