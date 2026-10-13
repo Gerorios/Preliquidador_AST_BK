@@ -3748,3 +3748,61 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 - Sin smoke con un usuario que tenga sólo Ver en `comprobantes`: lo cubre el código, sin
   prueba en el navegador.
 - Siguen BK-B y FT-B (adjuntos) y BK-C (histórico), y el deploy de la E2 con OK.
+
+## 2026-10-13 — Adjuntos de los Comprobantes en el backend (Facturación E2)
+
+**Mergeado**
+- PR #97 (back) — BK-B de la E2: subir, ver y quitar adjuntos (PDF, PNG o JPG) de los
+  Comprobantes. Encima del BK #96; sin PR hermano en el front (las pantallas llegan en FT-B).
+
+**Por frontera**
+- Facturación: tres rutas nuevas sobre la pantalla `comprobantes` (subir y quitar con Editar,
+  ver con Ver); el mapa de permisos pasa de 9 a 12 filas. Hasta 10 MB y hasta 5 por
+  Comprobante, también en los históricos. Cinco `tipo` de error nuevos (`adjunto_invalido`,
+  `adjunto_muy_grande`, `limite_adjuntos`, `adjuntos_sin_configurar`, `archivo_no_encontrado`).
+  Borrar un Comprobante se lleva sus adjuntos y los archivos, después del commit. Nueva
+  configuración `FACTURACION_ADJUNTOS_DIR` (`app/modulos/facturacion/config.py`): ruta
+  absoluta, existente y fuera del código; si no, los adjuntos responden 503.
+- Prod y Datos: `deploy/nginx-preliquidacion.conf` sube `client_max_body_size` a 12m en
+  `/api/` (10 MB más el margen del multipart). Sin migración: la tabla de adjuntos ya vino con
+  la `facturacion/003` del BK #96.
+- Docs: la variable nueva en `.env.example` y `docs/modulos/PUESTA-A-PUNTO.md`; el plan de la
+  E2 actualizado.
+
+**Decisiones**
+- El tipo se detecta por la firma del contenido y la extensión del nombre tiene que coincidir.
+  Porqué: un `.pdf` que no es un PDF se rechaza. Descartado: confiar en el `Content-Type` del
+  navegador, que lo arma la extensión.
+- En disco, el archivo va con un nombre del sistema; el del usuario se guarda saneado, sólo
+  para mostrar. Escritura atómica (temporal, `fsync`, `os.replace`), y si algo falla antes del
+  commit se borra el archivo; al quitar o borrar, primero la fila y después el archivo,
+  tolerando que falte.
+- La carpeta de adjuntos va fuera del código. Porqué: el deploy cambia la carpeta del código
+  entera y se llevaría los archivos subidos (ADR-0019).
+- Con un Comprobante con adjuntos y la carpeta sin configurar, borrarlo responde 503 y no
+  borra nada (decisión del usuario, fila 5 del contrato).
+- El límite de 5 con dos subidas a la vez (RB1 y RB2): `subir` cierra la transacción del
+  request, bloquea el Comprobante y recién ahí cuenta con una lectura común, que en MySQL ve
+  lo último confirmado; `subir`, `quitar` y `borrar` bloquean primero el Comprobante, en el
+  mismo orden. Descartado: contar con `FOR UPDATE` (el arreglo de RB1), porque toma bloqueos de
+  hueco en el índice de la FK y dos subidas a Comprobantes vecinos terminaban en deadlock.
+
+**Estado**
+- Deploy: no. Facturación se deploya cuando el módulo esté terminado entero, con OK.
+- Migraciones: ninguna.
+- Pruebas: `python -m pytest` 1555 passed y 1 xfailed después de RB1; `tests/facturacion` 411
+  passed después de RB2. Prueba de concurrencia contra MySQL en `testing`, con OK del usuario:
+  8 de 8 casos bien (incluye reproducir el deadlock del patrón de RB1), y lo de prueba se
+  borró. No probado: la subida por nginx con el límite de 12m.
+- Revisión: dos ejes, en dos rondas, con verificador. Ronda 1: 0 urgent, 1 high arreglado
+  (RB1: dos subidas a la vez podían dejar un Comprobante con 6 adjuntos), 13 minor y 6
+  descartados. Ronda 2, sobre RB1: 0 urgent, 1 high arreglado (RB2: el deadlock entre
+  Comprobantes vecinos) y 4 minor. Los minor quedan sin tocar por decisión del usuario; el
+  detalle está en el cuerpo del BK #97.
+
+**Pendiente**
+- La subida por nginx con el límite de 12m, con FT-B o en el deploy.
+- El deploy de Facturación necesita crear la carpeta en el VPS, cargar
+  `FACTURACION_ADJUNTOS_DIR` en su `.env` y aplicar el `client_max_body_size` de nginx. El
+  respaldo de la carpeta sigue pendiente (ADR-0019).
+- Siguen FT-B (adjuntos en el front) y BK-C (histórico).

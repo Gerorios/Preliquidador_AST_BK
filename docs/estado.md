@@ -2,7 +2,7 @@
 
 Sólo lo vivo: lo que está en curso, el próximo paso, lo que espera al usuario y lo que quedó para más adelante.
 Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva abajo). La regla está en
-`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-12**.
+`AGENTS.md` ("Estado del trabajo"). Última actualización: **2026-10-13**.
 
 ## En curso
 
@@ -10,7 +10,7 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## Próximo paso
 
-BK-B (adjuntos en el backend), fase 4: B1 a B5 hechos y commiteados en el worktree `.claude/worktrees/facturacion-e2-bkb` (rama `feature/facturacion-e2-adjuntos`, sin push, con un `.env` ficticio). Ronda 1 de la revisión: 1 high arreglado (RB1, el límite de 5 adjuntos con dos subidas a la vez). Ronda 2, sobre RB1: 1 high arreglado (RB2, dos subidas a Comprobantes vecinos se trababan en MySQL). Revisión cerrada; suite 1555 passed antes de RB2, Facturación 411 passed después. Prueba de concurrencia contra `testing`, con OK: 8 de 8 bien, y lo de prueba se borró. Fase 5: PR BK #97 abierto, espera el OK del usuario para el merge. Después siguen FT-B (adjuntos en el front) y BK-C (histórico). La `facturacion/003` está en `testing` y no en producción. Facturación no se deploya hasta que el módulo esté terminado entero, con todas sus etapas (decisión del usuario, 2026-10-12). Si antes hay que deployar otra cosa, Facturación viaja escondida: sin nadie con su rol no se ve, y ese deploy lleva la 003 (tablas nuevas, vacías). Todo deploy, con OK.
+FT-B (adjuntos en el front, sección 3.8 del plan), sobre las rutas de adjuntos del BK #97: en ejecución (FB1), en el worktree `.claude/worktrees/facturacion-e2-ftb` del front (rama `feature/facturacion-e2-adjuntos`). Después sigue BK-C (histórico). La `facturacion/003` está en `testing` y no en producción. Facturación no se deploya hasta que el módulo esté terminado entero, con todas sus etapas (decisión del usuario, 2026-10-12); ese deploy además crea la carpeta de adjuntos en el VPS, carga `FACTURACION_ADJUNTOS_DIR` en su `.env` y aplica el `client_max_body_size` de nginx (BK #97). Si antes hay que deployar otra cosa, Facturación viaja escondida: sin nadie con su rol no se ve, y ese deploy lleva la 003 (tablas nuevas, vacías). Todo deploy, con OK.
 
 ## Pendientes del usuario
 
