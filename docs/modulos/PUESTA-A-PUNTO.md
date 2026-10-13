@@ -142,6 +142,8 @@ La plantilla con todas las variables está en `.env.example`. Para desarrollo, `
 
 `TALLER_SHEET_URL` es la URL del Google Sheet publicado de la app del taller, de donde el módulo Liquidación Terceros lee las horas. Viene en el mismo `.env`. Dejarla vacía no rompe nada: solo esa consulta avisa que falta configurarla.
 
+`FACTURACION_ADJUNTOS_DIR` es la carpeta donde el módulo Facturación guarda los adjuntos de los Comprobantes. Para probarlos en tu máquina, creá una carpeta **fuera** de `backend_preliquidacion/` (por ejemplo, `C:\ruta\a\adjuntos-facturacion` o `/ruta/a/adjuntos-facturacion`) y poné su ruta absoluta en esa variable. Una carpeta dentro del repo, una ruta relativa o una carpeta que no existe no sirven. Vacía no rompe nada: solo los adjuntos responden que no están configurados.
+
 ### Comprobación
 
 ```bash

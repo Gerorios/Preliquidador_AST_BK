@@ -3,8 +3,8 @@ cada endpoint de `/api/facturacion`.
 
 `ESPERADO` copia la tabla de la sección 3.2 del plan de la E2
 (`docs/superpowers/plans/2026-10-11-facturacion-e2.md`): las filas 1 a 5
-(Comprobantes), 9 a 11 (clientes, fincas y empresas) y `GET /tareas`, todas de
-la pantalla `comprobantes`. Las filas 6 a 8 (adjuntos) llegan con BK-B. Las dos
+(Comprobantes), 6 a 8 (adjuntos), 9 a 11 (clientes, fincas y empresas) y
+`GET /tareas`, todas de la pantalla `comprobantes`. Las dos
 rutas de la E1 (`/tareas`, pantalla `unidad`) salieron el 2026-10-12 con su
 pantalla (`docs/superpowers/plans/2026-10-12-unidad-desde-campo.md`); la E2
 vuelve a crear `GET /tareas`, ahora en `comprobantes`. El mapa real se lee
@@ -40,6 +40,10 @@ ESPERADO = {
     ("POST", f"{F}/comprobantes"): EDITAR_COMPROBANTES,
     ("PUT", f"{F}/comprobantes/{{comprobante_id}}"): EDITAR_COMPROBANTES,
     ("DELETE", f"{F}/comprobantes/{{comprobante_id}}"): EDITAR_COMPROBANTES,
+    # 6 a 8: los adjuntos. Abrir es de quien ve; subir y quitar, de quien edita.
+    ("POST", f"{F}/comprobantes/{{comprobante_id}}/adjuntos"): EDITAR_COMPROBANTES,
+    ("GET", f"{F}/comprobantes/{{comprobante_id}}/adjuntos/{{adjunto_id}}"): VER_COMPROBANTES,
+    ("DELETE", f"{F}/comprobantes/{{comprobante_id}}/adjuntos/{{adjunto_id}}"): EDITAR_COMPROBANTES,
     # 9 a 11: las lecturas del campo y de sueldos que usa el alta.
     ("GET", f"{F}/clientes"): VER_COMPROBANTES,
     ("GET", f"{F}/clientes/{{cliente_id}}/fincas"): VER_COMPROBANTES,
@@ -81,8 +85,8 @@ def _mapa_real():
     return mapa
 
 
-def test_la_tabla_tiene_las_9_rutas():
-    assert len(ESPERADO) == 9
+def test_la_tabla_tiene_las_12_rutas():
+    assert len(ESPERADO) == 12
 
 
 def test_cada_endpoint_exige_la_pantalla_y_el_nivel_de_la_tabla():
