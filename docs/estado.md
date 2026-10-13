@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Facturación E2 (Comprobantes, adjuntos e histórico), fase 3 (ejecución), carril completo. Plan: `docs/superpowers/plans/2026-10-11-facturacion-e2.md`.
+- Facturación E2 (Comprobantes, adjuntos e histórico), BK-C en fase 4 (revisión), carril completo. Plan: `docs/superpowers/plans/2026-10-11-facturacion-e2.md`.
 
 ## Próximo paso
 
-BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del backend (rama `feature/facturacion-e2-historico`): C1 a C6 commiteados (lectura, clasificación, aplicar, conciliación y el script). En C7: la primera simulación contra `testing` se hizo; sigue el par C7a (Cliente activo entre repetidos y FECHA FAC "-" como vacía) y, después, otra simulación con la planilla que corrige el usuario. Después siguen F3 (aplicar en `testing`, con OK), la revisión y el PR. El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
+BK-C (histórico), en el worktree `.claude/worktrees/facturacion-e2-bkc` del backend (rama `feature/facturacion-e2-historico`): C1 a C7c commiteados. El histórico ya está aplicado en `testing` (353 Comprobantes; la simulación siguiente da 0 y diferencias 0) y se vio en el navegador. Quedan afuera 3 Comprobantes que el usuario corrige en la planilla (una UM vacía, dos FECHA FAC distintas en un mismo Comprobante y un precio ilegible); se suman con otra corrida. Sigue la revisión, después el PR y, con OK, el deploy y el histórico en producción (F7). El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
 
 ## Pendientes del usuario
 
