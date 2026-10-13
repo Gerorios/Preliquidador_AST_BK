@@ -924,6 +924,23 @@ Todo arranca de `main` con la E1 mergeada.
 - Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
 - Rojo: un Cliente con dos candidatos (uno activo y otro de baja) se resuelve al activo; con dos activos, o con todos de baja, sigue ambiguo; FECHA FAC "-" (también con espacios) cuenta como vacía; FECHA A FACTURAR "-" sigue como hoy.
 - Verificación: `python -m pytest tests/facturacion -q`. Después, otra simulación con la planilla corregida.
+- Hecho (ejecutor, 2026-10-13): 9 tests; `tests/facturacion` da 596. La segunda simulación, con la planilla todavía sin corregir, da 241 Comprobantes a migrar y diferencias 0. Aparecieron dos casos más y el usuario decidió:
+  - **Cantidad con más de 2 decimales** (7 filas de bins con 3): se **redondea a 2**, mitad hacia arriba. El importe sigue siendo el de la planilla. Sólo la cantidad: el precio y el importe con decimales de más siguen siendo ilegibles. Va como paso **C7b** (par).
+  - Una fila con precio "-" e importe "#VALUE!" omite un Comprobante de 22 filas: la corrige el usuario en la planilla.
+
+**C7b. Par: la cantidad se redondea a 2 decimales**
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: "5046,557" da 5046,56 y "4776,755" da 4776,76 (mitad hacia arriba); "1,5" sigue igual; un precio o un importe con decimales de más siguen siendo ilegibles.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
+**C7c. Par: la tarea que no está en el maestro se migra igual**
+- Decisión del usuario (2026-10-13): las tareas de la planilla que no están en el maestro del campo (en su mayoría de cosecha) se migran igual, "forzado". Se corrige después en la forma de cargar en el campo, con el personal asignado.
+- Cómo: la Línea va con `tarea_id = 0` (constante `TAREA_SIN_MAESTRO`) y `tarea_nombre` = el nombre de la planilla tal cual, recortado a 150. No hace falta DDL: la columna es NOT NULL y 0 no es un id del maestro. El histórico no se edita, y el front muestra el nombre guardado.
+- La tarea no encontrada deja de omitir el grupo y pasa a ser un **aviso** (`tarea_no_encontrada`), contado por nombre en "no resueltos" como hoy, así sigue a la vista. Una tarea **ambigua** sigue omitiendo el grupo.
+- Cuando el campo tenga esas tareas, una corrida con `--reemplazar-cambiados` las pasa a su id real: el cambio de `tarea_id` cuenta como Comprobante cambiado.
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: una fila con tarea no encontrada se migra con `tarea_id` 0 y el nombre de la planilla, da el aviso y cuenta en no resueltos; una tarea ambigua sigue omitiendo; cuando el maestro suma la tarea, la corrida siguiente la informa como cambiada y con el flag la reemplaza al id real.
+- Verificación: `python -m pytest tests/facturacion -q`. Después, la simulación con la planilla corregida.
 
 ### 3.10 Pasos FRENADOS (los hace la sesión principal, con OK del usuario)
 
