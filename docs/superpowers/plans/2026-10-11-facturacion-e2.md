@@ -360,7 +360,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 | 2 | `GET /comprobantes/{id}` | ver | 200 `ComprobanteDetalle` · 404 |
 | 3 | `POST /comprobantes` | editar | 201 `ComprobanteDetalle` · 409 · 422 · 503 |
 | 4 | `PUT /comprobantes/{id}` | editar | 200 `ComprobanteDetalle` · 404 · 409 · 422 · 503 |
-| 5 | `DELETE /comprobantes/{id}` | editar | 204 · 404 · 409 |
+| 5 | `DELETE /comprobantes/{id}` | editar | 204 · 404 · 409 · 503 (`adjuntos_sin_configurar`, sólo si tiene adjuntos y la carpeta no está configurada: no se borra nada; decisión del usuario en B3, 2026-10-12) |
 | 6 | `POST /comprobantes/{id}/adjuntos` (multipart, campo `archivo`) | editar | 201 `Adjunto` · 404 · 409 · 413 · 422 · 503 |
 | 7 | `GET /comprobantes/{id}/adjuntos/{adjunto_id}` | ver | 200 el archivo · 404 · 503 |
 | 8 | `DELETE /comprobantes/{id}/adjuntos/{adjunto_id}` | editar | 204 · 404 · 503 |
@@ -421,6 +421,7 @@ Prefijo `/api/facturacion`, en un router nuevo: `app/modulos/facturacion/api/com
 3. **BK-B y FT-B, hermanos**: adjuntos. Van después del merge de BK-A.
 4. **BK-C, sólo backend**: el histórico. Va después del merge de BK-A y en paralelo con BK-B.
 5. **Un solo deploy de toda la E2**, con OK (FRENADOS F4 a F8).
+   - **Cambio del 2026-10-12 (decisión del usuario):** Facturación no se deploya al final de la E2 sino cuando el módulo esté terminado entero, con todas sus etapas. Los PRs se siguen mergeando a `main`. Si antes hay que deployar otra cosa, el código de Facturación viaja escondido (nadie tiene su rol, así que no aparece en el menú ni en el Inicio), y ese deploy lleva la 003 a producción (F5), porque crea tablas nuevas y vacías que no tocan nada existente. Se descartó apagar el módulo sólo en producción (trabajo de más) y una rama larga de Facturación fuera de `main` (BK-A y FT-A ya están en `main`, y juntaría choques con el núcleo y con Terceros). F4 a F8 quedan para ese deploy.
 
 Todo arranca de `main` con la E1 mergeada.
 
@@ -629,6 +630,14 @@ Todo arranca de `main` con la E1 mergeada.
   - la búsqueda funciona por número y por Cliente.
 - Verificación: `npm test`.
 
+**FA3b. Par: el filtro Mes en orden de fecha (agregado por la sesión principal al cerrar FA3)**
+- Hallazgo: `opcionesCascada` del núcleo ordena las opciones como texto, así que el filtro Mes queda "abr 2026, ago 2025, …" en lugar de por fecha. `FiltrosBar` hace lo mismo con los valores elegidos que ya no tienen opción.
+- Archivos: `src/core/ui/opcionesCascada.js` y su test, `src/core/ui/FiltrosBar.jsx`, y `src/modulos/facturacion/listado.js` y su test.
+- Rojo:
+  - un campo puede traer un `orden` opcional (un comparador de valores); sin él, el orden sigue siendo el de hoy, y Preliquidación no cambia;
+  - el campo Mes de `CAMPOS_COMPROBANTES` trae un `orden` del más nuevo al más viejo.
+- Verificación: `npm test` (incluye los tests del núcleo).
+
 **FA4. Paso: servicio y rutas**
 - `src/modulos/facturacion/services/comprobantes.js`, con todo por `src/core/api.js`.
 - `rutas.jsx` (E1):
@@ -670,6 +679,36 @@ Todo arranca de `main` con la E1 mergeada.
 
 **FA7. Paso: revisión visual (fase 4)**
 - `/impeccable critique` y `/impeccable audit` sobre las dos pantallas.
+
+**Revisión de FT-A (sesión principal, 2026-10-12): 0 urgent, 3 high, 14 minor.** Los high se arreglan en RA1 a RA3. Además, por la regla 4 de GUIA-MODULOS §4.1, lo del núcleo de FA3b (`opcionesCascada.js`, su test y `FiltrosBar.jsx`) va en un PR aparte y chico, que se mergea antes que el de FT-A. Sin ese PR, el `orden` de `listado.js` se ignora y nada se rompe.
+
+**RA1. Par: quitar una línea se puede deshacer (revisión de FT-A, high)**
+- Hallazgo: el botón Quitar borra la fila sin confirmación ni deshacer (`components/GrillaLineas.jsx`, `pages/Comprobante.jsx`, `quitarFila`).
+- Escenario de falla: después del precio, Tab lleva a Quitar (el importe no recibe foco). Un Enter borra la línea; el foco pasa al Quitar de la fila vecina y otro Enter borra esa también. Se puede guardar con líneas de menos.
+- Arreglo: el quitar y el restaurar pasan a funciones puras de `formulario.js`. En `quitarFila`, si la fila no está vacía, un toast "Se quitó la línea N" con un botón Deshacer que la devuelve a su mismo lugar. Una fila vacía se quita sin toast.
+- Archivos: `src/modulos/facturacion/formulario.js` y su test, y `src/modulos/facturacion/pages/Comprobante.jsx`.
+- Rojo: quitar la fila del índice i y restaurarla la deja en el índice i con los mismos datos, también cuando se quitó la última o la primera.
+- Verificación: `npm test`; el toast con Deshacer, en el navegador.
+
+**RA2. Paso visual: avisar antes de perder lo cargado (revisión de FT-A, high)**
+- Hallazgo: al salir sin guardar se pierde todo sin aviso. La marca "Hay cambios sin guardar" no aparece en el alta (`Comprobante.jsx`, condición `!esNuevo`) y no hay `beforeunload`.
+- Escenario de falla: en un alta se cargan 12 líneas y se toca "← Comprobantes" o se cierra la pestaña: se pierde todo.
+- Arreglo: la marca también en el alta; `beforeunload` mientras haya cambios sin guardar; el enlace "← Comprobantes" pide confirmación si hay cambios (patrón de `src/core/administracion/ListaRoles.jsx`). El menú lateral no se puede frenar con `BrowserRouter` sin tocar el núcleo: queda como límite, anotado en el PR.
+- Archivos: `src/modulos/facturacion/pages/Comprobante.jsx`.
+- Verificación: en el navegador, y `npm run build`.
+
+**RA3. Paso visual: el Tipo se lee completo (revisión de FT-A, high)**
+- Hallazgo: a 1280 px el segmentado del Tipo se corta ("Nota de crédi", "actura"): columna `auto` de la cabecera, `min-width: 0` en el fieldset y `overflow: hidden` en `.segmentado` (`pages/Comprobante.module.css`).
+- Arreglo: que la columna del Tipo tome el ancho de su contenido (`max-content`, o una clase propia del fieldset sin `min-width: 0`), ajustando los mínimos de las otras para que la cabecera siga entrando a 1280 px.
+- Archivos: `src/modulos/facturacion/pages/Comprobante.module.css`.
+- Verificación: en el navegador a 1280 px, y `npm run build`.
+
+**RA4. Paso: la pantalla no queda en blanco si una lectura no trae datos (visto en el smoke de RA1 a RA3, high)**
+- Hallazgo: `Comprobante` (export por defecto de `pages/Comprobante.jsx`) espera con `isLoading` y frena con `isError && !data`. Una consulta en pausa o cancelada sin datos queda en `pending` sin buscar: `isLoading` y `isError` dan falso, y `Formulario` recibe `tareas` (o `clientes`, `empresas`) `undefined` y revienta en `tareas.map`.
+- Escenario de falla: visto en el navegador al reiniciar el backend con la pantalla de alta abierta (`TypeError: Cannot read properties of undefined (reading 'map')`, pantalla en blanco). También puede pasar si se corta la red al abrir la pantalla (React Query pausa las consultas sin conexión).
+- Arreglo: esperar con `isPending` (no hay datos todavía) en lugar de `isLoading`, para las lecturas del campo y para el detalle; el aviso de error sigue igual.
+- Archivos: `src/modulos/facturacion/pages/Comprobante.jsx`.
+- Verificación: `npm run build`; en el navegador, abrir el alta con el backend apagado y volver a prenderlo: se ve el aviso o el "Leyendo…", nunca la pantalla en blanco.
 
 ### 3.7 BK-B: Adjuntos (backend)
 
@@ -718,6 +757,25 @@ Todo arranca de `main` con la E1 mergeada.
 - `docs/modulos/PUESTA-A-PUNTO.md`: crear una carpeta local fuera del repo y apuntar la variable.
 - Si `docs/DOCUMENTACION.md` lista las variables, se suma esta.
 - Verificación: `python -m pytest -q` completo.
+
+**Revisión de BK-B, ronda 1 (sesión principal, 2026-10-13):** 0 urgent, 1 high, 13 minor (van al PR), 6 descartados.
+
+**RB1. Par: el límite de 5 con dos subidas a la vez (high)**
+- Hallazgo: en `AdjuntosService.subir` el conteo de adjuntos es una lectura sin bloqueo. `get_usuario_actual` usa la misma sesión del request y, cuando vence su caché de 60 s, su SELECT fija la foto de REPEATABLE READ (MySQL) antes del `FOR UPDATE` del Comprobante.
+- Escenario: un Comprobante con 4 adjuntos; A y B suben a la vez con la caché vencida. B espera el bloqueo, A commitea, el `count` de B lee la foto vieja (4), pasa, y quedan 6.
+- Arreglo mínimo: el conteo con lectura bloqueante (`.with_for_update()`, que lee lo último commiteado), manteniendo antes el bloqueo del Comprobante. Archivos: `app/modulos/facturacion/services/adjuntos_service.py` y `tests/facturacion/test_adjuntos.py`. SQLite no reproduce la carrera: el test controla que el conteo pide la lectura bloqueante.
+- Ajuste del ejecutor, aceptado: el conteo bloqueante solo deja un deadlock posible en MySQL contra `quitar` y `ComprobantesService.borrar`, que bloquean en otro orden. Por eso las tres escrituras sobre los adjuntos de un Comprobante toman el mismo orden: primero el Comprobante (`with_for_update()`), después sus adjuntos. `quitar` bloquea el Comprobante antes de borrar la fila; `borrar` toma el Comprobante con `with_for_update()` y lee sus adjuntos con lectura bloqueante (si no, podría no ver uno recién subido y chocar con la FK). Suma `app/modulos/facturacion/services/comprobantes_service.py`. Se descartó cerrar la transacción antes del bloqueo con un `rollback()`: no agrega bloqueos, pero el porqué no se ve en el código.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
+**Revisión de BK-B, ronda 2, sólo RB1 (sesión principal, 2026-10-13):** 0 urgent, 1 high, 4 minor (van al PR), 0 descartados.
+
+**RB2. Par: dos subidas a Comprobantes vecinos se traban (high)**
+- Hallazgo: el conteo bloqueante de RB1 (`SELECT COUNT ... WHERE comprobante_id = ? FOR UPDATE`) recorre el índice de la FK, secundario y no único. En REPEATABLE READ toma bloqueos de hueco, que no chocan entre sí, y el `INSERT` siguiente pide un bloqueo de intención de inserción, que choca con el hueco de la otra transacción.
+- Escenario: dos contadoras suben a la vez a los dos Comprobantes más nuevos. Las dos cuentan sobre el mismo hueco final y cada `INSERT` espera al de la otra: MySQL corta una con el error 1213 y ese pedido da 500. No se pierden datos (el archivo se borra en el `except`).
+- Arreglo mínimo: en `subir`, cerrar la transacción con `self.db.rollback()` antes del `FOR UPDATE` del Comprobante y volver a contar con una lectura común, sin `.with_for_update()`, con un comentario que diga el porqué. InnoDB arma la foto de REPEATABLE READ en la primera lectura común y una lectura bloqueante no la crea: el conteo que sigue al bloqueo del Comprobante ve lo último confirmado. Entre el cierre y el bloqueo no se lee nada (`usuario_id` llega como int) y `get_usuario_actual` sólo lee, así que el `rollback()` no pierde nada. Se corrige también el docstring de `subir` ("no se traben"). `quitar` y `borrar` no cambian: el mismo orden (primero el Comprobante) sigue valiendo y no insertan adjuntos. Archivos: `app/modulos/facturacion/services/adjuntos_service.py` y `tests/facturacion/test_adjuntos.py`.
+- Se reabre lo descartado en RB1 (el `rollback()` antes del bloqueo) porque el conteo bloqueante resultó tener este costo; el comentario en el código cubre el porqué que antes no se veía.
+- Test: SQLite no reproduce el deadlock. El test controla con el SQL compilado para MySQL que el conteo ya no lleva `FOR UPDATE`, y que antes del `SELECT ... FOR UPDATE` del Comprobante hay un `rollback`, con un espía sobre la sesión. Los cuatro tests de orden de RB1 se ajustan a esto.
+- Verificación: `python -m pytest tests/facturacion -q`.
 
 ### 3.8 FT-B: Adjuntos (front)
 
