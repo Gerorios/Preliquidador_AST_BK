@@ -30,6 +30,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.database import Base
 from app.modulos.facturacion.models import Adjunto, Comprobante
 from app.modulos.facturacion.services import historico as h
+from app.modulos.facturacion.services.reglas_comprobante import clave_identidad
 from app.modulos.facturacion.services.historico import (
     ENCABEZADOS,
     SIN_NUMERO_FACTURADO_HASTA,
@@ -337,8 +338,15 @@ MAESTROS = Maestros(
     clientes=[
         {"id": 1, "nombre": "CLIENTE UNO", "activo": True},
         {"id": 2, "nombre": "CLIENTE DOS", "activo": False},
+        # Dos activos con el mismo nombre normalizado: ambiguo.
         {"id": 3, "nombre": "CLIENTE REPETIDO", "activo": True},
-        {"id": 4, "nombre": "Cliente  Repetido", "activo": False},
+        {"id": 4, "nombre": "Cliente  Repetido", "activo": True},
+        # Uno activo y otro de baja: se usa el activo (paso C7a).
+        {"id": 5, "nombre": "CLIENTE ACTIVO", "activo": True},
+        {"id": 6, "nombre": "Cliente Activo", "activo": False},
+        # Todos de baja: ambiguo.
+        {"id": 7, "nombre": "CLIENTE DE BAJA", "activo": False},
+        {"id": 8, "nombre": "Cliente de Baja", "activo": False},
     ],
     tareas=[
         {"tarea_id": 10, "nombre": "TAREA A", "grupo_tarea": "G",
@@ -553,6 +561,59 @@ def test_un_cliente_o_un_numero_que_no_sirven_omiten_el_comprobante(cambios, mot
     [omitido] = resultado.omitidos
     assert omitido.motivo == motivo
     assert [f.fila for f in omitido.filas] == [2, 3]
+
+
+def test_un_cliente_repetido_con_uno_solo_activo_se_resuelve_al_activo():
+    # El maestro tiene el mismo nombre normalizado dos veces, uno de baja: el
+    # activo es el Cliente de hoy (paso C7a).
+    resultado = _clasificar(_fila(2, cliente="cliente activo"))
+
+    assert resultado.omitidos == []
+    assert resultado.no_resueltos == {}
+    [grupo] = resultado.grupos
+    assert (grupo.cliente_id, grupo.cliente_nombre) == (5, "CLIENTE ACTIVO")
+
+
+@pytest.mark.parametrize("cliente", ["cliente repetido", "cliente de baja"])
+def test_un_cliente_repetido_con_dos_activos_o_ninguno_sigue_ambiguo(cliente):
+    resultado = _clasificar(_fila(2, cliente=cliente))
+
+    assert resultado.grupos == []
+    [omitido] = resultado.omitidos
+    assert omitido.motivo == h.CLIENTE_AMBIGUO
+
+
+def test_el_sin_numero_omitido_de_un_cliente_con_uno_solo_activo_tiene_su_clave():
+    # Con la clave S, aplicar sabe que ese sin número sigue en el CSV y no lo
+    # borra: el Cliente se resuelve igual que en las Líneas.
+    resultado = _clasificar(_fila(2, cliente="CLIENTE ACTIVO", numero="", um="KG"))
+
+    [omitido] = resultado.omitidos
+    assert omitido.clave == clave_identidad(
+        historico=True, cliente_id=5, fecha_a_facturar=date(2025, 9, 1))
+
+
+@pytest.mark.parametrize("fecha_fac", ["-", " - ", "  -"])
+def test_fecha_fac_guion_cuenta_como_vacia(fecha_fac):
+    resultado = _clasificar(
+        _fila(2, numero="10", fecha_factura=fecha_fac),
+        _fila(3, numero="10", fecha_factura=""),
+        _fila(4, numero="11", fecha_factura=fecha_fac),
+        _fila(5, numero="11", fecha_factura="5/9/2025"),
+    )
+
+    assert resultado.omitidos == []
+    assert [(g.numero, g.fecha) for g in resultado.grupos] == [
+        ("10", None), ("11", date(2025, 9, 5)),
+    ]
+
+
+@pytest.mark.parametrize("fecha", ["-", " - "])
+def test_fecha_a_facturar_guion_sigue_ilegible(fecha):
+    resultado = _clasificar(_fila(2, numero="10", fecha_a_facturar=fecha))
+
+    [omitido] = resultado.omitidos
+    assert omitido.motivo == h.FECHA_A_FACTURAR_ILEGIBLE
 
 
 def test_el_motivo_es_el_de_la_primera_linea_mala():

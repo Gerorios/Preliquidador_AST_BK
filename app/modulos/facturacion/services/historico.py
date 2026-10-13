@@ -399,6 +399,24 @@ def _resolver(indice, nombre, no_encontrado, ambiguo):
     raise _LineaMala(ambiguo if encontradas else no_encontrado, nombre)
 
 
+def _cliente_unico(encontrados: list[dict]) -> dict | None:
+    """El Cliente de un nombre: el único candidato, o, entre varios, el único
+    activo (paso C7a: el maestro repite nombres con uno de baja). Con dos o más
+    activos, o todos de baja, None: es ambiguo. Sólo para el Cliente."""
+    if len(encontrados) == 1:
+        return encontrados[0]
+    activos = [c for c in encontrados if c.get("activo")]
+    return activos[0] if len(activos) == 1 else None
+
+
+def _resolver_cliente(indice, nombre) -> dict:
+    encontrados = indice.get(nombre, [])
+    cliente = _cliente_unico(encontrados)
+    if cliente is not None:
+        return cliente
+    raise _LineaMala(CLIENTE_AMBIGUO if encontrados else CLIENTE_NO_ENCONTRADO, nombre)
+
+
 def _leer_valor(texto, decimales, vacio, ilegible) -> Decimal:
     """Un valor obligatorio de la Línea: sus columnas no admiten NULL, y
     completar un vacío sería adivinar."""
@@ -445,8 +463,7 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
     analisis = _Analisis(fila=fila)
     cliente = tarea = tarea_mala = None
     try:
-        cliente = _resolver(clientes, normalizar_texto(fila.cliente),
-                            CLIENTE_NO_ENCONTRADO, CLIENTE_AMBIGUO)
+        cliente = _resolver_cliente(clientes, normalizar_texto(fila.cliente))
     except _LineaMala as error:
         no_resueltos[(error.motivo, error.detalle)] += 1
         analisis.error = error
@@ -492,7 +509,10 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
             if valor < 0:
                 raise _LineaMala(VALOR_NEGATIVO, texto.strip())
 
-        analisis.fecha_factura = _leer_fecha(fila.fecha_factura, FECHA_FACTURA_ILEGIBLE)
+        # En FECHA FAC, "-" es el vacío que muestra la planilla: el Comprobante
+        # queda sin fecha (paso C7a). En FECHA A FACTURAR sigue ilegible.
+        fecha_factura = "" if (fila.fecha_factura or "").strip() == "-" else fila.fecha_factura
+        analisis.fecha_factura = _leer_fecha(fecha_factura, FECHA_FACTURA_ILEGIBLE)
     except _LineaMala as error:
         analisis.error = error
         return analisis
@@ -521,12 +541,13 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
 
 def _clave_sin_numero(clave_grupo: tuple, clientes: dict) -> str | None:
     """La `S|...` de un grupo sin número omitido, si el Cliente se resuelve a
-    uno solo y la FECHA A FACTURAR es una fecha; si no, None."""
+    uno solo (con la misma regla que las Líneas) y la FECHA A FACTURAR es una
+    fecha; si no, None."""
     cliente, tipo, valor = clave_grupo
-    encontrados = clientes.get(cliente, [])
-    if tipo != "S" or not isinstance(valor, date) or len(encontrados) != 1:
+    encontrado = _cliente_unico(clientes.get(cliente, []))
+    if tipo != "S" or not isinstance(valor, date) or encontrado is None:
         return None
-    return clave_identidad(historico=True, cliente_id=encontrados[0]["id"],
+    return clave_identidad(historico=True, cliente_id=encontrado["id"],
                            fecha_a_facturar=valor)
 
 
@@ -586,7 +607,7 @@ def clasificar(filas: list[FilaPlanilla], maestros: Maestros, desde: date) -> Cl
             continue
 
         primera = analizadas[0]
-        [cliente] = indices[0][normalizar_texto(primera.fila.cliente)]
+        cliente = _resolver_cliente(indices[0], normalizar_texto(primera.fila.cliente))
         numero = leer_numero_comprobante(primera.fila.numero)
         fecha_a_facturar = primera.linea.fecha if numero is None else None
         resultado.grupos.append(GrupoHistorico(
