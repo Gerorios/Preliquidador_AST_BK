@@ -915,6 +915,15 @@ Todo arranca de `main` con la E1 mergeada.
 - Revisar con el usuario los conteos por motivo y lo no resuelto, en la consola, sin que nada vaya a git.
 - Si el usuario corrige la planilla, vuelve a exportar y se repite.
 - Después viene **F3**.
+- Primera simulación (2026-10-13), sin escribir: 991 filas, 216 Comprobantes a migrar, diferencias 0. Lo omitido salía de tres causas, y el usuario decidió:
+  - **Cliente repetido en el maestro**, uno activo y otro de baja con el mismo nombre normalizado (50 Comprobantes): si entre los candidatos hay **uno solo activo, se usa ese**; si hay dos o más activos, o ninguno, sigue siendo `cliente_ambiguo`. Sólo para el Cliente. Va como paso **C7a** (par).
+  - **FECHA FAC "-"** cuenta como vacía (el Comprobante queda con fecha NULL, como con la celda vacía). Las demás fechas ilegibles (texto, sin año, dos fechas) las corrige el usuario en la planilla. Va en C7a.
+  - **Tareas que no están en el maestro** (cuatro de cosecha y una renombrada en el campo): el usuario corrige la planilla con nombres que existan y la vuelve a exportar.
+
+**C7a. Par: Cliente activo y FECHA FAC "-"**
+- Archivos: `historico.py` y `tests/facturacion/test_historico.py`.
+- Rojo: un Cliente con dos candidatos (uno activo y otro de baja) se resuelve al activo; con dos activos, o con todos de baja, sigue ambiguo; FECHA FAC "-" (también con espacios) cuenta como vacía; FECHA A FACTURAR "-" sigue como hoy.
+- Verificación: `python -m pytest tests/facturacion -q`. Después, otra simulación con la planilla corregida.
 
 ### 3.10 Pasos FRENADOS (los hace la sesión principal, con OK del usuario)
 
