@@ -782,9 +782,12 @@ Todo arranca de `main` con la E1 mergeada.
 **FB1. Par: reglas de adjuntos**
 - Archivos: `src/modulos/facturacion/adjuntos.js` y su test.
 - Rojo:
-  - `validarArchivo(file, cantidad)`: extensión, menos de 10 MB y menos de 5 adjuntos, con mensajes en español;
+  - `validarArchivo(file, cantidad)`: extensión, hasta 10 MB (exactamente 10 MB sirve, como en el backend) y menos de 5 adjuntos, con mensajes en español;
   - `mensajeDeAdjunto(error)` por `status` (403, 404, 413, 503 y otro), porque el `detail` de un blob no se puede leer.
 - Verificación: `npm test`.
+- Lo decidido al ejecutarlo (sesión principal, 2026-10-13):
+  - El status se lee de `error.status` (el interceptor de `src/core/api.js` reemplaza el error de axios) y, si no está, de `error.response.status`.
+  - `mensajeDeAdjunto` prefiere `error.detail.mensaje` cuando existe y cae al mensaje por status cuando no. El `detail` sólo falta en la descarga, que se pide como blob. Al subir o al quitar, el backend explica el error: con el mensaje por status, un `.pdf` falso (422 `adjunto_invalido`) diría "Probá de nuevo en un rato". Se descartó resolverlo en `Adjuntos.jsx`, porque serían dos lugares que eligen el mensaje.
 
 **FB2. Paso visual: `components/Adjuntos.jsx` en el detalle**
 - La lista, "Subir" (`accept=".pdf,.png,.jpg,.jpeg"`), "Ver" (pestaña nueva y revocar la URL al rato) y "Quitar" con confirmación.
@@ -800,9 +803,31 @@ Todo arranca de `main` con la E1 mergeada.
   - un archivo de más de 10 MB;
   - ver y quitar;
   - un rol de sólo Ver.
+- Lo decidido al ejecutarlo (sesión principal, 2026-10-13):
+  - El servicio manda el header `multipart/form-data` explícito: la instancia `api` del núcleo trae `Content-Type: application/json` por defecto y, sin él, axios convierte el FormData en JSON.
+  - Después de subir o quitar se cambian sólo `adjuntos` y `cantidad_adjuntos` del detalle en la caché, y se invalida el listado: volver a pedir el detalle reiniciaría el formulario y se perderían los cambios sin guardar.
+  - "Ver" abre la pestaña en el mismo clic y le asigna el archivo cuando llega: un `window.open` después del `await` lo frena el bloqueador. Si el navegador la bloquea igual, el archivo se descarga con un aviso.
+  - El foco, después de subir, quitar o cancelar, vuelve con un efecto en el render que ya muestra la lista nueva, y no con `requestAnimationFrame`. Visto en el smoke: con la lista vieja, "Subir archivo" seguía deshabilitado y el foco se iba al título.
+  - Smoke contra `testing`, hecho: los tres tipos, un `.pdf` falso, el 6.º archivo, uno de más de 10 MB y uno `.txt` (estos dos sin llamar a la API), guardar después de subir sin perder cambios ni dar 409, ver, quitar y cancelar, el listado sin recargar (cantidad y "Sin adjunto"), un histórico con Editar y un nombre largo a 1280 px. Sin probar: un rol de sólo Ver, porque no hay un usuario así en `testing` (lo cubre el código: sin Editar no se dibujan "Subir" ni "Quitar").
 
 **FB3. Paso: revisión visual**
 - `/impeccable critique` y `/impeccable audit` del detalle con adjuntos.
+
+**Revisión de FT-B (sesión principal, 2026-10-13): 0 urgent, 0 high, 9 minor, 6 descartados.** De los minor, el usuario eligió arreglar tres de diseño antes del PR, después de verlos en un antes y después (RF-B1 a RF-B3). El resto va al cuerpo del PR y a "A futuro".
+
+**RF-B1. Paso visual: un Comprobante sin adjunto lo marca (minor 3 de la revisión)**
+- Archivos: `components/Adjuntos.jsx`, `components/Adjuntos.module.css` y `pages/Comprobante.jsx`.
+- Con 0 adjuntos y un Comprobante que no es histórico, el estado vacío pasa a tono de aviso: fondo `var(--warn-dim)`, borde `var(--warn)`, texto `var(--text-primary)` y el ícono `alerta` en `var(--warn)` (la convención de `.badge-warn`). Texto: "Falta el adjunto." y, con Editar, " Subí el PDF o la imagen del comprobante.". Un histórico sin adjuntos sigue con el estado neutro de hoy ("Sin adjuntos."), igual que en el listado, donde un histórico nunca dice "Sin adjunto".
+- En el alta, el aviso de guardado suma la guía: "<Tipo> guardada. Ahora adjuntá el comprobante, abajo.". La edición no cambia ("<Tipo> actualizada").
+- Verificación en el navegador: un Comprobante sin adjuntos, uno histórico sin adjuntos y un alta.
+
+**RF-B2. Paso visual: la ayuda aclara que se guardan al subirlos (minor 4)**
+- Archivo: `components/Adjuntos.jsx`.
+- La ayuda pasa a "PDF, PNG o JPG, de hasta 10 MB. Se guardan al subirlos.". Sin "sin tocar Guardar": en el detalle de un histórico no hay botón Guardar.
+
+**RF-B3. Paso visual: la nota del histórico no se contradice (minor 2)**
+- Archivo: `pages/Comprobante.jsx`.
+- Con Editar, la nota dice "Comprobante histórico, migrado de la planilla: no se edita ni se borra, pero sí se le pueden subir y quitar adjuntos. Sus importes son los de la planilla, tal cual.". Sin Editar queda como hoy.
 
 ### 3.9 BK-C: Histórico (backend)
 
