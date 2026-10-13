@@ -4,8 +4,9 @@ sección 3.1, "Migración del histórico").
 Toda la lógica pura vive acá, sin base de campo ni sesión, para probarla con
 datos inventados; el script `scripts/migrar_historico_facturacion.py` es una
 capa fina encima. Esta parte lee la planilla exportada: el CSV, los números
-es-AR y las fechas. Lo que no se puede leer se marca ilegible y no se adivina:
-quien clasifica omite el Comprobante entero y lo lista.
+es-AR, las fechas, la UM y el número del Comprobante. Lo que no se puede leer
+se marca ilegible y no se adivina: quien clasifica omite el Comprobante entero
+y lo lista.
 """
 import csv
 import re
@@ -13,6 +14,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+from app.modulos.facturacion.services.comprobantes_service import LARGO_NUMERO
+from app.modulos.facturacion.services.reglas_comprobante import (
+    NumeroInvalido, normalizar_numero,
+)
+from app.modulos.facturacion.unidades import traducir_unidad
 
 # Los encabezados que se usan, recortados y en mayúsculas. QUINCENA A FACTURAR,
 # GRUPO TAREA y Nosotros se ignoran, así que no se exigen.
@@ -38,7 +45,18 @@ _FECHA = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})$")
 
 
 class ValorIlegible(ValueError):
-    """Una celda con algo que no es un número o una fecha válida."""
+    """Una celda con algo que no es un número o una fecha válida, o un FACT N°
+    con la barra que separa las partes de clave_identidad."""
+
+
+class NumeroDemasiadoLargo(ValueError):
+    """Un FACT N° que, normalizado, no entra en la columna `numero`. No es
+    ilegible: se omite su grupo con su propio motivo, para que se corrija en la
+    planilla."""
+
+
+# Lo que en FACT N° significa "sin número" (pregunta 4), además del vacío.
+SIN_NUMERO = "-"
 
 
 class PlanillaInvalida(ValueError):
@@ -165,3 +183,36 @@ def leer_planilla(ruta) -> list[FilaPlanilla]:
                 },
             ))
         return filas
+
+
+def leer_unidad(texto) -> str | None:
+    """La clave de unidad de una UM, comparada sin acentos, en mayúsculas y con
+    los espacios colapsados (la tabla vive en `unidades.UNIDAD_DE_PLANILLA`).
+
+    NO FACTURABLE, vacía o cualquier otra dan None: su Comprobante se omite y
+    se lista (pregunta 2). No se usa la Unidad sugerida, porque adivina."""
+    clave, _no_facturable = traducir_unidad(texto)
+    return clave
+
+
+def leer_numero_comprobante(texto) -> str | None:
+    """El FACT N° normalizado como el de un Comprobante cargado a mano (regla 1),
+    para que el mismo número dé la misma clave venga de donde venga.
+
+    Vacío o "-" dan None: la fila va a un Comprobante sin número (pregunta 4).
+    Un compuesto ("10 - 11", "F.10 - NC 11") o cualquier otro texto se migra
+    tal cual (pregunta 3). La barra da ValorIlegible, porque separa las partes
+    de clave_identidad; más de LARGO_NUMERO caracteres, ya normalizado, da
+    NumeroDemasiadoLargo."""
+    recortado = (texto or "").strip()
+    if not recortado or recortado == SIN_NUMERO:
+        return None
+    try:
+        numero = normalizar_numero(recortado)
+    except NumeroInvalido as error:
+        raise ValorIlegible(str(error)) from None
+    if len(numero) > LARGO_NUMERO:
+        raise NumeroDemasiadoLargo(
+            f"«{numero}» tiene más de {LARGO_NUMERO} caracteres."
+        )
+    return numero

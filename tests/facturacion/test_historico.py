@@ -20,11 +20,14 @@ import pytest
 from app.modulos.facturacion.services.historico import (
     ENCABEZADOS,
     FilaPlanilla,
+    NumeroDemasiadoLargo,
     PlanillaInvalida,
     ValorIlegible,
     leer_fecha,
     leer_numero_ar,
+    leer_numero_comprobante,
     leer_planilla,
+    leer_unidad,
 )
 
 
@@ -223,3 +226,83 @@ def test_los_encabezados_que_se_ignoran_no_son_obligatorios(tmp_path):
     [fila] = leer_planilla(ruta)
 
     assert fila.fecha_a_facturar == "1/9/2025"
+
+
+# ─── UM a unidad ────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("texto, esperado", [
+    ("PLANTA", "plantas"),
+    ("TANCADA", "tancadas"),
+    ("HORAS TRACTOR", "horas_tractor"),
+    ("HORAS PEON", "horas_peon"),
+    ("HECTAREA", "hectareas"),
+    ("BINS", "bins"),
+    ("BINS C", "bins_c"),
+    ("BINS M", "bins_m"),
+    ("VIAJES", "viajes"),
+    # Sin acentos, en mayúsculas y con los espacios colapsados.
+    ("Horas Peón", "horas_peon"),
+    ("  horas   tractor ", "horas_tractor"),
+    ("HECTÁREA", "hectareas"),
+    ("bins\tc", "bins_c"),
+])
+def test_leer_unidad_traduce_la_tabla_de_um(texto, esperado):
+    assert leer_unidad(texto) == esperado
+
+
+@pytest.mark.parametrize("texto", [
+    "NO FACTURABLE",
+    "no  facturable",
+    "",
+    "   ",
+    None,
+    "PLANTAS",
+    "HORA PEON",
+    "KG",
+])
+def test_leer_unidad_no_traduce_no_facturable_vacia_ni_otra(texto):
+    # Su Comprobante se omite y se lista (pregunta 2): eso es de C3.
+    assert leer_unidad(texto) is None
+
+
+# ─── Número del Comprobante ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize("texto, esperado", [
+    ("123", "123"),
+    ("  0001234 ", "0001234"),
+    # Compuestos, tal cual con la normalización de la regla 1 (pregunta 3).
+    ("10-11", "10-11"),
+    ("10 - 11", "10 - 11"),
+    ("  10   -  11 ", "10 - 11"),
+    ("F.10 - NC 11", "F.10 - NC 11"),
+    ("f.10 - nc 11", "F.10 - NC 11"),
+    # Cualquier otro texto también se migra tal cual.
+    ("a confirmar", "A CONFIRMAR"),
+    ("--", "--"),
+])
+def test_leer_numero_comprobante_normaliza_como_la_regla_1(texto, esperado):
+    assert leer_numero_comprobante(texto) == esperado
+
+
+@pytest.mark.parametrize("texto", ["", "   ", None, "-", " - "])
+def test_leer_numero_comprobante_vacio_o_guion_es_sin_numero(texto):
+    assert leer_numero_comprobante(texto) is None
+
+
+def test_leer_numero_comprobante_con_barra_es_ilegible():
+    # La barra separa las partes de clave_identidad.
+    with pytest.raises(ValorIlegible):
+        leer_numero_comprobante("10 | 11")
+
+
+def test_leer_numero_comprobante_de_mas_de_30_caracteres_no_se_migra():
+    assert leer_numero_comprobante("1" * 30) == "1" * 30
+    # Se mide ya normalizado: los espacios colapsados no cuentan.
+    assert leer_numero_comprobante("F.1" + " " * 40 + "NC 2") == "F.1 NC 2"
+    with pytest.raises(NumeroDemasiadoLargo):
+        leer_numero_comprobante("1" * 31)
+
+
+def test_numero_demasiado_largo_no_es_ilegible():
+    # Son dos motivos distintos en el listado de omitidos.
+    assert not issubclass(NumeroDemasiadoLargo, ValorIlegible)
