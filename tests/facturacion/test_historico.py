@@ -1,6 +1,6 @@
 """Migración del histórico: lectura de la planilla y clasificación de sus
-filas (plan de la E2, sección 3.1, "Migración del histórico", y pares C1 a C3
-de la sección 3.9).
+filas, y su aplicación a la base (plan de la E2, sección 3.1, "Migración del
+histórico", y pares C1 a C4 de la sección 3.9).
 
 Lo que cuidan estos tests:
 - que un número es-AR se lea igual venga como venga ("1.234,56", "$ 1.234,56",
@@ -11,7 +11,10 @@ Lo que cuidan estos tests:
 - que el CSV se lea con BOM, CRLF y `;`, que es como lo puede dejar Excel;
 - que un encabezado faltante frene con un error que lo nombre;
 - que una Línea mala omita su Comprobante entero, con el motivo de esa Línea,
-  así nunca queda un Comprobante a medias y la conciliación cuadra.
+  así nunca queda un Comprobante a medias y la conciliación cuadra;
+- que aplicar dos veces no duplique, que lo cambiado no se pise sin el flag y
+  que una fila nunca cuente dos veces (sin número que gana número, o el mismo
+  número cargado a mano).
 
 Datos inventados.
 """
@@ -19,7 +22,11 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
+from app.core.database import Base
+from app.modulos.facturacion.models import Adjunto, Comprobante
 from app.modulos.facturacion.services import historico as h
 from app.modulos.facturacion.services.historico import (
     ENCABEZADOS,
@@ -29,6 +36,7 @@ from app.modulos.facturacion.services.historico import (
     NumeroDemasiadoLargo,
     PlanillaInvalida,
     ValorIlegible,
+    aplicar,
     clasificar,
     leer_fecha,
     leer_numero_ar,
@@ -615,3 +623,295 @@ def test_la_cantidad_cero_se_migra_tal_cual():
 
     assert grupo.lineas[0].cantidad == Decimal("0")
     assert grupo.lineas[0].importe == Decimal("0")
+
+
+# ─── Aplicar (SQLite) ───────────────────────────────────────────────────────
+
+@pytest.fixture()
+def db():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    sesion = sessionmaker(bind=engine)()
+    yield sesion
+    sesion.close()
+    engine.dispose()
+
+
+def _aplicar(db, *filas, reemplazar_cambiados=False, confirmar=True):
+    resultado = aplicar(db, _clasificar(*filas), reemplazar_cambiados=reemplazar_cambiados)
+    if confirmar:
+        db.commit()
+    return resultado
+
+
+def _por_clave(db, clave):
+    return db.query(Comprobante).filter_by(clave_identidad=clave).one_or_none()
+
+
+def _adjuntar(db, comprobante):
+    db.add(Adjunto(comprobante_id=comprobante.id, nombre_original="a.pdf",
+                   nombre_en_disco=f"{comprobante.id}-a.pdf",
+                   tipo_contenido="application/pdf", tamano_bytes=10))
+    db.commit()
+
+
+PLANILLA = (
+    _fila(2, numero="10", fecha_factura="5/9/2025"),
+    _fila(3, numero="10", tarea="TAREA B", um="HORAS PEON", finca="FINCA X",
+          cantidad="8", precio="1.000", importe="8.000"),
+    _fila(4, numero="11", fecha_a_facturar="16/9/2025"),
+    _fila(5, numero="", fecha_a_facturar="1/8/2026"),
+)
+
+
+def test_la_primera_corrida_crea_los_historicos(db):
+    resultado = _aplicar(db, *PLANILLA)
+
+    assert resultado.nuevos == ["H|1|10", "H|1|11", "S|1|2026-08-01"]
+    assert resultado.conteos() == {
+        "nuevos": 3, "iguales": 0, "cambiados": 0, "reemplazados": 0,
+        "omitidos_por_carga_a_mano": 0, "ausentes_del_csv": 0,
+        "sin_numero_borrados": 0, "sin_numero_bloqueados": 0,
+        "sin_numero_omitidos": 0,
+    }
+    comprobantes = db.query(Comprobante).order_by(Comprobante.id).all()
+    assert [(c.clave_identidad, c.numero, c.fecha, c.pendiente_de_facturar)
+            for c in comprobantes] == [
+        ("H|1|10", "10", date(2025, 9, 5), False),
+        ("H|1|11", "11", None, False),
+        ("S|1|2026-08-01", None, None, True),
+    ]
+    for c in comprobantes:
+        assert c.es_historico is True
+        assert c.tipo == "factura"
+        assert c.empresa_emisora is None
+        assert c.cliente_id == 1 and c.cliente_nombre == "CLIENTE UNO"
+        assert c.creado_por is None and c.actualizado_en is None
+    diez = comprobantes[0]
+    assert [(li.orden, li.fecha, li.tarea_id, li.tarea_nombre, li.unidad,
+             li.finca_id, li.finca_nombre, li.cantidad, li.precio_unitario, li.importe)
+            for li in diez.lineas] == [
+        (1, date(2025, 9, 1), 10, "TAREA A", "plantas", None, None,
+         Decimal("10"), Decimal("2.5"), Decimal("25")),
+        (2, date(2025, 9, 1), 11, "TAREA B", "horas_peon", 100, "FINCA X",
+         Decimal("8"), Decimal("1000"), Decimal("8000")),
+    ]
+
+
+def test_aplicar_no_confirma_la_transaccion(db):
+    # El commit lo decide quien llama: la simulación es aplicar y deshacer.
+    _aplicar(db, *PLANILLA, confirmar=False)
+    db.rollback()
+
+    assert db.query(Comprobante).count() == 0
+
+
+def test_la_segunda_corrida_no_crea_nada(db):
+    _aplicar(db, *PLANILLA)
+    ids = [c.id for c in db.query(Comprobante).order_by(Comprobante.id)]
+
+    resultado = _aplicar(db, *PLANILLA)
+
+    assert resultado.nuevos == []
+    assert resultado.iguales == ["H|1|10", "H|1|11", "S|1|2026-08-01"]
+    assert sum(resultado.conteos().values()) == 3
+    assert [c.id for c in db.query(Comprobante).order_by(Comprobante.id)] == ids
+
+
+def test_el_mismo_conjunto_de_lineas_en_otro_orden_es_igual(db):
+    _aplicar(db, *PLANILLA)
+
+    resultado = _aplicar(db, *reversed(PLANILLA))
+
+    assert resultado.cambiados == []
+    assert sorted(resultado.iguales) == ["H|1|10", "H|1|11", "S|1|2026-08-01"]
+
+
+@pytest.mark.parametrize("cambio", [
+    {"importe": "24"},            # una Línea distinta
+    {"fecha_factura": "6/9/2025"},  # la fecha del Comprobante
+])
+def test_un_historico_que_cambio_se_informa_y_no_se_toca(db, cambio):
+    _aplicar(db, *PLANILLA)
+    antes = _por_clave(db, "H|1|10")
+    lineas_antes = [(li.id, li.importe) for li in antes.lineas]
+
+    cambiada = (_fila(2, numero="10", **{"fecha_factura": "5/9/2025", **cambio}),
+                *PLANILLA[1:])
+    resultado = _aplicar(db, *cambiada)
+
+    assert resultado.cambiados == ["H|1|10"]
+    assert resultado.reemplazados == []
+    db.expire_all()
+    despues = _por_clave(db, "H|1|10")
+    assert despues.fecha == date(2025, 9, 5)
+    assert [(li.id, li.importe) for li in despues.lineas] == lineas_antes
+
+
+def test_con_el_flag_el_cambiado_se_reemplaza_conservando_id_y_adjuntos(db):
+    _aplicar(db, *PLANILLA)
+    original = _por_clave(db, "H|1|10")
+    id_original = original.id
+    _adjuntar(db, original)
+
+    cambiada = (_fila(2, numero="10", fecha_factura="6/9/2025", importe="24"),
+                PLANILLA[2], PLANILLA[3])
+    resultado = _aplicar(db, *cambiada, reemplazar_cambiados=True)
+
+    assert resultado.reemplazados == ["H|1|10"]
+    assert resultado.cambiados == []
+    db.expire_all()
+    despues = _por_clave(db, "H|1|10")
+    assert despues.id == id_original
+    assert despues.fecha == date(2025, 9, 6)
+    assert [(li.orden, li.importe) for li in despues.lineas] == [(1, Decimal("24"))]
+    assert len(despues.adjuntos) == 1
+    # El reemplazo no es una edición de una persona.
+    assert despues.actualizado_en is None
+
+
+def _cargado_a_mano(db, tipo, numero="10", cliente_id=1):
+    c = Comprobante(
+        tipo=tipo, cliente_id=cliente_id, cliente_nombre="CLIENTE UNO",
+        empresa_emisora="EMPRESA", numero=numero, fecha=date(2025, 9, 5),
+        es_historico=False, clave_identidad=f"E|EMPRESA|{tipo}|{numero}",
+    )
+    db.add(c)
+    db.commit()
+    return c
+
+
+def test_si_el_mismo_cliente_y_numero_se_cargo_a_mano_se_omite(db):
+    _cargado_a_mano(db, "factura")
+
+    resultado = _aplicar(db, *PLANILLA)
+
+    assert [(g.cliente_id, g.numero) for g in resultado.omitidos_por_carga_a_mano] == [
+        (1, "10"),
+    ]
+    assert resultado.nuevos == ["H|1|11", "S|1|2026-08-01"]
+    assert _por_clave(db, "H|1|10") is None
+
+
+def test_una_nota_de_credito_a_mano_no_choca_con_el_historico(db):
+    # Los históricos son siempre Facturas y las Notas de crédito numeran
+    # aparte (R3): el mismo número en una NC no es el mismo Comprobante.
+    _cargado_a_mano(db, "nota_credito")
+    # Otro Cliente con el mismo número tampoco.
+    _cargado_a_mano(db, "factura", numero="11", cliente_id=2)
+
+    resultado = _aplicar(db, *PLANILLA)
+
+    assert resultado.omitidos_por_carga_a_mano == []
+    assert resultado.nuevos == ["H|1|10", "H|1|11", "S|1|2026-08-01"]
+
+
+def test_un_historico_que_salio_del_csv_se_informa_y_no_se_borra(db):
+    _aplicar(db, *PLANILLA)
+
+    resultado = _aplicar(db, PLANILLA[0], PLANILLA[1], PLANILLA[3])
+
+    assert resultado.ausentes_del_csv == ["H|1|11"]
+    assert _por_clave(db, "H|1|11") is not None
+
+
+def test_una_fila_sin_numero_que_gana_numero_pasa_a_su_comprobante(db):
+    primera = (
+        _fila(2, numero="", fecha_a_facturar="1/9/2025"),
+        _fila(3, numero="-", fecha_a_facturar="1/9/2025", tarea="TAREA B"),
+    )
+    _aplicar(db, *primera)
+    sin_numero = _por_clave(db, "S|1|2025-09-01")
+    id_sin_numero = sin_numero.id
+    assert len(sin_numero.lineas) == 2
+
+    # La fila 3 gana número: pasa al numerado en la misma corrida, sin el
+    # flag, y sale del sin número.
+    resultado = _aplicar(db, primera[0], _fila(3, numero="20", tarea="TAREA B"))
+
+    assert resultado.nuevos == ["H|1|20"]
+    assert resultado.reemplazados == ["S|1|2025-09-01"]
+    db.expire_all()
+    sin_numero = _por_clave(db, "S|1|2025-09-01")
+    assert sin_numero.id == id_sin_numero
+    assert [li.tarea_id for li in sin_numero.lineas] == [10]
+    assert [li.tarea_id for li in _por_clave(db, "H|1|20").lineas] == [11]
+
+    # La fila 2 también: el sin número queda vacío y se borra.
+    resultado = _aplicar(db, _fila(2, numero="21"), _fila(3, numero="20", tarea="TAREA B"))
+
+    assert resultado.nuevos == ["H|1|21"]
+    assert resultado.sin_numero_borrados == ["S|1|2025-09-01"]
+    assert resultado.ausentes_del_csv == []
+    assert _por_clave(db, "S|1|2025-09-01") is None
+    assert resultado.bloqueado is False
+
+
+def test_un_sin_numero_con_adjuntos_no_se_toca_y_bloquea(db):
+    primera = (
+        _fila(2, numero="", fecha_a_facturar="1/9/2025"),
+        _fila(3, numero="", fecha_a_facturar="1/9/2025", tarea="TAREA B"),
+        _fila(4, numero="", fecha_a_facturar="16/9/2025"),
+    )
+    _aplicar(db, *primera)
+    _adjuntar(db, _por_clave(db, "S|1|2025-09-01"))
+    _adjuntar(db, _por_clave(db, "S|1|2025-09-16"))
+
+    # Al del 1/9 se le va una fila; el del 16/9 queda sin filas.
+    resultado = _aplicar(db, primera[0], _fila(3, numero="20", tarea="TAREA B"))
+
+    assert resultado.nuevos == ["H|1|20"]
+    assert resultado.sin_numero_bloqueados == ["S|1|2025-09-01", "S|1|2025-09-16"]
+    assert resultado.reemplazados == [] and resultado.sin_numero_borrados == []
+    assert resultado.bloqueado is True
+    db.expire_all()
+    assert len(_por_clave(db, "S|1|2025-09-01").lineas) == 2
+    assert _por_clave(db, "S|1|2025-09-16") is not None
+
+
+def test_un_sin_numero_igual_con_adjuntos_no_bloquea(db):
+    primera = (_fila(2, numero="", fecha_a_facturar="1/9/2025"),)
+    _aplicar(db, *primera)
+    _adjuntar(db, _por_clave(db, "S|1|2025-09-01"))
+
+    resultado = _aplicar(db, *primera)
+
+    assert resultado.iguales == ["S|1|2025-09-01"]
+    assert resultado.bloqueado is False
+
+
+def test_el_omitido_sin_numero_lleva_su_clave_si_se_puede_calcular():
+    resultado = _clasificar(
+        _fila(2, numero="", fecha_a_facturar="1/9/2025", um="KG"),
+        # Sin Cliente resuelto o sin FECHA A FACTURAR legible no hay clave.
+        _fila(3, numero="", fecha_a_facturar="1/9/2025", cliente="CLIENTE Z"),
+        _fila(4, numero="", fecha_a_facturar="x"),
+        _fila(5, numero="", fecha_a_facturar=""),
+        # Con número, tampoco: un histórico con número no se borra nunca.
+        _fila(6, numero="10", um="KG"),
+    )
+
+    assert [(o.filas[0].fila, o.clave) for o in resultado.omitidos] == [
+        (2, "S|1|2025-09-01"), (3, None), (4, None), (5, None), (6, None),
+    ]
+
+
+def test_un_sin_numero_cuyas_filas_salen_omitidas_no_se_borra(db):
+    # "Queda sin filas" es que ninguna fila sin número del CSV cae en su clave,
+    # no que sus filas estén rotas: nunca se destruye dato porque la planilla
+    # se rompió. La conciliación muestra la diferencia.
+    primera = (
+        _fila(2, numero="", fecha_a_facturar="1/9/2025"),
+        _fila(3, numero="", fecha_a_facturar="1/9/2025", tarea="TAREA B"),
+    )
+    _aplicar(db, *primera)
+
+    resultado = _aplicar(db, primera[0], _fila(3, numero="", fecha_a_facturar="1/9/2025",
+                                               tarea="TAREA B", um="KG"))
+
+    assert resultado.sin_numero_omitidos == ["S|1|2025-09-01"]
+    assert resultado.sin_numero_borrados == []
+    assert resultado.reemplazados == []
+    assert resultado.conteos()["sin_numero_omitidos"] == 1
+    db.expire_all()
+    assert [li.tarea_id for li in _por_clave(db, "S|1|2025-09-01").lineas] == [10, 11]

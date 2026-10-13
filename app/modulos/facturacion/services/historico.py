@@ -1,15 +1,17 @@
 """Migración del histórico de la planilla de facturación (plan de la E2,
 sección 3.1, "Migración del histórico").
 
-Toda la lógica pura vive acá, sin base de campo ni sesión, para probarla con
-datos inventados; el script `scripts/migrar_historico_facturacion.py` es una
-capa fina encima. Tiene dos partes:
+Toda la lógica vive acá, sin base de campo, para probarla con datos
+inventados y SQLite; el script `scripts/migrar_historico_facturacion.py` es
+una capa fina encima. Tiene tres partes:
 - la lectura de la planilla exportada: el CSV, los números es-AR, las fechas,
   la UM y el número del Comprobante. Lo que no se puede leer se marca ilegible
   y no se adivina;
 - la clasificación (`clasificar`): resuelve Cliente, tarea y finca contra los
   maestros que recibe y agrupa las filas en Comprobantes. Una Línea mala omite
-  su Comprobante entero con su motivo, y queda listado.
+  su Comprobante entero con su motivo, y queda listado;
+- la aplicación (`aplicar`): lleva los grupos a la base propia sin duplicar,
+  por `clave_identidad`. No confirma la transacción: lo decide el script.
 """
 import csv
 import re
@@ -19,11 +21,14 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
+from app.modulos.facturacion.models import Comprobante, LineaComprobante
 from app.modulos.facturacion.services.comprobantes_service import (
     CANTIDAD, IMPORTE, LARGO_NUMERO, PRECIO,
 )
 from app.modulos.facturacion.services.reglas_comprobante import (
-    NumeroInvalido, normalizar_numero,
+    FACTURA, NumeroInvalido, clave_identidad, normalizar_numero,
 )
 from app.modulos.facturacion.unidades import normalizar_texto, traducir_unidad
 
@@ -311,12 +316,18 @@ class GrupoHistorico:
 @dataclass(frozen=True)
 class Omitido:
     """Un Comprobante que no se migra: todas sus filas, en el orden del CSV,
-    con el motivo y el valor de la primera Línea mala (`fila_mala`)."""
+    con el motivo y el valor de la primera Línea mala (`fila_mala`).
+
+    `clave` es la `S|...` de un grupo sin número, cuando se puede calcular
+    (Cliente resuelto y FECHA A FACTURAR legible): con ella, aplicar sabe que
+    ese sin número todavía tiene filas en el CSV y no lo borra. En los demás,
+    None."""
 
     motivo: str
     detalle: str
     fila_mala: int
     filas: list[FilaPlanilla]
+    clave: str | None = None
 
 
 @dataclass(frozen=True)
@@ -505,6 +516,17 @@ def _analizar(fila, indices, desde, no_resueltos) -> _Analisis:
     return analisis
 
 
+def _clave_sin_numero(clave_grupo: tuple, clientes: dict) -> str | None:
+    """La `S|...` de un grupo sin número omitido, si el Cliente se resuelve a
+    uno solo y la FECHA A FACTURAR es una fecha; si no, None."""
+    cliente, tipo, valor = clave_grupo
+    encontrados = clientes.get(cliente, [])
+    if tipo != "S" or not isinstance(valor, date) or len(encontrados) != 1:
+        return None
+    return clave_identidad(historico=True, cliente_id=encontrados[0]["id"],
+                           fecha_a_facturar=valor)
+
+
 def _fincas_del_cliente(finca) -> tuple:
     return finca["cliente_id"], normalizar_texto(finca["nombre"])
 
@@ -532,13 +554,14 @@ def clasificar(filas: list[FilaPlanilla], maestros: Maestros, desde: date) -> Cl
         analisis = _analizar(fila, indices, desde, resultado.no_resueltos)
         por_grupo.setdefault(_clave_de_grupo(fila), []).append(analisis)
 
-    for analizadas in por_grupo.values():
+    for clave_grupo, analizadas in por_grupo.items():
         filas_del_grupo = [a.fila for a in analizadas]
         mala = next((a for a in analizadas if a.error), None)
         if mala:
             resultado.omitidos.append(Omitido(
                 motivo=mala.error.motivo, detalle=mala.error.detalle,
                 fila_mala=mala.fila.fila, filas=filas_del_grupo,
+                clave=_clave_sin_numero(clave_grupo, indices[0]),
             ))
             continue
 
@@ -555,6 +578,7 @@ def clasificar(filas: list[FilaPlanilla], maestros: Maestros, desde: date) -> Cl
                 motivo=FECHA_FACTURA_EN_CONFLICTO,
                 detalle=" y ".join(f.isoformat() for f in fechas),
                 fila_mala=conflicto.fila.fila, filas=filas_del_grupo,
+                clave=_clave_sin_numero(clave_grupo, indices[0]),
             ))
             continue
 
@@ -575,4 +599,191 @@ def clasificar(filas: list[FilaPlanilla], maestros: Maestros, desde: date) -> Cl
             lineas=[a.linea for a in analizadas],
         ))
         resultado.avisos.extend(aviso for a in analizadas for aviso in a.avisos)
+    return resultado
+
+
+# ─── Aplicar ────────────────────────────────────────────────────────────────
+
+@dataclass
+class ResultadoAplicar:
+    """Qué hizo (o haría, si quien llama deshace) una corrida, por
+    `clave_identidad`, en el orden del CSV; los que no vienen del CSV
+    (ausentes, y sin número borrados o bloqueados que quedaron sin filas), en
+    el orden de la base.
+
+    - `cambiados`: históricos con número que cambiaron y no se tocaron (falta
+      `--reemplazar-cambiados`). Los que sí se reemplazaron, y los sin número
+      recalculados, van en `reemplazados`.
+    - `sin_numero_bloqueados`: sin número con Adjuntos que habría que cambiar
+      o borrar y no se tocan. Con alguno, la salida no puede ser 0
+      (`bloqueado`).
+    - `sin_numero_omitidos`: sin número de la base cuyas filas siguen en el
+      CSV pero salieron omitidas. No se tocan: nunca se destruye dato porque
+      la planilla se rompió, y la conciliación muestra la diferencia."""
+
+    nuevos: list[str] = field(default_factory=list)
+    iguales: list[str] = field(default_factory=list)
+    cambiados: list[str] = field(default_factory=list)
+    reemplazados: list[str] = field(default_factory=list)
+    omitidos_por_carga_a_mano: list[GrupoHistorico] = field(default_factory=list)
+    ausentes_del_csv: list[str] = field(default_factory=list)
+    sin_numero_borrados: list[str] = field(default_factory=list)
+    sin_numero_bloqueados: list[str] = field(default_factory=list)
+    sin_numero_omitidos: list[str] = field(default_factory=list)
+
+    @property
+    def bloqueado(self) -> bool:
+        return bool(self.sin_numero_bloqueados)
+
+    def conteos(self) -> dict[str, int]:
+        return {
+            "nuevos": len(self.nuevos),
+            "iguales": len(self.iguales),
+            "cambiados": len(self.cambiados),
+            "reemplazados": len(self.reemplazados),
+            "omitidos_por_carga_a_mano": len(self.omitidos_por_carga_a_mano),
+            "ausentes_del_csv": len(self.ausentes_del_csv),
+            "sin_numero_borrados": len(self.sin_numero_borrados),
+            "sin_numero_bloqueados": len(self.sin_numero_bloqueados),
+            "sin_numero_omitidos": len(self.sin_numero_omitidos),
+        }
+
+
+def clave_de_grupo(grupo: GrupoHistorico) -> str:
+    """`H|<cliente_id>|<numero>`, o `S|<cliente_id>|<fecha a facturar>` sin
+    número: la misma función que usa la carga a mano (reglas_comprobante)."""
+    return clave_identidad(
+        historico=True, numero=grupo.numero, cliente_id=grupo.cliente_id,
+        fecha_a_facturar=grupo.fecha_a_facturar,
+    )
+
+
+def _firma_de_linea(fecha, tarea_id, unidad, finca_id, cantidad, precio, importe) -> tuple:
+    """Lo que se compara de una Línea. Sin los nombres: son copias del maestro,
+    y renombrar una tarea en el campo no es un cambio de la planilla. Los
+    Decimal se comparan por valor ("25" es igual a "25.00")."""
+    return (fecha, tarea_id, unidad, finca_id, Decimal(cantidad), Decimal(precio),
+            Decimal(importe))
+
+
+def _cambio(existente: Comprobante, grupo: GrupoHistorico) -> bool:
+    """Cambió la fecha o el multiconjunto de Líneas (el orden no cuenta)."""
+    en_base = Counter(
+        _firma_de_linea(li.fecha, li.tarea_id, li.unidad, li.finca_id,
+                        li.cantidad, li.precio_unitario, li.importe)
+        for li in existente.lineas
+    )
+    en_csv = Counter(
+        _firma_de_linea(li.fecha, li.tarea_id, li.unidad, li.finca_id,
+                        li.cantidad, li.precio_unitario, li.importe)
+        for li in grupo.lineas
+    )
+    return existente.fecha != grupo.fecha or en_base != en_csv
+
+
+def _lineas_del_grupo(grupo: GrupoHistorico) -> list[LineaComprobante]:
+    return [
+        LineaComprobante(
+            orden=orden, fecha=li.fecha, tarea_id=li.tarea_id,
+            tarea_nombre=li.tarea_nombre, unidad=li.unidad, finca_id=li.finca_id,
+            finca_nombre=li.finca_nombre, cantidad=li.cantidad,
+            precio_unitario=li.precio_unitario, importe=li.importe,
+        )
+        for orden, li in enumerate(grupo.lineas, start=1)
+    ]
+
+
+def _reemplazar(existente: Comprobante, grupo: GrupoHistorico) -> None:
+    """Las Líneas y la fecha nuevas, con el mismo id y sus Adjuntos (pregunta
+    8). No sella actualizado_en: el reemplazo del script no es una edición."""
+    existente.fecha = grupo.fecha
+    existente.pendiente_de_facturar = grupo.pendiente_de_facturar
+    existente.lineas = _lineas_del_grupo(grupo)
+
+
+def aplicar(db: Session, clasificacion: Clasificacion,
+            reemplazar_cambiados: bool = False) -> ResultadoAplicar:
+    """Lleva los grupos de la clasificación a la base, sin duplicar.
+
+    Por `clave_identidad`:
+    - si no existe, se crea un histórico: Factura, sin Empresa ni autor;
+    - si existe igual, no se toca;
+    - si cambió y tiene número, se informa; con `reemplazar_cambiados`, se le
+      reemplazan las Líneas y la fecha;
+    - si el mismo Cliente ya tiene una Factura cargada a mano con ese número,
+      se omite el grupo, para no contar dos veces (las Notas de crédito
+      numeran aparte, R3);
+    - un histórico con número que ya no está en el CSV se informa y no se
+      borra.
+    Los sin número se recalculan siempre, sin esperar al flag: si una fila
+    ganó número, pasa a su Comprobante numerado y sale del sin número, y uno
+    que queda sin filas se borra; así una fila nunca cuenta dos veces. Uno con
+    Adjuntos no se cambia ni se borra: queda en `sin_numero_bloqueados`.
+    "Sin filas" es que ninguna fila sin número del CSV cae en su clave: uno
+    cuyas filas salieron omitidas (su clave está en un `Omitido`) no se toca y
+    queda en `sin_numero_omitidos`.
+
+    Hace flush, para que un error de la base salga acá, pero no commit."""
+    resultado = ResultadoAplicar()
+    historicos = {
+        c.clave_identidad: c
+        for c in db.query(Comprobante)
+                   .filter(Comprobante.es_historico.is_(True))
+                   .order_by(Comprobante.id)
+    }
+    cargados_a_mano = {
+        (cliente_id, numero)
+        for cliente_id, numero in db.query(Comprobante.cliente_id, Comprobante.numero)
+                                    .filter(Comprobante.es_historico.is_(False),
+                                            Comprobante.tipo == FACTURA)
+    }
+
+    claves_del_csv = set()
+    for grupo in clasificacion.grupos:
+        if grupo.numero is not None and (grupo.cliente_id, grupo.numero) in cargados_a_mano:
+            resultado.omitidos_por_carga_a_mano.append(grupo)
+            continue
+        clave = clave_de_grupo(grupo)
+        claves_del_csv.add(clave)
+        existente = historicos.get(clave)
+
+        if existente is None:
+            db.add(Comprobante(
+                tipo=FACTURA, cliente_id=grupo.cliente_id,
+                cliente_nombre=grupo.cliente_nombre, empresa_emisora=None,
+                numero=grupo.numero, fecha=grupo.fecha, es_historico=True,
+                pendiente_de_facturar=grupo.pendiente_de_facturar,
+                clave_identidad=clave, creado_por=None,
+                lineas=_lineas_del_grupo(grupo),
+            ))
+            resultado.nuevos.append(clave)
+        elif not _cambio(existente, grupo):
+            resultado.iguales.append(clave)
+        elif grupo.numero is None:
+            if existente.adjuntos:
+                resultado.sin_numero_bloqueados.append(clave)
+            else:
+                _reemplazar(existente, grupo)
+                resultado.reemplazados.append(clave)
+        elif reemplazar_cambiados:
+            _reemplazar(existente, grupo)
+            resultado.reemplazados.append(clave)
+        else:
+            resultado.cambiados.append(clave)
+
+    claves_omitidas = {o.clave for o in clasificacion.omitidos if o.clave}
+    for clave, existente in historicos.items():
+        if clave in claves_del_csv:
+            continue
+        if existente.numero is not None:
+            resultado.ausentes_del_csv.append(clave)
+        elif clave in claves_omitidas:
+            resultado.sin_numero_omitidos.append(clave)
+        elif existente.adjuntos:
+            resultado.sin_numero_bloqueados.append(clave)
+        else:
+            db.delete(existente)
+            resultado.sin_numero_borrados.append(clave)
+
+    db.flush()
     return resultado
