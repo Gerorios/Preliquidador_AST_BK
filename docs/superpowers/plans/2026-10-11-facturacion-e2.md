@@ -758,6 +758,15 @@ Todo arranca de `main` con la E1 mergeada.
 - Si `docs/DOCUMENTACION.md` lista las variables, se suma esta.
 - Verificación: `python -m pytest -q` completo.
 
+**Revisión de BK-B, ronda 1 (sesión principal, 2026-10-13):** 0 urgent, 1 high, 13 minor (van al PR), 6 descartados.
+
+**RB1. Par: el límite de 5 con dos subidas a la vez (high)**
+- Hallazgo: en `AdjuntosService.subir` el conteo de adjuntos es una lectura sin bloqueo. `get_usuario_actual` usa la misma sesión del request y, cuando vence su caché de 60 s, su SELECT fija la foto de REPEATABLE READ (MySQL) antes del `FOR UPDATE` del Comprobante.
+- Escenario: un Comprobante con 4 adjuntos; A y B suben a la vez con la caché vencida. B espera el bloqueo, A commitea, el `count` de B lee la foto vieja (4), pasa, y quedan 6.
+- Arreglo mínimo: el conteo con lectura bloqueante (`.with_for_update()`, que lee lo último commiteado), manteniendo antes el bloqueo del Comprobante. Archivos: `app/modulos/facturacion/services/adjuntos_service.py` y `tests/facturacion/test_adjuntos.py`. SQLite no reproduce la carrera: el test controla que el conteo pide la lectura bloqueante.
+- Ajuste del ejecutor, aceptado: el conteo bloqueante solo deja un deadlock posible en MySQL contra `quitar` y `ComprobantesService.borrar`, que bloquean en otro orden. Por eso las tres escrituras sobre los adjuntos de un Comprobante toman el mismo orden: primero el Comprobante (`with_for_update()`), después sus adjuntos. `quitar` bloquea el Comprobante antes de borrar la fila; `borrar` toma el Comprobante con `with_for_update()` y lee sus adjuntos con lectura bloqueante (si no, podría no ver uno recién subido y chocar con la FK). Suma `app/modulos/facturacion/services/comprobantes_service.py`. Se descartó cerrar la transacción antes del bloqueo con un `rollback()`: no agrega bloqueos, pero el porqué no se ve en el código.
+- Verificación: `python -m pytest tests/facturacion -q`.
+
 ### 3.8 FT-B: Adjuntos (front)
 
 **FB1. Par: reglas de adjuntos**
