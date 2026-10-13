@@ -3806,3 +3806,64 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
   `FACTURACION_ADJUNTOS_DIR` en su `.env` y aplicar el `client_max_body_size` de nginx. El
   respaldo de la carpeta sigue pendiente (ADR-0019).
 - Siguen FT-B (adjuntos en el front) y BK-C (histórico).
+
+## 2026-10-13 — Adjuntos de los Comprobantes en el front (Facturación E2)
+
+**Mergeado**
+- PR #80 (front) — FT-B de la E2: la sección Adjuntos en el detalle del Comprobante, sobre las
+  rutas del BK #97. Sin PR hermano.
+
+**Por frontera**
+- Facturación: `adjuntos.js` con `validarArchivo` (PDF, PNG o JPG, hasta 10 MB inclusive y hasta
+  5 por Comprobante, con mensajes en español) y `mensajeDeAdjunto`, con sus tests; el servicio
+  suma `subirAdjunto`, `verAdjunto` (como blob) y `quitarAdjunto`; `Adjuntos.jsx` muestra la
+  lista con su tamaño y "N de 5", con "Subir archivo", "Ver" en una pestaña nueva y "Quitar" con
+  confirmación. Quien sólo tiene Ver en `comprobantes` ve la lista y "Ver". En el alta avisa que
+  se adjunta después de guardar. Un histórico también acepta adjuntos. Un Comprobante sin
+  adjunto lo marca con el tono de aviso y el alta lo recuerda al guardar; un histórico sin
+  adjuntos sigue neutro, como en el listado.
+
+**Decisiones**
+- El servicio manda `multipart/form-data` explícito. Porqué: la instancia `api` del núcleo trae
+  `Content-Type: application/json` por defecto y, con ese header, axios convierte el FormData en
+  JSON. Descartado: cambiar el default del núcleo en este PR. Terceros probablemente tiene el
+  mismo problema; quedó como aviso para Pitu.
+- Después de subir o quitar se cambian en la caché sólo `adjuntos` y `cantidad_adjuntos` del
+  detalle, y se invalida el listado. Descartado: volver a pedir el detalle, porque reiniciaría
+  el formulario y se perderían los cambios sin guardar.
+- "Ver" abre la pestaña en el mismo clic y le asigna el archivo cuando llega. Porqué: el
+  bloqueador de ventanas frena un `window.open` hecho después del `await`. Si la bloquea igual,
+  el archivo se descarga con un aviso.
+- El foco, después de subir, quitar o cancelar, vuelve con un efecto en el render que ya
+  muestra la lista nueva. Descartado: `requestAnimationFrame`, porque con la lista vieja
+  "Subir archivo" seguía deshabilitado y el foco se iba al título.
+- `mensajeDeAdjunto` prefiere el mensaje del backend y cae a uno por status sólo cuando no
+  viene (la descarga, pedida como blob). Porqué: con el mensaje por status, un `.pdf` falso
+  diría "Probá de nuevo en un rato".
+- El tamaño y la extensión se controlan antes de subir, para no mandar 10 MB que el backend va a
+  rechazar; el backend sigue decidiendo el tipo por el contenido.
+- Tres arreglos de diseño de la revisión (RF-B1 a RF-B3): la falta de adjunto se marca en el
+  detalle y se guía a adjuntar después del alta; la ayuda aclara que se guardan al subirlos; la
+  nota del histórico ya no dice que no se puede tocar. Porqué: el usuario los eligió entre los
+  minor, después de ver un antes y después.
+
+**Estado**
+- Deploy: en marcha con este merge, con OK del usuario: el primer deploy de Facturación (la
+  `facturacion/003`, la carpeta de adjuntos con `FACTURACION_ADJUNTOS_DIR` y el
+  `client_max_body_size` de nginx). Su entrada va aparte. Facturación sigue escondida: nadie
+  tiene su rol.
+- Migraciones: ninguna en este PR.
+- Pruebas: `npm test` 262 de 262, `npm run build` OK, `npx eslint src/modulos/facturacion` sin
+  errores. Smoke en el navegador contra `testing`: los tres tipos de archivo, un `.pdf` falso,
+  rechazos sin llamar a la API, el 6.º archivo, guardar después de subir sin perder cambios ni
+  dar 409, "Ver", "Quitar", cancelar y el foco, el listado sin recargar, históricos y el alta.
+- Revisión: dos ejes, más `/impeccable critique` (27/40) y `/impeccable audit` (17/20), con
+  verificador: 0 urgent, 0 high, 9 minor y 6 descartados. Tres minor de diseño se arreglaron
+  (RF-B1 a RF-B3); el resto queda sin tocar por decisión del usuario, con el detalle en el
+  cuerpo del FT #80. Deuda previa del núcleo vista: `.btn-danger` no llega al contraste mínimo
+  y `.btn` no tiene `:focus-visible`.
+
+**Pendiente**
+- No probado: un usuario con sólo Ver en `comprobantes` (no hay uno así en `testing`) y la
+  subida a través de nginx con el límite de 12m, que se prueba en el deploy.
+- Sigue BK-C (histórico).
