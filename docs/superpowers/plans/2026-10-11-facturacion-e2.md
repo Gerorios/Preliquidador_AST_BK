@@ -878,6 +878,11 @@ Todo arranca de `main` con la E1 mergeada.
   - un histórico que salió del CSV se informa y no se borra;
   - una fila sin número que gana número pasa a su Comprobante numerado en la misma corrida, y el sin número vacío se borra; uno con Adjuntos se informa y no se toca.
 - Verificación: correr el archivo de tests.
+- Hecho (ejecutor, 2026-10-13): 15 tests; `tests/facturacion` da 550. `aplicar` hace `flush` y no `commit`: confirma o deshace el script. Lo que el plan no fijaba y quedó así:
+  - sólo una Factura cargada a mano omite el grupo, no una Nota de crédito (la misma lectura de R3 que el servicio);
+  - para decir si cambió se comparan la fecha y el multiconjunto de Líneas, sin los nombres, que son copias del maestro;
+  - un sin número con Adjuntos que pierde una fila queda bloqueado y la fila cuenta dos veces hasta resolverlo; `bloqueado` hace que la salida no sea 0;
+  - **un sin número cuyas filas siguen en el CSV pero salieron omitidas no se borra** (decisión de la sesión principal): se conserva, se informa en `sin_numero_omitidos` y la conciliación muestra la diferencia, como con un histórico con número cuyo grupo se omite. Sólo se borra uno sin Adjuntos al que no le cae ninguna fila del CSV. Excepción: si sus filas pierden el Cliente o la FECHA A FACTURAR, no hay clave para reconocerlo y se borra; las filas quedan listadas como omitidas.
 
 **C5. Par: conciliación**
 - Rojo:
