@@ -6,11 +6,11 @@ Lo entregado no va acá: su cierre está en `docs/BITACORA.md` (la más nueva ab
 
 ## En curso
 
-- Facturación, rediseño del flujo (Resumen, Detalle y Precarga): mockup aprobado y entrevista cerrada; los documentos del módulo (glosario, pantallas y plan) están en el PR de docs BK #100, que espera el OK para mergear (2026-10-14).
+- Nada en curso.
 
 ## Próximo paso
 
-Mergear el BK #100 con OK y después planear con el planificador la etapa 3 de Facturación (Resumen, Detalle y Precarga, según `docs/modulos/facturacion/plan-facturacion.md`), con OK antes del código. El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
+Planear con el planificador la etapa 3 de Facturación (Resumen, Detalle y Precarga, según `docs/modulos/facturacion/plan-facturacion.md`), con OK del usuario antes del código. El primer deploy de Facturación ya se hizo (2026-10-13): la `facturacion/003` está en producción. Facturación se deploya por avances, a medida que se mergea, escondida: nadie tiene su rol, así que nadie la ve (el usuario cambió la decisión del 2026-10-12, porque va a trabajar en Preliquidación en otra sesión; 2026-10-13). Todo deploy, con OK.
 
 ## Pendientes del usuario
 

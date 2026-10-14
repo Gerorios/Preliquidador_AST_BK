@@ -4061,3 +4061,56 @@ Corrige su "Deploy: no". El detalle técnico va en `docs/DEPLOY.md` (local, fuer
 **Pendiente**
 - El smoke del usuario en producción: el listado con los históricos y uno abierto en sólo
   lectura (en `docs/estado.md`).
+
+## 2026-10-14 — Rediseño del flujo de Facturación, sólo documentos (BK #100)
+
+**Mergeado**
+- PR #100 (backend) — glosario, pantallas y plan de Facturación reescritos para el flujo con
+  Resumen, Detalle y Precarga. Sin código; sin PR hermano en el front.
+
+**Por frontera**
+- Docs: `CONTEXT-facturacion.md` suma las pantallas Resumen, Comprobantes, Equivalencias y
+  Panel y los términos Fecha de carga, Período facturado, Precarga, Precio sugerido, Estado del
+  mes y Revisión de diferencia; reescribe Alerta de facturación, Cruce, Diferencia, Umbral de
+  diferencia y Mes de corte; "Pendiente de facturar" deja de ser un término aparte.
+  `pantallas.md` pasa a las pantallas del mockup (Resumen, Detalle, Precarga, Comprobante,
+  Comprobantes, Equivalencias y Panel). `plan-facturacion.md` reescribe las secciones 3.1 a
+  3.4, 3.7, 4, 5 y 7: la etapa 3 pasa a ser Resumen, Detalle y Precarga.
+
+**Decisiones**
+- Un resumen por mes y Cliente (lo trabajado, lo facturado y el estado, con alertas arriba),
+  un detalle hasta los partes del campo y la factura precargada desde lo pendiente. Porqué: lo
+  propuso el usuario; se armó un mockup, lo aprobó y las reglas se cerraron una por una.
+- Pendiente de facturar es sólo un estado del mes: el Cliente tuvo trabajo y no tiene nada
+  facturado. Porqué no registrado en el PR.
+- Con diferencia se mide por tarea, en cantidades: basta una tarea facturable fuera del
+  Umbral, y una tarea trabajada y no facturada también cuenta. Descartado: medirla por grupo
+  de tareas (el criterio anterior).
+- La Revisión de diferencia guarda las tareas que superaban; si después supera otra, el mes
+  vuelve a Con diferencia. Sólo se revisa Con diferencia. Descartado: revisar un Pendiente de
+  facturar.
+- Varios estados por fila, cada uno un link a donde se resuelve; el botón de la fila va al
+  más urgente; Pendiente de facturar y Facturada van solos. Porqué no registrado en el PR.
+- Dos fechas: la Fecha de carga es siempre hoy; el Período facturado se propone solo, es
+  editable y queda dentro de un mismo mes. Porqué: el usuario confirmó que una factura no
+  cobra dos meses. Descartado: un Período que cruce de un mes a otro.
+- Mes de corte: los meses anteriores dicen "Antes del corte" y lo mueve sólo el Admin (antes
+  era fijo). Umbral: uno solo para todos, arranca en 5 % y lo cambia sólo el Admin. El mes en
+  curso sólo controla Falta comprobante. Porqué no registrado en el PR.
+- Nombres: en todos lados, los de la pantalla; "Estado del mes" es el conjunto y "Alertas"
+  son los tres estados que piden hacer algo. Porqué no registrado en el PR.
+- Precio sugerido: el de la última Factura del mismo Cliente, por la misma tarea y en la misma
+  unidad; las Notas de crédito no cuentan. Descartado: tomar el precio de otro Cliente.
+- Descartado también: el nivel por finca en el detalle.
+- Sin ADR. Porqué: ninguna de estas decisiones es difícil de revertir.
+
+**Estado**
+- Deploy: no aplica (sólo documentos).
+- Migraciones: ninguna.
+
+**Pendiente**
+- El plan de construcción de la etapa 3 (Resumen, Detalle y Precarga), con el planificador y
+  con OK del usuario antes del código. Quedan para ese plan: cómo se pasan las claves de
+  pantalla ya declaradas (`pendientes` y `cruce`); cómo pasan al Período facturado los
+  Comprobantes ya cargados y los históricos, que hoy tienen una fecha en cada Línea; dónde
+  cambia el Admin el Umbral y el Mes de corte; dónde va el aviso de tarea sin Unidad sugerida.
