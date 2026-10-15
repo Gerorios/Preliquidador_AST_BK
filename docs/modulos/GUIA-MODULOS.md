@@ -78,6 +78,7 @@ Las migraciones son SQL manual versionado (sección 4.3).
 | Fechas | date-fns con locale `es` | 3.6 |
 | Loaders | react-spinners | 0.17 |
 | Tablas largas | @tanstack/react-virtual | 3.14 |
+| PDF desde una pantalla | html2pdf.js, cargado con `import()` recién al usarlo. Aprobado el 2026-10-05 para guardar los recibos de Terceros, un PDF por tercero, en una carpeta, antes que `reportlab`: arma el PDF a partir de la misma hoja, así el diseño se hace una sola vez | 0.14 |
 | Estilos | CSS Modules + tokens de diseño en `src/index.css`. Sin Tailwind, sin librería de componentes. | |
 
 ### Bases de datos

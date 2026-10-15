@@ -9,11 +9,11 @@ Escrito a partir de la sesión de grilling sobre el Excel que hoy resuelve el ci
 ## El módulo
 
 **Liquidación Terceros**:
-El módulo que liquida lo que la empresa le paga y le descuenta a los terceros que le prestan servicio. Cubre dos servicios distintos con el mismo sujeto que cobra y el mismo recibo: el Servicio de flete y el Servicio de maquinaria.
+El módulo que liquida lo que la empresa le paga y le descuenta a los terceros que le prestan servicio. Cubre dos servicios distintos con el mismo sujeto que cobra y la misma Orden de facturación: el Servicio de flete y el Servicio de maquinaria.
 _Avoid_: llamarlo "Fletes" — el flete es uno de sus dos servicios
 
 **Tercero**:
-La persona o empresa a la que se le liquida: la que cobra por lo que presta y a la que se le descuenta lo que consumió. Es el sujeto del Recibo y el titular del Saldo.
+La persona o empresa a la que se le liquida: la que cobra por lo que presta y a la que se le descuenta lo que consumió. Es el sujeto de la Orden de facturación y el titular del Saldo.
 _Avoid_: "dueño de colectivo" (deja afuera a los de maquinaria), "proveedor"
 
 **Servicio de flete**:
@@ -29,7 +29,7 @@ El vehículo con el que un Tercero presta el Servicio de flete, identificado por
 _Avoid_: usar "colectivo" para hablar del dueño, aunque el sistema de campo lo haga
 
 **Maquinaria de tercero**:
-Máquina (tractor, cargadora, pulverizadora, elevador) que pertenece a un Tercero. Participa de los dos lados del recibo: **trabaja** en las fincas (Hora de servicio, se paga) y **se repara** en el taller de la empresa (Hora de reparación y Repuesto, se descuentan).
+Máquina (tractor, cargadora, pulverizadora, elevador) que pertenece a un Tercero. Participa de los dos lados de la Orden de facturación: **trabaja** en las fincas (Hora de servicio, se paga) y **se repara** en el taller de la empresa (Hora de reparación y Repuesto, se descuentan).
 
 **Quincena**:
 El período de liquidación, el mismo corte que el resto del Sistema: 1ra = días 1 a 15, 2da = 16 a fin de mes. En el Excel de origen se escribe `MM-1Q` / `MM-2Q`.
@@ -41,6 +41,7 @@ Las Pantallas del módulo y qué es ver y qué es editar en cada una (Pantalla y
 - **Tarifario**: ver las tarifas; editar es crearlas, editarlas, borrarlas, confirmarlas y copiarlas.
 - **Estaciones**: ver lo facturado por cada estación; editar es subir su archivo, cargar o borrar líneas y definir el origen.
 - **Verificaciones**: solo ver.
+- **Órdenes de facturación**: ver las órdenes de la quincena y su historia; editar es emitirlas o reabrirlas, repartirlas entre empresas, registrar y revisar las facturas, marcar el pago, cargar ajustes y saldos iniciales, y resolver lo que llegó tarde.
 
 ---
 
@@ -67,39 +68,41 @@ Litros que un Colectivo cargó en una estación habilitada, respaldados por un *
 El comprobante físico que el Supervisor le entrega al chofer y sin el cual no puede cargar combustible. Su número es el que identifica la carga en el sistema de campo y el que permite cruzarla contra lo que factura la estación.
 
 **Repuesto**:
-Repuesto, lubricante o reparación que salió del taller de la empresa hacia una Maquinaria de tercero. Su fecha es la de la **descarga a la maquinaria**, no la del encabezado del movimiento ni la de la factura de compra.
+Repuesto, lubricante o reparación que salió del taller de la empresa hacia una Maquinaria de tercero. Su fecha es la de la **descarga a la maquinaria**, no la del encabezado del movimiento ni la de la factura de compra. **El dueño es el que el sistema de campo le da a la máquina**, buscada por el id que La Falda guarda de ella: una máquina sin ese id queda sin dueño, a la vista.
 
 **Hora de reparación**:
-Hora que un mecánico de la empresa dedicó a reparar una Maquinaria de tercero, cargada en la app del taller. La hora total incluye preparación y traslado. **Solo se cobran las aprobadas**: una pendiente todavía no se cobra, y una rechazada no se cobra nunca.
+Hora que un mecánico de la empresa dedicó a reparar una Maquinaria de tercero, cargada en la app del taller. La hora total incluye preparación y traslado. **Solo se cobran las aprobadas**: una pendiente todavía no se cobra, y una rechazada no se cobra nunca. **El dueño es el que el maestro de maquinaria del sistema de campo le da a la máquina**, no el que se deduce del nombre en la app del taller: una máquina que ese maestro no tiene (las de clientes, que el taller igual marca como de terceros) queda sin dueño, a la vista, y no se le cobra a nadie.
 _Avoid_: "hora de taller" (se confundía con la Hora de servicio, que va en el sentido contrario)
 
 **Seguro**:
-Cuota que la empresa le descuenta al Tercero por las pólizas que le cubre. Son de tres clases —del vehículo o la máquina (automotor), del chofer en relación de dependencia, y de accidentes personales— y **se imputan enteras a la 2da quincena del mes**, no se parten. En el Recibo van **después del Total a facturar**, en su propio bloque: el Tercero no los factura.
+Cuota que la empresa le descuenta al Tercero por las pólizas que le cubre. Son de tres clases —del vehículo o la máquina (automotor), del chofer en relación de dependencia, y de accidentes personales— y **se imputan enteras a la 2da quincena del mes**, no se parten. En la Orden de facturación van **después del Total a facturar**, en su propio bloque: el Tercero no los factura.
 _Avoid_: pensar que es solo de los colectivos propios; alcanza a colectivos y a maquinaria de terceros
 
 ---
 
-## El Recibo
+## La Orden de facturación
 
-**Recibo**:
-El documento que se le manda a cada Tercero al cerrar la quincena, con el detalle de lo que se le paga y lo que se le descuenta, el saldo anterior y el total. Es lo que el Tercero usa para emitir su factura. Se emite uno por Tercero y por Quincena, y **una vez emitido queda congelado**: lo que llegue después va al siguiente. Cierra con **dos cifras y no con una**: el Total a facturar, después el detalle de los Seguros, y recién entonces el Total a pagar.
+**Orden de facturación**:
+El documento que se le manda a cada Tercero al cerrar la quincena, con el detalle de lo que se le paga y lo que se le descuenta, el saldo anterior y el total. Es lo que el Tercero usa para emitir su factura. Se emite una por Tercero y por Quincena, y **una vez emitida queda congelada**: lo que llegue después va a la siguiente. Cierra con **dos cifras y no con una**: el Total a facturar, después el detalle de los Seguros, y recién entonces el Total a pagar.
+_Avoid_: "recibo" — es lo que se manda para que el Tercero facture, no la constancia de un pago
 
 **Total a facturar**:
 Lo que el Tercero le factura a la empresa por la quincena:
 `Viajes + Horas de servicio − Combustible − Repuestos − Horas de reparación + Ajustes`.
 **El Seguro no entra acá.** Es la cifra que el Tercero copia en su factura, y el seguro no es algo que él le venda a la empresa: es una cuota que la empresa le adelantó y le recupera al pagarle. Meterlo adentro haría que facture de menos.
+Casi siempre se le factura entero a una sola empresa. A algunos Terceros se les pide que lo **repartan**: una parte a una empresa y otra a otra, cada una con su factura. La Orden de facturación sigue siendo una, dice cuánto facturarle a cada empresa, y no se emite hasta que lo repartido sume el Total a facturar.
 
 **Total a pagar**:
 `Total a facturar − Seguros`. Es lo que la empresa efectivamente le transfiere, y no coincide con lo que el Tercero factura.
-Positivo la empresa le paga al Tercero; negativo el Tercero le debe. Un Tercero que presta un solo servicio simplemente tiene el otro término en cero; no son dos recibos distintos.
+Positivo la empresa le paga al Tercero; negativo el Tercero le debe. Un Tercero que presta un solo servicio simplemente tiene el otro término en cero; no son dos órdenes distintas.
 _Avoid_: "Neto a pagar" a secas — servía cuando el seguro iba adentro de un total único, y ahora son dos cifras que no dan lo mismo
 
-**Recibo de la empresa**:
-La misma liquidación vista desde adentro. Cambia una sola cosa: el Seguro entra **dentro** del cálculo del Total a facturar en vez de ir después. Por eso su Total a facturar **es** el Total a pagar del recibo del Tercero — que las dos cifras den igual es la comprobación de que el recibo está bien armado.
+**Orden de facturación de la empresa**:
+La misma liquidación vista desde adentro. Cambia una sola cosa: el Seguro entra **dentro** del cálculo del Total a facturar en vez de ir después. Por eso su Total a facturar **es** el Total a pagar de la Orden de facturación del Tercero — que las dos cifras den igual es la comprobación de que la orden está bien armada.
 _Avoid_: leerlo como otra liquidación; es otro layout del mismo cálculo, no otro número
 
 **Ajuste**:
-Corrección manual con signo sobre el Recibo, con motivo. Positivo le paga más, negativo le descuenta.
+Corrección manual con signo sobre la Orden de facturación, con motivo. Positivo le paga más, negativo le descuenta.
 
 ---
 
@@ -113,14 +116,14 @@ _Avoid_: buscarle una fórmula a un precio; es una negociación, no un cálculo
 Regla que determina el Tipo de viaje y el precio de un Viaje, sobre cuatro dimensiones: tercero, cliente, finca y capataz. La combinación habitual es **tercero + capataz**, porque el capataz identifica adónde va el viaje.
 
 **Tarifa de servicio**:
-Regla que determina el precio de una Hora de servicio, sobre cuatro dimensiones: tercero, cliente, finca y tarea. Además de un precio, fija la **Unidad base**.
+Regla que determina el precio de una Hora de servicio, sobre cinco dimensiones: tercero, cliente, finca, tarea y máquina. La máquina está porque el precio cambia según cuál trabaje. Además de un precio, fija la **Unidad base**.
 
 **Unidad base**:
-Sobre qué medida se calcula una Tarifa de servicio: la **hora de máquina** o la **cantidad** que midió la tarea. Cuál de las dos es lo pactado con cada Tercero, no una propiedad del dato. La hora de jornal no se paga nunca, aunque el sistema de campo también la cargue. Es el mismo término y el mismo criterio que la Unidad base de Preliquidación (ver `CONTEXT.md`).
-_Avoid_: pagar por hora de jornal; dar por sentado que se paga la hora de máquina
+Sobre qué medida se calcula una Tarifa de servicio: la **hora de máquina**, el **jornal**, los **bins** o las **toneladas**. Cuál es lo pactado con cada Tercero, no una propiedad del dato. Un **jornal** son 10 horas de jornal de las que carga el sistema de campo: 14 horas son 1,4 jornales. Bins y toneladas sólo se cuentan si la tarea mide eso (ver Unidad de la tarea); si no, la línea queda sin cantidad. La excepción: una tarea medida en bins se puede pagar por toneladas, a **400 kilos el bin** (la carga de fruta se cuenta en bins y se paga por tonelada). Es el mismo término y el mismo criterio que la Unidad base de Preliquidación (ver `CONTEXT.md`).
+_Avoid_: pagar las horas de jornal como si cada una fuera un jornal; dar por sentado que se paga la hora de máquina
 
 **Unidad de la tarea**:
-De qué son las cantidades que el sistema de campo carga en un trabajo: BINS, TANCADAS, HORAS, HORAS TRACTOR o JORNAL. Viene del catálogo de tareas y es **informativa**: dice qué mide la tarea, no cómo se paga. Una tarea medida en bins puede pagarse igual por hora — eso lo decide la Unidad base de la tarifa. Es el mismo papel que el Grupo de pago en Preliquidación.
+De qué son las cantidades que el sistema de campo carga en un trabajo: BINS, TANCADAS, HORAS, HORAS TRACTOR o JORNAL. Viene del catálogo de tareas y dice qué mide la tarea, no cómo se paga: una tarea medida en bins puede pagarse igual por hora — eso lo decide la Unidad base de la tarifa. Sí cuenta en un caso: con la Unidad base en bins o toneladas, sólo se toman las cantidades de una tarea que mide eso, y no las tancadas de otra. Es el mismo papel que el Grupo de pago en Preliquidación.
 _Avoid_: usarla como criterio de precio; sumar cantidades sin mirarla, que mezcla bins con tancadas y con horas
 
 **Precio del combustible**:
@@ -133,11 +136,11 @@ Precio de la hora de mano de obra del taller, por Tercero.
 Importe de la cuota de una póliza, por Tercero, clase de póliza y sujeto cubierto. **Lo carga a mano quien tiene a cargo los seguros**, dentro de la app: no llega por archivo ni se deduce de ningún sistema. Se elige del Padrón de asegurables en vez de escribirse, porque un nombre tipeado tiene que coincidir exacto con el del sistema de campo o el seguro no se le imputa a nadie.
 
 **Sujeto del seguro**:
-Qué o a quién cubre una póliza: una máquina o un colectivo si es del automotor, una persona si es del chofer. Las tres clases —automotor, relación de dependencia y accidentes personales— se reparten entre esas dos naturalezas, y por eso el sujeto no es siempre un bien.
-_Avoid_: llamarlo "maquinaria" — deja afuera al chofer, que es la mitad de las pólizas
+Qué o a quién cubre una póliza: una máquina o un colectivo si es del automotor, una persona si es del chofer. Las tres clases —automotor, relación de dependencia y accidentes personales— se reparten entre esas dos naturalezas, y por eso el sujeto no es siempre un bien. Un colectivo se nombra por su patente («COLECTIVO ZZZ999»), que es lo que dice la póliza.
+_Avoid_: llamarlo "maquinaria" — deja afuera al chofer, que es la mitad de las pólizas; nombrar un colectivo por su dueño — un dueño con varios colectivos tendría una sola póliza
 
 **Padrón de asegurables**:
-La lista de todo lo que la empresa le asegura a los Terceros: sus Colectivos, su Maquinaria y sus choferes. Sale del sistema de campo, que es el maestro; los choferes no tienen padrón propio y se deducen de quién manejó cada colectivo en el último año.
+La lista de todo lo que la empresa le asegura a los Terceros: sus Colectivos, su Maquinaria y sus choferes. Sale del sistema de campo, que es el maestro; los choferes no tienen padrón propio y se deducen de quién manejó cada colectivo en el último año. La Maquinaria pasará a salir de La Falda cuando tenga una columna de propietario; hoy el dueño está escrito dentro del nombre de la máquina. Los Colectivos no están en La Falda.
 
 **Regla más específica**:
 Cuando dos Tarifas alcanzan al mismo hecho, gana **la que tiene más dimensiones cargadas**: una regla con más condiciones es una excepción deliberada sobre una más general. Si empatan en cantidad de dimensiones, el hecho queda **ambiguo** y lo resuelve el liquidador; el sistema no elige en silencio.
@@ -146,7 +149,7 @@ Cuando dos Tarifas alcanzan al mismo hecho, gana **la que tiene más dimensiones
 Tarifa que vino copiada de otra quincena y todavía no fue confirmada. Se usa igual, pero queda resaltada hasta confirmarse, para no arrastrar un precio viejo sin darse cuenta. (Mismo criterio que el Precio heredado de Preliquidación, ADR-0004.)
 
 **Sin tarifa**:
-Un hecho al que ninguna Tarifa alcanza. **No entra al Recibo y no paga cero en silencio**: queda listado aparte hasta que el liquidador le cargue el precio.
+Un hecho al que ninguna Tarifa alcanza. **No entra a la Orden de facturación y no paga cero en silencio**: queda listado aparte hasta que el liquidador le cargue el precio.
 
 ---
 
@@ -156,16 +159,16 @@ Un hecho al que ninguna Tarifa alcanza. **No entra al Recibo y no paga cero en s
 La quincena a la que un hecho pertenece por su fecha.
 
 **Quincena efectiva**:
-La quincena en la que un hecho **realmente se cobra o se descuenta**, cuando no es la de su fecha. La carga el liquidador a mano, con **motivo**, y existe por dos razones que conviene no confundir: porque el dato llegó tarde (la gente sigue cargando después de cerrada la quincena, y el recibo sale a los tres días), o porque la empresa **decidió** no descontarle algo a un Tercero esa quincena para ayudarlo. La segunda no se deduce de ninguna fecha.
+La quincena en la que un hecho **realmente se cobra o se descuenta**, cuando no es la de su fecha. La carga el liquidador a mano, con **motivo**, y existe por dos razones que conviene no confundir: porque el dato llegó tarde (la gente sigue cargando después de cerrada la quincena, y la Orden de facturación sale a los tres días), o porque la empresa **decidió** no descontarle algo a un Tercero esa quincena para ayudarlo. La segunda no se deduce de ninguna fecha.
 
 **Quincena de liquidación**:
-La que efectivamente se usa para liquidar: la Quincena efectiva si está cargada, si no la de imputación. Es la que filtran todas las cuentas del Recibo.
+La que efectivamente se usa para liquidar: la Quincena efectiva si está cargada, si no la de imputación. Es la que filtran todas las cuentas de la Orden de facturación.
 
-**Emisión del recibo**:
-El momento en que el Recibo se manda al Tercero. Cierra esa quincena para ese Tercero y **congela** el documento: lo que se corrija o llegue después no cambia lo ya enviado, aparece en el Recibo siguiente. Se puede reabrir, con motivo.
+**Emisión de la orden**:
+El momento en que la Orden de facturación se manda al Tercero. Cierra esa quincena para ese Tercero y **congela** el documento: lo que se corrija o llegue después no cambia lo ya enviado, aparece en la Orden de facturación siguiente. Se puede reabrir, con motivo.
 
 **Llegada tardía**:
-Un hecho cuya fecha de carga es posterior a la emisión del Recibo de su quincena. El sistema la detecta y **propone** diferirla; la decisión es del liquidador.
+Un hecho cuya fecha de carga es posterior a la emisión de la Orden de facturación de su quincena. El sistema la detecta y **propone** diferirla; la decisión es del liquidador.
 _Avoid_: "Alcahuete" (así se llamaba la alerta en el Excel)
 
 ---
@@ -176,10 +179,10 @@ _Avoid_: "Alcahuete" (así se llamaba la alerta en el Excel)
 `Neto a pagar − lo efectivamente pagado` para un Tercero en una quincena.
 
 **Saldo acumulado**:
-El arrastre de los saldos de todas las quincenas anteriores del mismo Tercero. Es lo que el Recibo muestra como saldo anterior y lo que hace que el total a pagar no sea solo el neto del período.
+El arrastre de los saldos de todas las quincenas anteriores del mismo Tercero. Es lo que la Orden de facturación muestra como saldo anterior y lo que hace que el total a pagar no sea solo el neto del período.
 
 **Quincena en revisión**:
-Quincena cuyo saldo está en discusión con el Tercero y que por eso **no suma** al Saldo acumulado del Recibo: se muestra aparte, como línea informativa, para que se vea que el tema no se olvidó sin ensuciar el número que el Tercero tiene que facturar.
+Quincena cuyo saldo está en discusión con el Tercero y que por eso **no suma** al Saldo acumulado de la Orden de facturación: se muestra aparte, como línea informativa, para que se vea que el tema no se olvidó sin ensuciar el número que el Tercero tiene que facturar.
 
 ---
 
