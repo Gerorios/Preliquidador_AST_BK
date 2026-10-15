@@ -131,7 +131,14 @@ SELECT
          ELSE ru.ingreso * ru.precargas END AS monto_total,
     ru.reparacion,
     ru.nombreprove,
-    grp1.grupo1_nombre AS propiedad_maquina
+    grp1.grupo1_nombre AS propiedad_maquina,
+    -- El id de la máquina en el sistema de campo, que La Falda guarda desde el
+    -- 2026-10-07: el dueño se busca ahí con él. Cero es que no está cargado.
+    NULLIF(maq.idchinagro, 0) AS id_chinagro,
+    -- En qué maestro del sistema de campo está ese id: un colectivo apunta al
+    -- de colectivos y todo lo demás al de maquinaria (2026-10-14). Los dos
+    -- numeran por separado, así que el mismo número es otra cosa en cada uno.
+    COALESCE(UPPER(TRIM(tmaq.tipo_nombre)) = 'COLECTIVOS', 0) AS es_colectivo
 FROM (
     -- ===================== INSUMOS =====================
     SELECT
@@ -274,11 +281,39 @@ FROM (
 ) AS ru
 LEFT JOIN nuemaquinas AS maq ON ru.id_maquina = maq.id_maquina
 LEFT JOIN nuegrupo1maquinas AS grp1 ON maq.grupo1_id = grp1.grupo1_id
+LEFT JOIN nuetipomaquinas AS tmaq ON maq.tipo_id = tmaq.tipo_id
 WHERE UPPER(TRIM(grp1.grupo1_nombre)) LIKE '%%TERCERO%%'
     AND ru.fecha BETWEEN :fecha_desde AND :fecha_hasta
 ORDER BY ru.fecha, ru.maquina
 """)
 
+
+
+# Las fichas nuevas del maestro de maquinaria tienen el estado vacío (NULL), y
+# `estado <> 9` las descarta sin decir nada: en SQL, NULL no es distinto de 9.
+# En los maestros se filtra con COALESCE (2026-10-08). En los partes no hace
+# falta: no hay ninguno con el estado vacío.
+
+
+def _dueno_de_maquinaria(alias: str) -> str:
+    """El dueño de una máquina de tercero, en SQL.
+
+    Lo usan las tres consultas que lo leen —horas de servicio, padrón de
+    seguros y dueños del taller— para que las tres lo escriban igual: si una
+    dijera «SOSA  MARTA» y otra «SOSA MARTA», a la misma persona le tocarían
+    órdenes de facturación distintas.
+
+    Es el último campo de `descripcion` (PROPIEDAD;TIPO;MARCA;MODELO;NUMERO;
+    DUEÑO), tal como está escrito, sin espacios de más: el dueño tiene que
+    quedar igual que en los colectivos («SOSA, MARTA»), y cambiarle la coma
+    por un espacio lo hacía otra persona (2026-10-07). Cuando ese campo trae
+    una patente en vez de un nombre da NULL, para que el hueco se vea en lugar
+    de cobrarle a una patente.
+    """
+    ultimo = f"TRIM(SUBSTRING_INDEX({alias}.descripcion, ';', -1))"
+    patente = "'^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2}|[A-Z][0-9]{3}[A-Z]{3})$'"
+    return (f"NULLIF(TRIM(REPLACE(CASE WHEN {ultimo} REGEXP {patente} THEN '' "
+            f"ELSE {ultimo} END, '  ', ' ')), '')")
 
 
 # ─── Horas de servicio (etapa 4) ────────────────────────────────────────────
@@ -307,11 +342,12 @@ ORDER BY ru.fecha, ru.maquina
 # **no** cómo se paga — eso lo decide la Unidad base de la tarifa, igual que el
 # Grupo de pago de Preliquidación (ver CONTEXT.md).
 #
-# El dueño sale del último campo de `descripcion`, que tiene la forma
-# PROPIEDAD;TIPO;MARCA;MODELO;NUMERO;DUEÑO. Cuando ese campo trae una patente en
-# vez de un nombre se devuelve NULL, para que el hueco se vea en lugar de
-# liquidarle las horas a una patente. En las máquinas con horas de 2026 está
-# cargado en todas.
+# El dueño sale del último campo de `descripcion` (ver `_dueno_de_maquinaria`).
+# En las máquinas con horas de 2026 está cargado en todas.
+#
+# `id_maquinaria` es el id de la máquina en el sistema de campo. Las tarifas y
+# los seguros se atan a él, no al nombre: el nombre cambia y el id no
+# (2026-10-07).
 QUERY_HORAS_SERVICIO = text(f"""
 SELECT
     DATE(h.fecha) AS fecha,
@@ -321,17 +357,11 @@ SELECT
     fincas.nombre      AS finca,
     tareas.nombre      AS tarea,
     maquinarias.nombre AS maquinaria,
-    NULLIF(
-        TRIM(REPLACE(REPLACE(
-            CASE
-                -- si el último campo es una patente, no es el dueño
-                WHEN TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', -1))
-                     REGEXP '^([A-Z]{{3}}[0-9]{{3}}|[A-Z]{{2}}[0-9]{{3}}[A-Z]{{2}})$' THEN ''
-                ELSE TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', -1))
-            END, ',', ' '), '  ', ' ')
-    ), '')             AS tercero,
+    maquinarias.id     AS id_maquinaria,
+    {_dueno_de_maquinaria('maquinarias')} AS tercero,
     usuarios_supervisor.`name` AS supervisor,
     h.hsmaquina        AS horas_maquina,
+    h.hsjornal         AS horas_jornal,
     h.unidades         AS unidades,
     tareas.unidad      AS unidad
 FROM (
@@ -346,6 +376,8 @@ FROM (
         r1.maquinaria  AS maquinaria,
         CASE WHEN TRIM(r1.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(r1.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END AS hsmaquina,
+        CASE WHEN TRIM(r1.hsjornal) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(r1.hsjornal) AS DECIMAL(10,2)) ELSE 0 END AS hsjornal,
         NULL AS unidades
     FROM laa_pdcosechasregistros1 r1
         INNER JOIN laa_pdcosechas pdc ON pdc.id = r1.parent_id
@@ -359,6 +391,8 @@ FROM (
         pdm.supervisor, mr.maquinaria,
         CASE WHEN TRIM(mr.hsmaquina) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(mr.hsmaquina) AS DECIMAL(10,2)) ELSE 0 END,
+        CASE WHEN TRIM(mr.hsjornal) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(mr.hsjornal) AS DECIMAL(10,2)) ELSE 0 END,
         CASE WHEN TRIM(mr.unidades)  REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(mr.unidades)  AS DECIMAL(12,2)) ELSE NULL END
     FROM laa_pdmaquinariasregistros mr
@@ -373,6 +407,8 @@ FROM (
         pdp.supervisor, pr.tractor1,
         CASE WHEN TRIM(pr.hsmaquina1) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(pr.hsmaquina1) AS DECIMAL(10,2)) ELSE 0 END,
+        CASE WHEN TRIM(pr.hsjornal1) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(pr.hsjornal1) AS DECIMAL(10,2)) ELSE 0 END,
         NULL
     FROM laa_pdpulverizadasregistros pr
         INNER JOIN laa_pdpulverizadas pdp ON pdp.id = pr.parent_id
@@ -386,6 +422,8 @@ FROM (
         pdp.supervisor, pr.tractor2,
         CASE WHEN TRIM(pr.hsmaquina2) REGEXP '^[0-9]*[.]?[0-9]+$'
              THEN CAST(TRIM(pr.hsmaquina2) AS DECIMAL(10,2)) ELSE 0 END,
+        CASE WHEN TRIM(pr.hsjornal2) REGEXP '^[0-9]*[.]?[0-9]+$'
+             THEN CAST(TRIM(pr.hsjornal2) AS DECIMAL(10,2)) ELSE 0 END,
         NULL
     FROM laa_pdpulverizadasregistros pr
         INNER JOIN laa_pdpulverizadas pdp ON pdp.id = pr.parent_id
@@ -402,10 +440,10 @@ WHERE TRIM(SUBSTRING_INDEX(maquinarias.descripcion, ';', 1)) IN ('TERCEROS', 'TE
   -- DATE(): la fecha viene como datetime con hora 03:00, y sin esto el
   -- último día de la quincena queda afuera entero.
   AND DATE(h.fecha) BETWEEN :fecha_desde AND :fecha_hasta
-  -- Sin horas de máquina ni cantidad no hay nada sobre qué aplicar una tarifa,
-  -- así que la fila no es una línea a liquidar. En 2026 son 16 filas con horas
-  -- de jornal y nada más (86 horas): candidatas a una Verificación, no a pago.
-  AND (h.hsmaquina > 0 OR h.unidades > 0)
+  -- Sin horas de máquina, de jornal ni cantidad no hay nada sobre qué aplicar
+  -- una tarifa. El jornal entra desde que se puede pagar por jornal
+  -- (2026-10-05): antes estas filas quedaban afuera.
+  AND (h.hsmaquina > 0 OR h.hsjornal > 0 OR h.unidades > 0)
 ORDER BY h.fecha, maquinarias.nombre
 """)
 
@@ -420,7 +458,7 @@ SELECT id,
        descripcion,
        TRIM(SUBSTRING_INDEX(descripcion, ';', 1)) AS propiedad
 FROM laa_maquinarias
-WHERE estado <> 9
+WHERE COALESCE(estado, '') <> '9'
   AND UPPER(TRIM(SUBSTRING_INDEX(descripcion, ';', 1))) LIKE '%%TERCERO%%'
 ORDER BY nombre
 """)
@@ -436,7 +474,7 @@ SELECT id,
        TRIM(SUBSTRING_INDEX(descripcion, ';', 1))  AS propiedad,
        TRIM(SUBSTRING_INDEX(descripcion, ';', -1)) AS patente_descripcion
 FROM laa_colectivos
-WHERE estado <> 9
+WHERE COALESCE(estado, '') <> '9'
 ORDER BY nombre
 """)
 
@@ -473,23 +511,27 @@ GROUP BY pp.id_maquina
 # sistema de campo o el seguro no se le imputa a nadie.
 #
 # Sale del sistema de campo, que es el maestro. Dos orígenes distintos:
-#   colectivos   el `nombre` ES el del dueño y la patente está en su columna
+#   colectivos   el `nombre` del sistema de campo ES el del dueño, y no sirve
+#                para nombrar el colectivo: un dueño con trece colectivos
+#                tendría trece pólizas con el mismo sujeto, y sólo entraría
+#                una. Se lo nombra por su patente, que es lo que dice la póliza
 #   choferes     no hay padrón: se deducen de quién manejó sus colectivos
 #   maquinaria   el dueño es el último campo de `descripcion`… salvo en los
 #                vehículos, donde ese último campo es la patente. Cuando pasa
 #                eso el dueño vuelve vacío y se ve el hueco, en vez de dar por
 #                dueño a una patente.
-QUERY_BIENES_TERCEROS = text("""
+QUERY_BIENES_TERCEROS = text(f"""
 SELECT * FROM (
     SELECT
         'colectivo'                 AS origen,
         c.id                        AS id_origen,
         TRIM(c.nombre)              AS tercero,
-        TRIM(c.nombre)              AS nombre,
+        CONCAT('COLECTIVO ', COALESCE(NULLIF(TRIM(c.patente), ''),
+                                      CONCAT('SIN PATENTE ', c.id))) AS nombre,
         NULLIF(TRIM(c.patente), '') AS patente,
         NULLIF(TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(c.descripcion, ';', 4), ';', -1)), '') AS detalle
     FROM laa_colectivos c
-    WHERE c.estado <> 9
+    WHERE COALESCE(c.estado, '') <> '9'
       AND UPPER(TRIM(SUBSTRING_INDEX(c.descripcion, ';', 1))) LIKE '%%TERCERO%%'
       AND UPPER(TRIM(c.nombre)) NOT LIKE 'SIN COLECTIVO%%'
 
@@ -498,24 +540,18 @@ SELECT * FROM (
     SELECT
         'maquinaria',
         m.id,
-        -- El último campo es el dueño, salvo cuando es una patente.
-        NULLIF(
-            CASE WHEN TRIM(SUBSTRING_INDEX(m.descripcion, ';', -1))
-                      REGEXP '^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2}|[A-Z][0-9]{3}[A-Z]{3})$'
-                 THEN ''
-                 ELSE TRIM(REPLACE(SUBSTRING_INDEX(m.descripcion, ';', -1), ',', ' '))
-            END, ''),
+        {_dueno_de_maquinaria('m')},
         TRIM(m.nombre),
         -- La patente puede estar en el último campo o embebida en el nombre.
         NULLIF(
             CASE WHEN TRIM(SUBSTRING_INDEX(m.descripcion, ';', -1))
-                      REGEXP '^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2}|[A-Z][0-9]{3}[A-Z]{3})$'
+                      REGEXP '^([A-Z]{{3}}[0-9]{{3}}|[A-Z]{{2}}[0-9]{{3}}[A-Z]{{2}}|[A-Z][0-9]{{3}}[A-Z]{{3}})$'
                  THEN TRIM(SUBSTRING_INDEX(m.descripcion, ';', -1))
                  ELSE ''
             END, ''),
         NULLIF(TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(m.descripcion, ';', 2), ';', -1)), '')
     FROM laa_maquinarias m
-    WHERE m.estado <> 9
+    WHERE COALESCE(m.estado, '') <> '9'
       AND UPPER(TRIM(SUBSTRING_INDEX(m.descripcion, ';', 1))) LIKE '%%TERCERO%%'
 
     UNION ALL
@@ -545,6 +581,39 @@ ORDER BY (b.tercero IS NULL), b.tercero, b.origen, b.nombre
 """)
 
 
+# ─── El dueño de cada máquina de tercero ────────────────────────────────────
+#
+# Las horas del taller se le cobran al dueño que dice el maestro de maquinaria
+# del sistema de campo, y no al que se deduce del nombre de la máquina en la app
+# del taller (decidido con el usuario el 2026-10-07). Así todo lo de una persona
+# cae en la misma orden de facturación. Una máquina que el maestro no tiene —las
+# de clientes, que el taller marca igual como de terceros— queda sin dueño, a la
+# vista, y no se le cobra a nadie.
+QUERY_DUENOS_MAQUINARIA = text(f"""
+SELECT m.id, TRIM(m.nombre) AS maquina,
+       {_dueno_de_maquinaria('m')} AS tercero
+FROM laa_maquinarias m
+WHERE COALESCE(m.estado, '') <> '9'
+  AND UPPER(TRIM(SUBSTRING_INDEX(m.descripcion, ';', 1))) LIKE '%%TERCERO%%'
+""")
+
+# El dueño de cada colectivo de tercero, por su id: lo usan los repuestos de un
+# colectivo, que en La Falda apuntan al maestro de colectivos (2026-10-14). Es
+# el mismo nombre con el que llegan sus viajes y su combustible.
+QUERY_DUENOS_COLECTIVOS = text("""
+SELECT c.id, TRIM(c.nombre) AS tercero
+FROM laa_colectivos c
+WHERE COALESCE(c.estado, '') <> '9'
+  AND UPPER(TRIM(SUBSTRING_INDEX(c.descripcion, ';', 1))) LIKE '%%TERCERO%%'
+""")
+
+
+def nombre_de_maquina(nombre: str | None) -> str:
+    """El nombre para cruzar una máquina entre sistemas: en mayúsculas y sin
+    espacios de más, que es lo único en lo que difieren sin querer."""
+    return " ".join((nombre or "").upper().split())
+
+
 # Las columnas que devuelve cada consulta. Están acá y no solo en el SQL porque
 # son el contrato de la etapa 1: son las mismas que hoy tienen las hojas de
 # aterrizaje del Excel, y los tests las fijan para que un cambio en el SELECT
@@ -563,12 +632,13 @@ COLUMNAS_CARGAS_COMBUSTIBLE = (
 )
 COLUMNAS_HORAS_SERVICIO = (
     "fecha", "quincena_mes", "planilla", "cliente", "finca", "tarea",
-    "maquinaria", "tercero", "supervisor", "horas_maquina", "unidades", "unidad",
+    "maquinaria", "id_maquinaria", "tercero", "supervisor", "horas_maquina",
+    "horas_jornal", "unidades", "unidad",
 )
 COLUMNAS_REPUESTOS = (
     "id_maquina", "maquina", "fecha", "fecha_descarga", "quincena_mes",
     "tipo_insumo", "rubro", "repuesto", "cantidad", "precargas",
-    "monto_total", "reparacion", "nombreprove", "propiedad_maquina",
+    "monto_total", "reparacion", "nombreprove", "propiedad_maquina", "id_chinagro",
 )
 
 
@@ -624,6 +694,22 @@ class ConsultaExternaService:
     def bienes_terceros(self) -> list[dict]:
         """Colectivos, maquinaria y choferes de terceros: lo que se asegura."""
         return self._sin_parametros(self.db_externa, QUERY_BIENES_TERCEROS)
+
+    def duenos_de_maquinas(self) -> dict[str, str | None]:
+        """El dueño de cada máquina de tercero del sistema de campo, por su
+        nombre (ver `nombre_de_maquina`)."""
+        return {nombre_de_maquina(f["maquina"]): f["tercero"]
+                for f in self._sin_parametros(self.db_externa, QUERY_DUENOS_MAQUINARIA)}
+
+    def duenos_por_id(self) -> dict[int, str | None]:
+        """El dueño de cada máquina de tercero del sistema de campo, por su id."""
+        return {f["id"]: f["tercero"]
+                for f in self._sin_parametros(self.db_externa, QUERY_DUENOS_MAQUINARIA)}
+
+    def duenos_de_colectivos_por_id(self) -> dict[int, str | None]:
+        """El dueño de cada colectivo de tercero del sistema de campo, por su id."""
+        return {f["id"]: f["tercero"]
+                for f in self._sin_parametros(self.db_externa, QUERY_DUENOS_COLECTIVOS)}
 
     def lineas_por_maquina(self, anio: int) -> dict[int, int]:
         """Cuántas líneas de repuestos tuvo cada máquina en el año."""

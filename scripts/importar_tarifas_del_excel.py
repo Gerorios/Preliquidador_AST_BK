@@ -21,8 +21,10 @@ Necesita el Excel en docs/modulos/terceros/fuentes/, que está fuera de git.
 
     python scripts/importar_tarifas_del_excel.py --quincena 2026-08-01
     python scripts/importar_tarifas_del_excel.py --quincena 2026-08-01 --aplicar
+    python scripts/importar_tarifas_del_excel.py --quincena 2026-09-01 --excel <ruta del 71>
 
-Sin --aplicar sólo muestra qué haría.
+Sin --aplicar sólo muestra qué haría. Sin --excel lee el maestro de fuentes/;
+cada versión nueva del maestro que manda el liquidador se pasa con --excel.
 """
 import argparse
 import sys
@@ -105,11 +107,24 @@ def atar_al_campo(filas, duenos, columna_patente):
     return salida, sin_ficha
 
 
+def _sin_precio(v) -> bool:
+    return v is None or (isinstance(v, tuple) and v[0] is None)
+
+
 def agrupar(filas, dimensiones, valor):
-    """Junta por dimensiones y devuelve (consistentes, ambiguas)."""
+    """Junta por dimensiones y devuelve (consistentes, ambiguas).
+
+    Una fila sin precio no compite con una que lo tiene: es una fila que el
+    liquidador todavía no completó, no otro precio. Sólo cuenta si en toda la
+    combinación no hay ninguno.
+    """
     grupos = defaultdict(set)
     for f in filas:
         grupos[tuple(_t(f.get(d)) for d in dimensiones)].add(valor(f))
+    for k, v in grupos.items():
+        con_precio = {x for x in v if not _sin_precio(x)}
+        if con_precio:
+            grupos[k] = con_precio
     consistentes = {k: next(iter(v)) for k, v in grupos.items() if len(v) == 1}
     ambiguas = {k: v for k, v in grupos.items() if len(v) > 1}
     return consistentes, ambiguas
@@ -122,21 +137,25 @@ def main() -> int:
     ap.add_argument("--aplicar", action="store_true", help="escribir de verdad")
     ap.add_argument("--reemplazar", action="store_true",
                     help="borrar antes las tarifas que ya tenga esa quincena")
+    ap.add_argument("--excel", type=Path, default=EXCEL,
+                    help="el Excel maestro a leer (por defecto, el de fuentes/)")
     args = ap.parse_args()
+    excel = args.excel
 
     from datetime import date
     quincena = date.fromisoformat(args.quincena)
     etq = etiqueta(quincena)
 
-    if not EXCEL.exists():
-        print("No encuentro %s. Está fuera de git: ver fuentes/LEEME.md." % EXCEL)
+    if not excel.exists():
+        print("No encuentro %s. Está fuera de git: ver fuentes/LEEME.md." % excel)
         return 1
     if args.aplicar and settings.db_propia_name != "testing":
         print("La base propia es %r. Este script sólo escribe en 'testing'."
               % settings.db_propia_name)
         return 1
 
-    wb = openpyxl.load_workbook(EXCEL, read_only=True, data_only=True)
+    wb = openpyxl.load_workbook(excel, read_only=True, data_only=True)
+    print("Excel: %s" % excel.name)
     db = SessionPropia()
     servicio = TarifarioService(db)
     duenos = duenos_del_campo()

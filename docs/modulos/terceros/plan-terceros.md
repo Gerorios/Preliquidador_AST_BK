@@ -51,7 +51,19 @@ El combustible solo alcanza al flete. Lo demás es común a los dos.
 | Sistema de compras | Un campo con **el id de la maquinaria del sistema de campo**. Es nuestro |
 | App del taller | Una columna con **el id de la maquinaria del sistema de campo** |
 
+**Las tarifas y los seguros se atan al id del sistema de campo** (2026-10-07, después de que un reorganizado del maestro de maquinaria dejara 420 tarifas sin su máquina). Las horas de servicio traen el id de la máquina y se reconcilian por él. Una tarifa de servicio guarda el id de su máquina, y un seguro el de su bien (colectivo, máquina o chofer). Al actualizar una quincena, la tarifa y el seguro toman el nombre actual por ese id, y el seguro también el dueño. El seguro de un chofer no se toca, porque el mismo chofer aparece con cada dueño. El dueño se toma tal cual está escrito en el sistema de campo, con su coma, para que quede igual que en los colectivos. Decidido con el usuario el mismo día: el dueño se escribe en Chinagro y en La Falda, pero el módulo lo busca en Chinagro; La Falda y la app del taller van a tener el id de Chinagro. Plan en `docs/superpowers/plans/2026-10-07-maquina-por-id.md`.
+
+**Los repuestos toman el dueño del sistema de campo por el id que guarda La Falda** (`idchinagro`, cargado el 2026-10-08). Una máquina sin ese id queda «Sin dueño»; ya no se deduce del nombre. El taller todavía cruza por nombre exacto: su maestro no usa aún los números de La Falda (del 951 en adelante son otras máquinas), y cruzarlo por número le cobraría a otro. Cuando la app del taller comparta el maestro de La Falda, pasa a cruzar por id igual que los repuestos.
+
 **Nada se resuelve por parecido.** Un cruce que falla genera una Verificación accionable, no una adivinanza. La única excepción es sugerir, dentro de una alerta que ya existe, cuál podría ser la ficha equivalente — no cruza ni decide nada.
+
+**El dueño sigue siendo un nombre escrito en el sistema de campo** (revisado el 2026-10-01). Se evaluaron y se descartaron dos alternativas:
+- **Un maestro de terceros propio del módulo**, con CUIT, y los bienes asociados por patente o por id. Descartado porque duplica un maestro que ya existe y obliga a mantenerlo en dos lugares.
+- **Una lista de terceros en el sistema de campo**, con el dueño elegido de un desplegable. Imposible: el sistema de campo no lo admite.
+
+Queda así: si un dueño aparece escrito de dos formas, aparecen las dos en los desplegables del módulo, alguien se da cuenta y se corrige en el origen. Para los terceros, `nuempleados` no sirve: medido sobre los 111 dueños, 39 no están y 44 coinciden por nombre con varias personas. Tampoco están en `nueproveedores`, donde hay sólo 2.
+
+Clientes y fincas salen del sistema de campo. Una advertencia medida: **el mismo nombre de finca existe en varios clientes** (COCHAMOLLE en 5, MONTE GRANDE en 4, CASPINCHANGO en 3), y una tarifa que fija la finca sin el cliente alcanza a todas.
 
 ### 3.2 El Tarifario
 
@@ -60,21 +72,26 @@ Cinco tablas, todas **por quincena**, con copia desde la quincena que se elija y
 | Tabla | Dimensiones | Resultado |
 |---|---|---|
 | Viajes | tercero, cliente, finca, capataz | tipo de viaje + precio |
-| Horas de servicio | tercero, cliente, finca, tarea | **unidad base** + precio |
+| Horas de servicio | tercero, cliente, finca, tarea, máquina | **unidad base** + precio |
 | Combustible | tercero | precio por litro |
 | Horas de reparación | tercero | precio por hora |
 | Seguros | maquinaria, tercero | importe de la cuota |
 
 - **Gana la regla más específica** (más dimensiones cargadas). Empate = ambiguo, lo resuelve el liquidador.
 - **Sin tarifa, el hecho no entra al recibo**: queda listado aparte, nunca paga cero en silencio.
-- **La unidad base de las horas de servicio la elige el liquidador**: se paga la hora de máquina o la hora de jornal según lo pactado, no según el dato. El sistema de campo carga las dos y no son iguales: en 2026 son 17.560 horas de máquina contra 21.737 de jornal, **4.177 de diferencia**.
+- **La unidad base de las horas de servicio la elige el liquidador**, según lo pactado y no según el dato: **hora de máquina, jornal, bins o toneladas** (las cuatro, pedidas por el usuario el 2026-10-05; antes eran hora de máquina o "cantidad"). Un jornal son las horas de jornal del sistema de campo divididas por 10. El sistema de campo carga horas de máquina y de jornal, y no son iguales: en 2026 son 17.560 horas de máquina contra 21.737 de jornal, **4.177 de diferencia**. Bins y toneladas sólo cuentan si la tarea mide eso; si no, la línea queda sin cantidad. Una tarea medida en bins se puede pagar por toneladas: los bins por 400 kilos (2026-10-07, la carga de fruta). La Quincena muestra los bins al lado de lo que se paga.
+- **El precio de servicio puede cambiar según la máquina** (2026-10-05): la máquina es la quinta dimensión de la tarifa. Una regla sin máquina sigue alcanzando a todas.
 - **Los seguros no llegan por archivo**: los carga a mano, dentro de la app, quien tiene los seguros a cargo. Es un cambio respecto del plan del 09-09, que asumía un Excel mensual.
+- **De dónde salen los desplegables de Seguros** (decidido con el usuario el 2026-10-05): del maestro del sistema de campo, colectivos y maquinaria con su dueño. El usuario quería la maquinaria de La Falda, pero La Falda todavía no tiene un campo de dueño: va escrito dentro del nombre y en cualquier orden. Cuando se reorganice la base de maquinaria y La Falda tenga la columna de propietario, la maquinaria pasa a salir de ahí. Los colectivos siguen en el sistema de campo: en La Falda no están. Un colectivo se nombra por su patente ("COLECTIVO ZZZ999"), no por el nombre del dueño: si no, un dueño con trece colectivos tendría trece pólizas con el mismo sujeto, y sólo entraría una.
 
 ### 3.3 Períodos y diferimiento
 
 - La **quincena efectiva es un campo manual con motivo** en todas las tablas de hechos. No se puede derivar: además de la llegada tardía existe la excepción comercial.
-- **Emitir el recibo congela** ese recibo y cierra la quincena para ese Tercero. Se puede reabrir con motivo.
-- El sistema **propone** diferir lo que llegó después de la emisión; la decisión es del liquidador.
+- **Un hecho movido de quincena conserva el precio de la quincena en que se generó** (2026-09-30). Moverlo cambia cuándo se cobra, no cuánto: un viaje que llegó tarde se paga lo que valía cuando se hizo. Por eso lo que le falte de tarifa se pacta en su quincena de origen, no en la que se liquida.
+- **Un repuesto se puede descontar en cuotas quincenales iguales** (2026-09-30), con la última absorbiendo el redondeo. Cada cuota queda escrita al repartirlo y no se recalcula: una cuota emitida es un cobro.
+- **Emitir el recibo congela** ese recibo y cierra la quincena para ese Tercero. Se puede reabrir con motivo. Mientras esté emitido, lo que se liquida en él no se puede mover de quincena ni repartir en cuotas: si no, quedaría a la vez en el recibo congelado y en otro. Sí se puede mover lo que llegó después de emitir, porque no está en la foto.
+- El sistema **propone** diferir lo que llegó después de la emisión; la decisión es del liquidador. Cómo (2026-10-05): se compara la foto del recibo emitido contra lo que esa quincena liquidaría hoy, línea por línea. Lo que **llegó después** se propone mover al recibo abierto; lo que **desapareció** o **cambió de importe**, un ajuste por la diferencia; y cualquiera se puede descartar con motivo. Al actualizar una quincena se actualiza también la anterior si tiene recibos emitidos, para que lo tardío aparezca sin ir a buscarlo. El aviso sale en Recibos del recibo abierto, en el diálogo de cada tercero y en el resumen de actualizar. Los seguros quedan afuera: se cargan a mano en la app, no llegan de un origen.
+- **Ajuste manual** (2026-10-05): una corrección con signo que se carga sobre el recibo abierto, con concepto (viajes, horas de servicio, combustible, repuestos, horas de reparación u otro), motivo obligatorio y, si corrige algo de antes, la quincena de origen. Entra al Total a facturar y en el recibo va con los ajustes, agrupado por concepto.
 - **Seguros**: se imputan enteros a la 2da quincena del mes.
 
 ### 3.4 Horas de reparación
@@ -82,15 +99,23 @@ Cinco tablas, todas **por quincena**, con copia desde la quincena que se elija y
 - Se cobran **solo las aprobadas**. Las pendientes esperan; cuando se aprueben entran en la quincena que esté abierta. Las rechazadas no se cobran nunca.
 - El tablero muestra cuántas aprobadas, pendientes y rechazadas hay, para reclamar antes de liquidar.
 - El módulo lee la app del taller **automáticamente** y guarda su propia copia, para que el recibo quede congelado al emitirse.
+- **El dueño de una hora del taller sale del maestro de maquinaria del sistema de campo** (decidido con el usuario el 2026-10-07), cruzando la máquina por nombre: así lo de una persona cae en una sola orden. La máquina que el maestro no tiene queda «Sin dueño» y no se cobra: son las de clientes (Citrusvil, San Miguel, Sertec) que el taller marca como de terceros, y las que el taller nombra distinto que el maestro, que hay que alinear en el origen.
 
 ### 3.5 La cuenta y el recibo
 
 - **No hay una sección aparte para cargar pagos.** Se trabaja sobre la grilla de la quincena, marcando los estados ahí mismo, con registro de auditoría de cada cambio.
+- **El pago se marca entero o parcial** (2026-09-30): marcarlo entero asume el total; sólo el parcial pide el importe. La diferencia queda como saldo y pasa al recibo siguiente.
+- **El saldo inicial se carga a mano**, una vez por Tercero: el que tiene en el Excel a la quincena de corte. Después el módulo lo arrastra solo.
 - El recibo tiene tres bloques: **esta quincena**, **saldo anterior** y **en revisión** (listado sin sumar).
+- **Lo de esta quincena se separa en tres** (2026-09-30), para que el Tercero entienda de qué es cada cosa: lo que **es de esta quincena**, las **cuotas de repuestos** («cuota 2 de 5») y los **ajustes de otras quincenas**, por concepto y con su motivo («ajuste viajes: llegó tarde»).
+- **La factura se registra en el recibo**: número, fecha, importe y la **empresa a la que se factura**, que se elige en cada recibo entre La Asturiana, Pamplona, Baleares y La Sevilla (cambia de una quincena a otra). Lore la aprueba o la rechaza con motivo, según coincidan los montos u otras razones.
+- **El Total a facturar se puede repartir entre varias empresas** (pedido del usuario, 2026-10-05): a algunos terceros se les pide que facturen una parte a una y otra parte a otra. La orden sigue siendo una y arriba dice cuánto facturarle a cada empresa. Se escribe el importe de cada una, y no se emite hasta que la suma dé el Total a facturar. Cada empresa tiene su factura (número, fecha, importe), que se aprueba o se rechaza por separado. El pago sigue siendo uno por orden, así que el reparto no toca los seguros ni el saldo. Cada quincena arranca sin reparto: no se propone el de la anterior. Plan en `docs/superpowers/plans/2026-10-05-reparto-de-facturas.md`.
 - **Dónde va el seguro depende de para quién es el recibo.** En el del Tercero va **afuera** del total a facturar: el bloque cierra en Total a facturar, sigue el detalle de los seguros, y abajo el Total a pagar. En el de la empresa va **adentro** del cálculo, y hay un solo total. Porqué: el Total a facturar del Tercero es lo que él copia en su factura, y el seguro no es un servicio que él preste — es una cuota adelantada que se le recupera; si entrara arriba facturaría de menos. Adentro de la empresa esa distinción no hace falta, lo que se quiere ver es cuánto se paga.
 - **Los dos layouts cierran en el mismo número**: el Total a facturar del recibo de la empresa tiene que ser igual al Total a pagar del recibo del Tercero. Es un solo cálculo impreso de dos formas, y esa igualdad es el test.
-- **Salida en PDF**, individual y en lote. Requiere `reportlab` — a aprobar según la regla de stack.
-- **WhatsApp se manda a mano**, como hoy.
+- **El recibo es una página imprimible** (propuesto el 2026-09-30, a confirmar), individual y en lote, y se guarda como PDF desde el navegador. Reemplaza al PDF armado en el servidor con `reportlab`: no suma una dependencia, y con el portal de abajo el Tercero lo ve en pantalla.
+  - **Un PDF por tercero, todos de un clic** (decidido el 2026-10-05): para mandarlos por WhatsApp, «Guardar todos» pide una carpeta una vez (Chrome o Edge) y escribe ahí un PDF por tercero, con el nombre «Recibo <tercero> - <quincena>». Los arma `html2pdf.js` en el navegador a partir de la misma hoja; se eligió antes que `reportlab` porque así el recibo se diseña una sola vez. El PDF es una imagen de la hoja: no se puede seleccionar el texto. De a uno sigue el diálogo de imprimir.
+- **WhatsApp se manda a mano**, como hoy, hasta que exista el portal.
+- **Portal de terceros, después de la etapa 11** (2026-09-30): cada Tercero entra a la app, ve su recibo y lo pendiente de facturar con el detalle, y sube ahí su factura en vez de mandarla por WhatsApp; Lore la aprueba o la rechaza. La etapa 11 se construye con Lore como la que opera y de forma que el portal sea una capa arriba: el Tercero ve el mismo recibo emitido, y la factura la sube él. Trae gente de afuera de la empresa al sistema, así que antes lleva su ADR: cómo se da de alta cada Tercero sin mail (la invitación por mail está descartada), cómo se garantiza que vea sólo lo suyo, el rol nuevo en el núcleo, y dónde se guardan los archivos de las facturas.
 
 ### 3.6 Combustible y estaciones de servicio
 
@@ -136,7 +161,7 @@ Todas con prefijo `terceros_`, en `migrations/terceros/001_crear_tablas.sql`. El
 | `terceros_hora_reparacion` | Copia de las horas aprobadas de la app del taller, con su precio |
 | `terceros_seguro` | La cuota de cada póliza de la quincena |
 | `terceros_tarifa_viaje` | tercero, cliente, finca, capataz → tipo y precio, con marca de heredada |
-| `terceros_tarifa_servicio` | tercero, cliente, finca, tarea → unidad base y precio |
+| `terceros_tarifa_servicio` | tercero, cliente, finca, tarea, máquina → unidad base y precio |
 | `terceros_precio_combustible` | Precio por litro, por quincena y tercero |
 | `terceros_precio_reparacion` | Precio de la hora de taller, por quincena y tercero |
 | `terceros_precio_seguro` | Importe de la cuota, por maquinaria y tercero |
@@ -162,8 +187,8 @@ Cada etapa termina con un PR mergeado. El criterio de aceptación de todas, a pa
 | 7 | **Cálculo del neto**: aplicar la tarifa a cada hecho, regla más específica, ambiguos y sin tarifa a la vista. Cierra en **dos cifras**: Total a facturar y, restándole los seguros, Total a pagar | El motor está (2026-09-21). **Falta la aceptación**: agosto todavía no coincide, ver abajo |
 | 8 | **La grilla**: una sola pantalla filtrable por concepto, cliente, tercero y capataz, con exportar a Excel. Reemplaza las cuatro pantallas de la etapa 2 | El liquidador revisa agosto entero desde ahí |
 | 9 | **Verificaciones por fuente**: duplicados en cada origen, más los cruces de la etapa 3 reorganizados | Se detecta un duplicado real antes de liquidar |
-| 10 | **Estaciones de servicio**: subida de archivos con mapeo por estación, carga manual de La Angostura, y la marca del vale en la grilla | Se detecta un vale facturado y no cargado |
-| 11 | **Cuenta corriente y recibo**: saldo, estados, emisión, congelado y PDF | Se manda una quincena real desde el sistema |
+| 10 | ~~**Estaciones de servicio**: subida de archivos con mapeo por estación, carga manual de La Angostura, y la marca del vale en la grilla~~ | **Hecho (2026-09-30).** En agosto encuentra 5 cargas facturadas y no registradas |
+| 11 | **Cuenta corriente y recibo**: saldo, emisión y congelado, factura con empresa y aprobación, pago entero o parcial, página imprimible | Se manda una quincena real desde el sistema |
 | 12 | **Panel gerencial** bajo `/api/terceros/gerencial` | Al final, con todo lo anterior en uso |
 
 ### Etapas 1 a 3 — cómo quedaron
@@ -302,7 +327,7 @@ elegida no funcionaba: se corregía Chinagro y el módulo nunca se enteraba.
 **Decisiones**
 - **El rol de quien carga los seguros.** Hoy un módulo tiene `operador` y `gerente`. Quien carga los seguros no es ninguno de los dos: entra a una sola sección y no ve el resto. Agregar un tercer rol toca el núcleo, así que va en un PR aparte (regla 4 de `GUIA-MODULOS.md`).
 - **La quincena de corte**: desde cuándo el módulo liquida en serio.
-- **`reportlab`** como dependencia nueva para el PDF (etapa 11).
+- **Dónde se guardan los archivos de las facturas** (etapa 11 y portal). Hoy el sistema no guarda archivos: la base propia es compartida por varios sistemas y el disco del VPS es infraestructura. Lo decide Gero. Hasta entonces la factura se registra con sus datos, sin el archivo.
 
 **Con el sistema de campo y sus responsables**
 - El token del dueño en la descripción de la maquinaria.

@@ -211,9 +211,21 @@ class DetalleConjunto(BaseModel):
     planes_de_cuotas_borrados: int = 0
 
 
+class AnteriorActualizada(BaseModel):
+    """La quincena anterior, que se actualiza sola si tiene recibos emitidos:
+    es lo que hace aparecer lo que le llegó tarde sin ir a buscarlo."""
+    quincena: date
+    # Cuántas líneas de sus recibos emitidos cambiaron y están por resolver.
+    llegadas: int = 0
+    # Si no se pudo actualizar (un origen no contestó). La quincena pedida
+    # se generó igual.
+    error: str | None = None
+
+
 class GenerarResponse(LiquidacionResponse):
     nueva: bool                            # False = era una actualización
     detalle: dict[str, DetalleConjunto]
+    anterior: AnteriorActualizada | None = None
 
 
 # ─── En qué quincena se liquida cada hecho ──────────────────────────────────
@@ -447,6 +459,8 @@ class TotalTerceroResponse(BaseModel):
     combustible: Decimal
     repuestos: Decimal
     reparacion: Decimal
+    # Con signo: positivo se le paga más, negativo se le descuenta.
+    ajustes: Decimal = Decimal("0")
     seguros: Decimal
     total_a_facturar: Decimal
     total_a_pagar: Decimal
@@ -492,9 +506,16 @@ class LineaGrillaResponse(BaseModel):
     motivo: str | None = None
     # «2 de 5», en un repuesto que se descuenta en cuotas.
     cuota: str | None = None
+    # De qué es un ajuste.
+    ajuste_de: str | None = None
+    ajuste_de_label: str | None = None
     maquina: str | None = None          # servicio, repuestos, reparación
     planilla: str | None = None         # servicio
     supervisor: str | None = None       # servicio
+    bins: Decimal | None = None         # servicio, si la tarea mide bins
+    # Repuestos, mantenimiento, reparaciones: el recibo lo pone entre la
+    # máquina y el insumo.
+    tipo_insumo: str | None = None      # repuestos
     repuesto: str | None = None         # repuestos
     rubro: str | None = None            # repuestos, reparación
     sub_rubro: str | None = None        # reparación
@@ -536,6 +557,7 @@ class TarifaResponse(BaseModel):
     finca: str | None = None
     capataz: str | None = None
     tarea: str | None = None
+    maquinaria: str | None = None
     tipo_seguro: str | None = None
     sujeto: str | None = None
     referencia: str | None = None
@@ -544,6 +566,11 @@ class TarifaResponse(BaseModel):
     unidad_base: str | None = None
     precio: Decimal | None = None
     importe: Decimal | None = None
+    # A qué máquina o a qué bien del padrón está atada, por id del sistema de
+    # campo: así la sigue aunque le cambien el nombre.
+    id_maquinaria: int | None = None
+    origen: str | None = None
+    id_origen: int | None = None
 
 
 class TarifaRequest(BaseModel):
@@ -554,6 +581,7 @@ class TarifaRequest(BaseModel):
     finca: str | None = None
     capataz: str | None = None
     tarea: str | None = None
+    maquinaria: str | None = None
     tipo_seguro: str | None = None
     sujeto: str | None = None
     referencia: str | None = None
@@ -561,6 +589,9 @@ class TarifaRequest(BaseModel):
     unidad_base: str | None = None
     precio: Decimal | None = None
     importe: Decimal | None = None
+    id_maquinaria: int | None = None
+    origen: str | None = None
+    id_origen: int | None = None
 
 
 class CombinacionResponse(BaseModel):
@@ -579,6 +610,7 @@ class CombinacionResponse(BaseModel):
     finca: str | None = None
     capataz: str | None = None
     tarea: str | None = None
+    maquinaria: str | None = None
     lineas: int
     cantidad: Decimal
     # Cuántas de esas líneas todavía no tienen precio.
@@ -655,3 +687,173 @@ class BienResponse(BaseModel):
     patente: str | None = None
     detalle: str | None = None   # marca o tipo, para reconocerlo
 
+
+# ─── El recibo (etapa 11) ───────────────────────────────────────────────────
+
+class FacturaDeEmpresa(BaseModel):
+    """Lo que el tercero le factura a una empresa, y la factura que mandó."""
+    empresa: str
+    importe: Decimal | None = None
+    numero: str | None = None
+    fecha: date | None = None
+    importe_factura: Decimal | None = None
+    estado: str | None = None
+    motivo: str | None = None
+    # Si la factura dice lo mismo que lo que se le factura a esa empresa.
+    coincide: bool | None = None
+
+
+class ReciboRenglon(BaseModel):
+    """Un tercero en una quincena: en vivo si no se emitió, la foto si sí.
+
+    `cambio_desde_emision` es cuánto daría hoy el Total a pagar contra lo que
+    se emitió: hechos que llegaron tarde o se corrigieron en el origen. No toca
+    el recibo, avisa.
+    """
+    quincena: date
+    tercero: str
+    emitido: bool
+    emitido_en: datetime | None = None
+    # A qué empresas factura, cuánto a cada una y la factura de cada una.
+    facturas: list[FacturaDeEmpresa] = []
+    total_a_facturar: Decimal
+    seguros: Decimal
+    total_a_pagar: Decimal
+    saldo_anterior: Decimal
+    total: Decimal
+    pendientes: int
+    en_revision: bool = False
+    motivo_revision: str | None = None
+    pago: str | None = None
+    pago_importe: Decimal | None = None
+    pago_fecha: date | None = None
+    cambio_desde_emision: Decimal | None = None
+    # Cuántas líneas de recibos emitidos antes cambiaron y se proponen en éste.
+    llegadas: int = 0
+
+
+class ReciboEventoResponse(BaseModel):
+    tipo: str
+    motivo: str | None = None
+    detalle: dict | None = None
+    creado_en: datetime
+    creado_por: int | None = None
+
+
+class ReciboDetalle(ReciboRenglon):
+    """El recibo entero: los bloques con sus líneas, y su historia.
+
+    `contenido` tiene cuatro bloques —`quincena`, `cuotas`, `ajustes` y
+    `seguros`—, cada uno con sus grupos por concepto.
+    """
+    contenido: dict
+    eventos: list[ReciboEventoResponse] = []
+    # Lo que llegó tarde a recibos emitidos antes, con su propuesta.
+    llegadas_detalle: list[dict] = []
+    # Los ajustes cargados a mano en este recibo, para poder corregirlos.
+    ajustes: list[dict] = []
+
+
+class EmitirRequest(BaseModel):
+    """Uno o varios recibos de la misma quincena, cada uno con su empresa."""
+    quincena: date
+    recibos: list[dict]      # [{"tercero": ..., "empresa": ...}]
+
+
+class EmitirResponse(BaseModel):
+    emitidos: list[str]
+    # Los que no se pudieron, con el porqué. Uno que falla no frena al resto.
+    rechazados: list[dict]
+
+
+class ReciboRef(BaseModel):
+    quincena: date
+    tercero: str
+
+
+class ReabrirRequest(ReciboRef):
+    motivo: str
+
+
+class ParteDelReparto(BaseModel):
+    empresa: str
+    # Con una sola empresa no hace falta: es el Total a facturar.
+    importe: Decimal | None = None
+
+
+class RepartoRequest(ReciboRef):
+    """A qué empresas factura y cuánto a cada una, elegido antes de emitir.
+    Vacío saca la elección."""
+    empresas: list[ParteDelReparto] = []
+
+
+class FacturaRef(ReciboRef):
+    # De qué empresa es la factura. Con una sola, no hace falta.
+    empresa: str | None = None
+
+
+class FacturaRequest(FacturaRef):
+    numero: str
+    fecha: date | None = None
+    importe: Decimal
+
+
+class RechazoRequest(FacturaRef):
+    motivo: str
+
+
+class PagoRequest(ReciboRef):
+    """`tipo` TOTAL, PARCIAL o nulo para sacar el pago."""
+    tipo: str | None = None
+    importe: Decimal | None = None
+    fecha: date | None = None
+
+
+class RevisionRequest(ReciboRef):
+    en_revision: bool
+    motivo: str | None = None
+
+
+class SaldoInicialRequest(BaseModel):
+    tercero: str
+    quincena: date
+    importe: Decimal
+    motivo: str | None = None
+
+
+class SaldoInicialResponse(BaseModel):
+    tercero: str
+    quincena: date
+    importe: Decimal
+    motivo: str | None = None
+
+
+class AjusteRequest(BaseModel):
+    """Una corrección con signo sobre el recibo abierto de un tercero.
+
+    `importe` a favor del tercero: positivo se le paga más, negativo se le
+    descuenta. `origen_clave` lo manda la pantalla cuando el ajuste resuelve
+    algo que llegó tarde a un recibo emitido.
+    """
+    quincena: date
+    tercero: str
+    concepto: str
+    importe: Decimal
+    motivo: str
+    quincena_origen: date | None = None
+    origen_clave: str | None = None
+
+
+class AjusteEdicion(BaseModel):
+    concepto: str
+    importe: Decimal
+    motivo: str
+    quincena_origen: date | None = None
+
+
+class DescartarLlegadaRequest(BaseModel):
+    """Dejar como está algo que llegó tarde a un recibo emitido."""
+    quincena_origen: date
+    tercero: str
+    clave: str
+    motivo: str

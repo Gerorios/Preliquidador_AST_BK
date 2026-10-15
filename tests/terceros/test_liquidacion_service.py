@@ -50,9 +50,10 @@ def servicio_fila(maquinaria="MANITOU N°0060 BARRIOS", horas="6.00", unidades="
     }
 
 
-def repuesto(nombre="TORNILLO", monto="789.81"):
+def repuesto(nombre="TORNILLO", monto="789.81", id_chinagro=62):
     return {
         "id_maquina": 721, "maquina": "MAQUINARIA RUBEN MUÑOZ", "fecha": date(2026, 8, 5),
+        "id_chinagro": id_chinagro,
         "fecha_descarga": date(2026, 8, 14), "quincena_mes": "08-1Q",
         "tipo_insumo": "REPUESTOS", "rubro": "BULONERIA", "repuesto": nombre,
         "cantidad": Decimal("3.00"), "precargas": Decimal("263.27"),
@@ -72,10 +73,31 @@ def reparacion(sub="475. TORRE", total="5.0"):
     }
 
 
+# El maestro de maquinaria del sistema de campo: de quién es cada máquina, por
+# nombre (lo usa el taller) y por id (lo usan los repuestos).
+DUENOS = {"CARGADORA MANITOU N°9872 PABLO ROJAS": "PABLO ROJAS"}
+DUENOS_POR_ID = {62: "RUBEN MUÑOZ"}
+# El maestro de colectivos numera por separado: el 62 es otro.
+DUENOS_DE_COLECTIVOS = {62: "QUIROGA, LUIS"}
+
+
 class ExternaFalsa:
-    def __init__(self, viajes=(), cargas=(), servicios=(), repuestos=()):
+    def __init__(self, viajes=(), cargas=(), servicios=(), repuestos=(), duenos=None):
         self._viajes, self._cargas = list(viajes), list(cargas)
         self._servicios, self._repuestos = list(servicios), list(repuestos)
+        self._duenos = DUENOS if duenos is None else duenos
+
+    def duenos_de_maquinas(self):
+        return self._duenos
+
+    def duenos_por_id(self):
+        return DUENOS_POR_ID
+
+    def duenos_de_colectivos_por_id(self):
+        return DUENOS_DE_COLECTIVOS
+
+    def bienes_terceros(self):
+        return []
 
     def viajes(self, q):
         return self._viajes
@@ -144,17 +166,57 @@ def test_la_patente_se_guarda_sin_los_espacios_del_origen(db):
     assert db.query(CargaCombustible).one().colectivo_patente == "FAP480"
 
 
-def test_el_tercero_de_un_repuesto_se_deduce_del_nombre_de_la_maquina(db):
-    """El sistema de compras no guarda el dueño. Se usa la misma heurística que
-    la app del taller, con lo frágil que es: por eso el plan pide un campo."""
+def test_el_dueno_de_un_repuesto_sale_del_sistema_de_campo_por_el_id_de_la_falda(db):
+    """La Falda guarda el id de la máquina en el sistema de campo, y el dueño
+    se busca ahí: el nombre de La Falda no se usa (2026-10-07)."""
     armar(db, repuestos=[repuesto()]).generar(Q)
     assert db.query(Repuesto).one().tercero == "RUBEN MUÑOZ"
+
+
+def test_el_repuesto_de_un_colectivo_busca_el_dueno_en_los_colectivos(db):
+    """En La Falda un colectivo apunta al maestro de colectivos; buscarlo en el
+    de maquinaria le daría el dueño de otra cosa con el mismo número."""
+    armar(db, repuestos=[{**repuesto(), "es_colectivo": 1}]).generar(Q)
+    assert db.query(Repuesto).one().tercero == "QUIROGA, LUIS"
+
+
+def test_un_repuesto_de_una_maquina_sin_id_del_sistema_de_campo_queda_sin_dueno(db):
+    """No se deduce del nombre: se ve sin dueño hasta que La Falda tenga el id."""
+    armar(db, repuestos=[repuesto(id_chinagro=None)]).generar(Q)
+    assert db.query(Repuesto).one().tercero is None
 
 
 def test_las_dos_fechas_del_repuesto_se_guardan(db):
     armar(db, repuestos=[repuesto()]).generar(Q)
     r = db.query(Repuesto).one()
     assert r.fecha == date(2026, 8, 5) and r.fecha_descarga == date(2026, 8, 14)
+
+
+def _taller(db, maquina, duenos, tercero_del_taller="OTRO NOMBRE"):
+    externa = ExternaFalsa(duenos=duenos)
+    fila = {**reparacion(), "maquina": maquina, "tercero": tercero_del_taller}
+    LiquidacionService(db, externa, TallerFalso([fila])).generar(Q)
+    return db.query(HoraReparacion).one().tercero
+
+
+def test_el_dueno_de_una_hora_de_taller_es_el_del_maestro_de_chinagro(db):
+    """No el que se deduce del nombre en la app del taller (2026-10-07): así lo
+    de una persona cae en una sola orden de facturación."""
+    assert _taller(db, "TRACTOR DEUTZ A55 N°0002 LUIS QUIROGA",
+                   {"TRACTOR DEUTZ A55 N°0002 LUIS QUIROGA": "LUIS QUIROGA"},
+                   tercero_del_taller="QUIROGA LUIS") == "LUIS QUIROGA"
+
+
+def test_la_maquina_se_cruza_sin_importar_mayusculas_ni_espacios(db):
+    assert _taller(db, "tractor deutz  a55 N°0002 luis quiroga ",
+                   {"TRACTOR DEUTZ A55 N°0002 LUIS QUIROGA": "LUIS QUIROGA"}) == "LUIS QUIROGA"
+
+
+def test_una_maquina_que_no_esta_en_el_maestro_queda_sin_dueno(db):
+    """Las de clientes que el taller marca como de terceros: no se le cobran
+    a nadie, y quedan a la vista como sin dueño."""
+    assert _taller(db, "FUMIGADORA 400 LTS CITRUSVIL 570", {},
+                   tercero_del_taller="FUMIGADORA 400 LTS CITRUSVIL 570") is None
 
 
 def test_la_hora_de_servicio_guarda_las_dos_medidas_y_la_unidad(db):

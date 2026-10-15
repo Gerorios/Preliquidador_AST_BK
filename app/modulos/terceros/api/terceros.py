@@ -33,9 +33,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db_externa, get_db_propia, get_db_sueldos
 from app.modulos.terceros.permisos import (
-    editar_estaciones, editar_inicio, editar_quincena, editar_tarifario,
+    editar_estaciones, editar_inicio, editar_quincena, editar_recibos, editar_tarifario,
     ver_alguna_pantalla, ver_bienes, ver_estaciones, ver_inicio,
-    ver_inicio_o_quincena, ver_quincena, ver_tarifario, ver_verificaciones,
+    ver_inicio_o_quincena, ver_quincena, ver_recibos, ver_tarifario, ver_verificaciones,
 )
 from app.modulos.terceros.schemas import (
     AlertasResponse,
@@ -45,8 +45,25 @@ from app.modulos.terceros.schemas import (
     ActualizarEnLoteRequest,
     CombinacionResponse,
     ConfirmarEnLoteRequest,
+    AjusteEdicion,
+    AjusteRequest,
     CargaSinEstacion,
     CruceResponse,
+    DescartarLlegadaRequest,
+    EmitirRequest,
+    EmitirResponse,
+    FacturaRef,
+    FacturaRequest,
+    PagoRequest,
+    ReabrirRequest,
+    ReciboDetalle,
+    ReciboRef,
+    ReciboRenglon,
+    RechazoRequest,
+    RepartoRequest,
+    RevisionRequest,
+    SaldoInicialRequest,
+    SaldoInicialResponse,
     CuotaResponse,
     CuotasRequest,
     MoverRequest,
@@ -88,6 +105,9 @@ from app.modulos.terceros.services.destino_service import (
     DestinoInvalido, DestinoService,
 )
 from app.modulos.terceros.services.grilla_service import GrillaService
+from app.modulos.terceros.services.recibo_service import (
+    ReciboInvalido, ReciboService,
+)
 from app.modulos.terceros.services.verificaciones_service import VerificacionesService
 from app.modulos.terceros.services.liquidacion_service import LiquidacionService
 from app.modulos.terceros.services.tarifario_service import (
@@ -159,9 +179,10 @@ def get_tarifario(
 
 def _tarifa_a_dict(fila) -> dict:
     """La forma común de las cinco tablas, más su especificidad."""
-    campos = ("tercero", "cliente", "finca", "capataz", "tarea",
-              "tipo_seguro", "sujeto", "referencia",
-              "tipo_viaje", "unidad_base", "precio", "importe")
+    # Las dimensiones salen de la tabla y no de una lista acá: una dimensión
+    # nueva que faltara en la lista se guardaría bien y volvería sin ella.
+    campos = (*fila.DIMENSIONES, "referencia", "tipo_viaje", "unidad_base",
+              "precio", "importe", "id_maquinaria", "origen", "id_origen")
     salida = {c: getattr(fila, c, None) for c in campos}
     # Una dimensión vacía se guarda como '' para que el índice único funcione,
     # pero hacia afuera es "no aplica": se devuelve como null.
@@ -217,6 +238,12 @@ def get_destino(
     db_propia: Session = Depends(get_db_propia),
 ) -> DestinoService:
     return DestinoService(db_propia)
+
+
+def get_recibos(
+    db_propia: Session = Depends(get_db_propia),
+) -> ReciboService:
+    return ReciboService(db_propia)
 
 
 def get_verificaciones(
@@ -302,6 +329,7 @@ def generar_liquidacion(
     usuario=Depends(editar_inicio),
     servicio: LiquidacionService = Depends(get_liquidacion),
     calculo: CalculoService = Depends(get_calculo),
+    recibos: ReciboService = Depends(get_recibos),
 ):
     """Trae las cinco fuentes de esa quincena, las guarda y les pone precio.
 
@@ -327,6 +355,26 @@ def generar_liquidacion(
     # liquidador ve una pantalla de ceros y no sabe si es que no hay tarifas o
     # que le falta apretar algo. Al lado de traer cinco orígenes, no se nota.
     calculo.calcular(req.quincena)
+
+    # La anterior se actualiza también si tiene recibos emitidos: es lo que
+    # trae lo que les llegó tarde sin que nadie tenga que ir a buscarlo. Sólo
+    # la anterior, porque cada una cuesta lo mismo que la pedida.
+    anterior = quincenas.anterior(req.quincena)
+    if recibos.tiene_emitidos(anterior):
+        salida["anterior"] = {"quincena": anterior}
+        try:
+            servicio.generar(anterior, usuario_id=getattr(usuario, "id", None))
+            calculo.calcular(anterior)
+            salida["anterior"]["llegadas"] = sum(
+                1 for items in recibos.llegadas(req.quincena).values()
+                for i in items if i["quincena_origen"] == anterior)
+        except FALLAS_DE_ORIGEN as e:
+            # La pedida ya quedó guardada. De la anterior se descarta lo que
+            # haya alcanzado a reconciliar antes de que fallara un origen:
+            # generar confirma recién al final, y media quincena no se guarda.
+            # Es la misma sesión del pedido, la de todos los servicios.
+            recibos.db.rollback()
+            salida["anterior"]["error"] = _mensaje_origen(e)
     return salida
 
 
@@ -1002,3 +1050,220 @@ def alertas_de_cruce(
             maquinarias_campo, maquinas_compras, maquinas_taller
         ),
     )
+
+
+# ─── El recibo (etapa 11) ───────────────────────────────────────────────────
+#
+# El tercero viaja en el cuerpo o en la query y no en la ruta: son nombres
+# como «APELLIDO, NOMBRE», con coma y espacios, que en una ruta hay que
+# escapar y se leen mal en cualquier log.
+
+def _uid(usuario) -> int | None:
+    return getattr(usuario, "id", None)
+
+
+def _recibo_o_422(fn):
+    try:
+        return fn()
+    except ReciboInvalido as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.get("/recibos", response_model=list[ReciboRenglon],
+            dependencies=[Depends(ver_recibos)])
+def listar_recibos(
+    quincena: date = Depends(quincena_param),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Un renglón por tercero de la quincena, emitido o no."""
+    return servicio.listar(quincena)
+
+
+@router.get("/recibos/detalle", response_model=ReciboDetalle,
+            dependencies=[Depends(ver_recibos)])
+def detalle_de_recibo(
+    tercero: str = Query(...),
+    quincena: date = Depends(quincena_param),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """El recibo de un tercero: la foto si está emitido, en vivo si no."""
+    return servicio.detalle(quincena, tercero)
+
+
+@router.post("/recibos/emitir", response_model=EmitirResponse)
+def emitir_recibos(
+    req: EmitirRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Emite uno o varios, cada uno con su empresa.
+
+    Uno que no se puede emitir —porque le quedan líneas sin precio, por
+    ejemplo— no frena a los demás: vuelve en `rechazados` con el porqué.
+    """
+    emitidos, rechazados = [], []
+    for r in req.recibos:
+        tercero = (r.get("tercero") or "").strip()
+        try:
+            servicio.emitir(req.quincena, tercero, r.get("empresa"), _uid(usuario))
+            emitidos.append(tercero)
+        except ReciboInvalido as e:
+            servicio.db.rollback()
+            rechazados.append({"tercero": tercero, "motivo": str(e)})
+    return {"emitidos": emitidos, "rechazados": rechazados}
+
+
+@router.post("/recibos/reabrir", response_model=ReciboRenglon)
+def reabrir_recibo(
+    req: ReabrirRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Vuelve a armarlo en vivo. Pide motivo y queda en la historia."""
+    _recibo_o_422(lambda: servicio.reabrir(req.quincena, req.tercero, req.motivo,
+                                           _uid(usuario)))
+    return servicio.detalle(req.quincena, req.tercero)
+
+
+@router.put("/recibos/empresas", response_model=ReciboRenglon)
+def repartir_entre_empresas(
+    req: RepartoRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """A qué empresas factura y cuánto a cada una, elegido antes de emitir.
+    Queda guardado en la orden y el borrador ya lo muestra. Una orden emitida no
+    lo acepta."""
+    _recibo_o_422(lambda: servicio.repartir(
+        req.quincena, req.tercero, [p.model_dump() for p in req.empresas], _uid(usuario)))
+    return servicio.detalle(req.quincena, req.tercero)
+
+
+@router.put("/recibos/factura", response_model=ReciboRenglon)
+def registrar_factura(
+    req: FacturaRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """La factura que mandó el tercero. Registrar otra reemplaza la anterior."""
+    _recibo_o_422(lambda: servicio.registrar_factura(
+        req.quincena, req.tercero, req.numero, req.fecha, req.importe, _uid(usuario),
+        empresa=req.empresa))
+    return servicio.detalle(req.quincena, req.tercero)
+
+
+@router.post("/recibos/factura/aprobar", response_model=ReciboRenglon)
+def aprobar_factura(
+    req: FacturaRef,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    _recibo_o_422(lambda: servicio.aprobar_factura(req.quincena, req.tercero,
+                                                   _uid(usuario), empresa=req.empresa))
+    return servicio.detalle(req.quincena, req.tercero)
+
+
+@router.post("/recibos/factura/rechazar", response_model=ReciboRenglon)
+def rechazar_factura(
+    req: RechazoRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Pide motivo: es lo que el tercero tiene que corregir."""
+    _recibo_o_422(lambda: servicio.rechazar_factura(req.quincena, req.tercero,
+                                                    req.motivo, _uid(usuario),
+                                                    empresa=req.empresa))
+    return servicio.detalle(req.quincena, req.tercero)
+
+
+@router.put("/recibos/pago", response_model=ReciboRenglon)
+def registrar_pago(
+    req: PagoRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Entero o parcial; sin tipo, saca el pago."""
+    _recibo_o_422(lambda: servicio.registrar_pago(
+        req.quincena, req.tercero, req.tipo, req.importe, req.fecha, _uid(usuario)))
+    return servicio.detalle(req.quincena, req.tercero)
+
+
+@router.put("/recibos/revision", response_model=ReciboRenglon)
+def marcar_revision(
+    req: RevisionRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Una quincena en discusión con el tercero no suma al saldo."""
+    _recibo_o_422(lambda: servicio.marcar_revision(
+        req.quincena, req.tercero, req.en_revision, req.motivo, _uid(usuario)))
+    return servicio.detalle(req.quincena, req.tercero)
+
+
+@router.get("/saldos-iniciales", response_model=list[SaldoInicialResponse],
+            dependencies=[Depends(ver_recibos)])
+def listar_saldos_iniciales(servicio: ReciboService = Depends(get_recibos)):
+    return servicio.listar_saldos_iniciales()
+
+
+@router.put("/saldos-iniciales", response_model=SaldoInicialResponse)
+def cargar_saldo_inicial(
+    req: SaldoInicialRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """El saldo con el que arranca un tercero, una vez. Se corrige mientras no
+    se haya emitido ningún recibo que salga de él."""
+    return _recibo_o_422(lambda: servicio.cargar_saldo_inicial(
+        req.tercero, req.quincena, req.importe, req.motivo, _uid(usuario)))
+
+
+# ─── Los ajustes y lo que llegó tarde ───────────────────────────────────────
+
+@router.post("/recibos/ajustes", status_code=201)
+def crear_ajuste(
+    req: AjusteRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Una corrección con signo sobre el recibo abierto, con su motivo."""
+    a = _recibo_o_422(lambda: servicio.crear_ajuste(
+        req.quincena, req.tercero, req.concepto, req.importe, req.motivo,
+        req.quincena_origen, req.origen_clave, _uid(usuario)))
+    return {"id": a.id}
+
+
+@router.put("/recibos/ajustes/{id_}", status_code=204)
+def editar_ajuste(
+    id_: int,
+    req: AjusteEdicion,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Se corrige mientras el recibo no esté emitido."""
+    _recibo_o_422(lambda: servicio.editar_ajuste(
+        id_, req.concepto, req.importe, req.motivo, req.quincena_origen, _uid(usuario)))
+
+
+@router.delete("/recibos/ajustes/{id_}", status_code=204)
+def borrar_ajuste(
+    id_: int,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    _recibo_o_422(lambda: servicio.borrar_ajuste(id_, _uid(usuario)))
+
+
+@router.post("/recibos/llegadas/descartar", status_code=204)
+def descartar_llegada(
+    req: DescartarLlegadaRequest,
+    usuario=Depends(editar_recibos),
+    servicio: ReciboService = Depends(get_recibos),
+):
+    """Dejar como está algo que llegó tarde. Pide motivo y deja de avisar.
+
+    Para moverlo al recibo abierto está `/hechos/{concepto}/{id}/quincena`, y
+    para ajustarlo, `/recibos/ajustes` con `origen_clave`.
+    """
+    _recibo_o_422(lambda: servicio.descartar_llegada(
+        req.quincena_origen, req.tercero, req.clave, req.motivo, _uid(usuario)))

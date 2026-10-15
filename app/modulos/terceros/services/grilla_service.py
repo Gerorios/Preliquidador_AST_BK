@@ -24,8 +24,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.modulos.terceros.models import (
-    CALCULADO, SIGNO, CargaCombustible, CuotaRepuesto, HoraReparacion,
-    HoraServicio, Liquidacion, PrecioSeguro, Repuesto, Viaje,
+    CALCULADO, SIGNO, Ajuste, CargaCombustible, CuotaRepuesto, HoraReparacion,
+    HoraServicio, Liquidacion, PrecioSeguro, Repuesto, UNIDAD_BINS,
+    UNIDADES_DE_LA_TAREA, Viaje,
 )
 from app.modulos.terceros.services.calculo_service import sin_cuotas
 from app.modulos.terceros.services.estaciones_service import EstacionesService
@@ -38,8 +39,12 @@ ETIQUETAS = {
     "combustible": "Combustible",
     "repuestos": "Repuestos",
     "reparacion": "Horas de reparación",
+    "ajustes": "Ajustes",
     "seguros": "Seguros",
 }
+
+# De qué es un ajuste, como se lee en la pantalla y en el recibo.
+CONCEPTO_DE_AJUSTE = {**ETIQUETAS, "otro": "Otro"}
 
 UNIDAD_VIAJE = "viaje"
 UNIDAD_LITRO = "litro"
@@ -55,6 +60,10 @@ def _limpio(v) -> str | None:
     return texto or None
 
 
+def _mide_bins(h) -> bool:
+    return (h.unidad or "").strip().upper() in UNIDADES_DE_LA_TAREA[UNIDAD_BINS]
+
+
 def _linea(concepto: str, **campos) -> dict:
     """Una fila de la grilla.
 
@@ -65,7 +74,8 @@ def _linea(concepto: str, **campos) -> dict:
     base = {
         "concepto": concepto,
         "concepto_label": ETIQUETAS[concepto],
-        "signo": SIGNO[concepto],
+        # El ajuste no tiene un signo fijo: lo trae cada uno.
+        "signo": SIGNO.get(concepto, 1),
         # Comunes
         "fecha": None, "tercero": None, "cliente": None, "finca": None,
         "capataz": None, "tarea": None,
@@ -76,8 +86,8 @@ def _linea(concepto: str, **campos) -> dict:
         # de esa estación: no es lo mismo "no está facturada" que "todavía no
         # sabemos", y mostrarlo igual haría que se reclame de gusto.
         "facturada": None,
-        "maquina": None, "planilla": None, "supervisor": None,
-        "repuesto": None, "rubro": None,
+        "maquina": None, "planilla": None, "supervisor": None, "bins": None,
+        "tipo_insumo": None, "repuesto": None, "rubro": None,
         "sub_rubro": None, "estado_taller": None,
         "sujeto": None, "referencia": None, "tipo_seguro": None,
         # De qué quincena viene, cuando no es de ésta, y por qué se movió.
@@ -85,6 +95,8 @@ def _linea(concepto: str, **campos) -> dict:
         "viene_de": None, "motivo": None,
         # «2 de 5», en un repuesto que se descuenta en cuotas.
         "cuota": None,
+        # De qué es un ajuste: «combustible», y como se lee, «Combustible».
+        "ajuste_de": None, "ajuste_de_label": None,
         # El cálculo
         "cantidad": None, "unidad": None, "precio": None,
         "importe": None, "estado": CALCULADO,
@@ -122,6 +134,7 @@ class GrillaService:
         filas += self._repuestos(quincena)
         filas += self._cuotas(quincena)
         filas += self._reparacion(quincena)
+        filas += self._ajustes(quincena)
         filas += self._seguros(quincena)
         # Sin fecha van al final: son los seguros, que son de la quincena entera.
         return sorted(filas, key=lambda f: (f["fecha"] is None, f["fecha"] or date.min,
@@ -164,6 +177,9 @@ class GrillaService:
             "servicio", id=h.id, fecha=h.fecha, tercero=h.tercero,
             cliente=h.cliente, finca=h.finca, tarea=h.tarea,
             maquina=h.maquinaria, planilla=h.planilla, supervisor=h.supervisor,
+            # Los bins que cargó la tarea, aunque se pague por otra medida: la
+            # carga de fruta se paga por tonelada y lo que se cuenta son bins.
+            bins=h.unidades if _mide_bins(h) else None,
             # Si todavía no se calculó no hay unidad base elegida, y mostrar una
             # de las dos medidas al azar diría que se paga por esa.
             cantidad=h.cantidad_base, unidad=h.unidad_base,
@@ -193,7 +209,8 @@ class GrillaService:
         # sistema de compras, no uno que se haya pactado con el tercero.
         return [_linea(
             "repuestos", id=r.id, fecha=r.fecha, tercero=r.tercero,
-            maquina=r.maquina, repuesto=r.repuesto, rubro=r.rubro,
+            maquina=r.maquina, tipo_insumo=r.tipo_insumo,
+            repuesto=r.repuesto, rubro=r.rubro,
             cantidad=r.cantidad, importe=r.importe,
             estado=r.estado_calculo, **_movido(r),
         ) for r in self._de(Repuesto, quincena)]
@@ -214,7 +231,8 @@ class GrillaService:
             origen = r.liquidacion.quincena
             filas.append(_linea(
                 "repuestos", id=r.id, fecha=r.fecha, tercero=r.tercero,
-                maquina=r.maquina, repuesto=r.repuesto, rubro=r.rubro,
+                maquina=r.maquina, tipo_insumo=r.tipo_insumo,
+                repuesto=r.repuesto, rubro=r.rubro,
                 cantidad=r.cantidad, estado=r.estado_calculo,
                 importe=c.importe if r.estado_calculo == CALCULADO else 0,
                 cuota="%d de %d" % (c.numero, c.de),
@@ -234,6 +252,23 @@ class GrillaService:
             precio=h.precio_aplicado, importe=h.importe,
             estado=h.estado_calculo, **_movido(h),
         ) for h in self._de(HoraReparacion, quincena)]
+
+    def _ajustes(self, quincena: date) -> list[dict]:
+        """Las correcciones a mano sobre el recibo de cada tercero.
+
+        El importe va en valor absoluto y el signo aparte, como en el resto de
+        las líneas: así la grilla y el recibo los suman igual que a un viaje o
+        a un repuesto, sin un caso especial.
+        """
+        ajustes = (self.db.query(Ajuste).filter(Ajuste.quincena == quincena)
+                   .order_by(Ajuste.id).all())
+        return [_linea(
+            "ajustes", id=a.id, tercero=a.tercero,
+            signo=1 if a.importe >= 0 else -1, importe=abs(a.importe),
+            ajuste_de=a.concepto,
+            ajuste_de_label=CONCEPTO_DE_AJUSTE.get(a.concepto, a.concepto),
+            viene_de=a.quincena_origen, motivo=a.motivo,
+        ) for a in ajustes]
 
     def _seguros(self, quincena: date) -> list[dict]:
         """Los seguros no tienen tabla de hechos: la tarifa **es** la línea.

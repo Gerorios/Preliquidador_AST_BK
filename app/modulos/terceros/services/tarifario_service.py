@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.modulos.terceros.models import (
     SIN_DIMENSION, TIPOS_SEGURO, TIPOS_VIAJE, UNIDADES_BASE,
-    PrecioCombustible, PrecioReparacion, PrecioSeguro,
+    HoraServicio, PrecioCombustible, PrecioReparacion, PrecioSeguro,
     TarifaServicio, TarifaViaje,
 )
 
@@ -47,9 +47,12 @@ TIPOS = {
     },
     "servicio": {
         "modelo": TarifaServicio,
-        "dimensiones": ("tercero", "cliente", "finca", "tarea"),
+        "dimensiones": ("tercero", "cliente", "finca", "tarea", "maquinaria"),
         "obligatorias": (),
         "valores": ("precio", "unidad_base"),
+        # El id de la máquina: no decide qué regla gana, pero la ata a su
+        # máquina aunque le cambien el nombre.
+        "ids": ("id_maquinaria",),
         "importe": "precio",
         "etiqueta": "tarifa de servicio",
     },
@@ -73,6 +76,8 @@ TIPOS = {
         "modelo": PrecioSeguro,
         # El sujeto puede ser una máquina o una persona: el tipo dice cuál.
         "dimensiones": ("tercero", "tipo_seguro", "sujeto"),
+        # El bien del padrón: el seguro lo sigue si cambia de nombre o de dueño.
+        "ids": ("origen", "id_origen"),
         "obligatorias": ("tercero", "tipo_seguro", "sujeto"),
         "valores": ("importe", "referencia"),
         "importe": "importe",
@@ -218,6 +223,7 @@ class TarifarioService:
                     continue
                 datos = {d: getattr(f, d) for d in dimensiones}
                 datos.update({c: getattr(f, c) for c in conf["valores"]})
+                datos.update({c: getattr(f, c) for c in conf.get("ids", ())})
                 nuevas.append({"quincena": hasta, "heredada": True,
                                "creado_por": f.creado_por, **datos})
             if nuevas:
@@ -261,7 +267,20 @@ class TarifarioService:
             valores[d] = texto
         for campo in conf["valores"]:
             valores[campo] = self._validar_valor(conf, campo, datos.get(campo))
+        for campo in conf.get("ids", ()):
+            valores[campo] = datos.get(campo) or None
+        # Una tarifa de servicio se carga eligiendo la máquina de las que
+        # trabajaron: su id se toma de ahí, sin que nadie lo tenga que saber.
+        if "id_maquinaria" in valores and valores.get("maquinaria") and not valores["id_maquinaria"]:
+            valores["id_maquinaria"] = self._id_de_maquina(valores["maquinaria"])
         return valores
+
+    def _id_de_maquina(self, nombre: str) -> int | None:
+        fila = (self.db.query(HoraServicio.id_maquinaria)
+                .filter(HoraServicio.maquinaria == nombre,
+                        HoraServicio.id_maquinaria.isnot(None))
+                .order_by(HoraServicio.id.desc()).first())
+        return fila[0] if fila else None
 
     def _validar_valor(self, conf: dict, campo: str, valor):
         if campo in ("precio", "importe"):
@@ -270,8 +289,8 @@ class TarifarioService:
             if valor not in UNIDADES_BASE:
                 raise TarifaInvalida(
                     "La unidad base tiene que ser una de %s: dice sobre qué se "
-                    "calcula el precio, por hora de máquina o por cantidad."
-                    % ", ".join(UNIDADES_BASE)
+                    "calcula el precio, por hora de máquina, por jornal, por bins o "
+                    "por toneladas." % ", ".join(UNIDADES_BASE)
                 )
             return valor
         if campo == "referencia":

@@ -31,9 +31,9 @@ from sqlalchemy.orm import Session
 
 from app.modulos.terceros.models import (
     CargaCombustible, CuotaRepuesto, HoraReparacion, HoraServicio, Liquidacion,
-    Repuesto, Viaje,
+    PrecioSeguro, Repuesto, TarifaServicio, Viaje,
 )
-from app.modulos.terceros.services.consulta_taller import _detectar_tercero
+from app.modulos.terceros.services.consulta_externa import nombre_de_maquina
 
 
 def _fecha(valor) -> date | None:
@@ -104,8 +104,12 @@ def _mapear_hora_servicio(f: dict) -> dict:
         "finca": _texto(f.get("finca")),
         "tarea": _texto(f.get("tarea")),
         "maquinaria": _texto(f.get("maquinaria")),
+        "id_maquinaria": f.get("id_maquinaria"),
         "supervisor": _texto(f.get("supervisor")),
         "horas_maquina": f.get("horas_maquina"),
+        # Fuera de la clave a propósito: así las filas ya guardadas, que no lo
+        # tenían, se refrescan en vez de rehacerse y perder lo cargado a mano.
+        "horas_jornal": f.get("horas_jornal"),
         "unidades": f.get("unidades"),
         "unidad": _texto(f.get("unidad")),
     }
@@ -113,10 +117,8 @@ def _mapear_hora_servicio(f: dict) -> dict:
 
 def _mapear_repuesto(f: dict) -> dict:
     return {
-        # El sistema de compras no guarda el dueño: se deduce del nombre de la
-        # máquina, con la misma heurística que usa la app del taller. Es frágil
-        # a propósito y por eso el plan pide un campo propio en el origen.
-        "tercero": _detectar_tercero(f.get("maquina")) or None,
+        # El dueño lo pone `_repuestos_con_dueno`, desde el sistema de campo.
+        "tercero": _texto(f.get("tercero")) or None,
         "id_maquina": f.get("id_maquina"),
         "maquina": _texto(f.get("maquina")),
         "fecha": _fecha(f.get("fecha")),
@@ -167,7 +169,9 @@ CONJUNTOS = (
         "nombre": "horas_servicio",
         "modelo": HoraServicio,
         "mapear": _mapear_hora_servicio,
-        "clave": ("fecha", "planilla", "maquinaria", "cliente", "finca", "tarea",
+        # La máquina por su id y no por su nombre: renombrarla en el sistema de
+        # campo no rehace la fila ni pierde lo que se movió de quincena.
+        "clave": ("fecha", "planilla", "id_maquinaria", "cliente", "finca", "tarea",
                   "horas_maquina", "unidades"),
     },
     {
@@ -202,6 +206,16 @@ def tiene_trabajo_manual(fila) -> bool:
     if getattr(fila, "no_cobrar", False):
         return True
     return any(getattr(fila, campo, None) for campo in CAMPOS_MANUALES)
+
+
+def _misma_persona(a: str, b: str) -> bool:
+    """Si dos nombres son la misma persona escrita de otra forma: las mismas
+    palabras, sin importar la coma ni el orden ("ANA FERREYRA" y "FERREYRA,
+    ANA"). Un cambio de dueño de verdad no pasa esto, y no tiene que pasarlo:
+    el precio se pactó con otra persona."""
+    def palabras(s):
+        return sorted(s.upper().replace(",", " ").split())
+    return palabras(a) == palabras(b)
 
 
 def _normalizar(v):
@@ -266,6 +280,91 @@ class LiquidacionService:
 
     # ─── Generar / actualizar ───────────────────────────────────────────────
 
+    def _seguir_renombres(self, liq: Liquidacion) -> None:
+        """Las tarifas y los seguros toman el nombre actual de su máquina o su
+        bien, buscándolo por id (2026-10-07). La tarifa de servicio toma
+        también cómo está escrito ahora su dueño ("ANA FERREYRA" pasó a
+        "FERREYRA, ANA", 2026-10-14), pero sólo si es la misma persona: hay
+        reglas de una máquina a nombre de otros terceros, y esas no son de él.
+
+        El cruce con los hechos sigue siendo por nombre, pero el nombre ya no
+        puede quedar viejo: cambia acá, en la misma actualización que trae a los
+        hechos con el nombre nuevo. Lo que chocaría con una regla que ya tiene
+        ese nombre se deja como está, a la vista, en vez de pisarla.
+        """
+        # Las horas recién actualizadas todavía no están en la base, y la
+        # sesión de la app no se vacía sola: sin esto se leerían los nombres
+        # viejos y el renombre llegaría recién en la actualización siguiente.
+        self.db.flush()
+        actuales = {i: (maquina, dueno) for i, maquina, dueno in
+                    self.db.query(HoraServicio.id_maquinaria, HoraServicio.maquinaria,
+                                  HoraServicio.tercero)
+                    .filter(HoraServicio.liquidacion_id == liq.id,
+                            HoraServicio.id_maquinaria.isnot(None)).distinct()}
+        for tarifa in (self.db.query(TarifaServicio)
+                       .filter(TarifaServicio.id_maquinaria.in_(actuales)).all()):
+            maquina, dueno = actuales[tarifa.id_maquinaria]
+            nuevo = {"maquinaria": maquina}
+            # Una regla sin tercero vale para cualquiera y así sigue; y una
+            # máquina que se quedó sin dueño no le borra el que la regla tenía.
+            if tarifa.tercero and dueno and _misma_persona(tarifa.tercero, dueno):
+                nuevo["tercero"] = dueno
+            if any(getattr(tarifa, c) != v for c, v in nuevo.items()) and not self._choca(
+                    TarifaServicio, tarifa, **nuevo):
+                for campo, valor in nuevo.items():
+                    setattr(tarifa, campo, valor)
+                # La sesión no se vacía sola: sin esto, dos reglas que pasan al
+                # mismo nombre no se ven entre sí y chocan en la base.
+                self.db.flush()
+
+        # El chofer no: el mismo chofer aparece con cada dueño para el que
+        # manejó, así que su id no alcanza para saber de quién es la póliza.
+        bienes = {(b["origen"], b["id_origen"]): b
+                  for b in self.externa.bienes_terceros() if b["origen"] != "chofer"}
+        for seguro in (self.db.query(PrecioSeguro)
+                       .filter(PrecioSeguro.id_origen.isnot(None),
+                               PrecioSeguro.origen != "chofer").all()):
+            bien = bienes.get((seguro.origen, seguro.id_origen))
+            if bien is None or not bien["tercero"]:
+                continue
+            nuevo = {"tercero": bien["tercero"], "sujeto": bien["nombre"],
+                     "referencia": bien["patente"]}
+            if any(getattr(seguro, c) != v for c, v in nuevo.items()) and not self._choca(
+                    PrecioSeguro, seguro, **nuevo):
+                for campo, valor in nuevo.items():
+                    setattr(seguro, campo, valor)
+                self.db.flush()
+
+    def _choca(self, modelo, fila, **cambios) -> bool:
+        """Si con esos cambios quedaría igual a otra regla de su quincena."""
+        consulta = self.db.query(modelo).filter(modelo.quincena == fila.quincena,
+                                                modelo.id != fila.id)
+        for d in modelo.DIMENSIONES:
+            consulta = consulta.filter(getattr(modelo, d) == cambios.get(d, getattr(fila, d)))
+        return consulta.first() is not None
+
+    def _repuestos_con_dueno(self, filas: list[dict]) -> list[dict]:
+        """Cada repuesto, con el dueño que el sistema de campo le da a su
+        máquina, buscada por el id que La Falda guarda de ella (decidido con el
+        usuario el 2026-10-07). Antes se deducía del nombre, y lo de una misma
+        persona caía en varias órdenes. Una máquina sin ese id queda sin dueño:
+        se ve, y se resuelve cargándolo en La Falda.
+
+        El id de un colectivo es el del maestro de colectivos, no el de
+        maquinaria (2026-10-14): el mismo número es otra cosa en cada uno."""
+        maquinas = self.externa.duenos_por_id()
+        colectivos = self.externa.duenos_de_colectivos_por_id()
+        return [{**f, "tercero": (colectivos if f.get("es_colectivo") else maquinas)
+                 .get(f.get("id_chinagro"))} for f in filas]
+
+    def _con_dueno_del_maestro(self, horas: list[dict]) -> list[dict]:
+        """Cada hora del taller, con el dueño que el maestro de maquinaria del
+        sistema de campo le da a su máquina (ver `QUERY_DUENOS_MAQUINARIA`).
+        La que no está en el maestro queda sin dueño: se ve y no se cobra."""
+        duenos = self.externa.duenos_de_maquinas()
+        return [{**h, "tercero": duenos.get(nombre_de_maquina(h.get("maquina")))}
+                for h in horas]
+
     def generar(self, quincena: date, usuario_id: int | None = None) -> dict:
         """Trae las cinco fuentes y las guarda. Si la quincena ya existe,
         reconcilia en vez de rehacerla."""
@@ -282,8 +381,9 @@ class LiquidacionService:
             "viajes": lambda: self.externa.viajes(quincena),
             "horas_servicio": lambda: self.externa.horas_servicio(quincena),
             "combustible": lambda: self.externa.cargas_combustible(quincena),
-            "repuestos": lambda: self.externa.repuestos(quincena),
-            "horas_reparacion": lambda: self.taller.horas_quincena(quincena),
+            "repuestos": lambda: self._repuestos_con_dueno(self.externa.repuestos(quincena)),
+            "horas_reparacion": lambda: self._con_dueno_del_maestro(
+                self.taller.horas_quincena(quincena)),
         }
 
         detalle = {}
@@ -291,6 +391,7 @@ class LiquidacionService:
             detalle[conjunto["nombre"]] = self._reconciliar(
                 liq, conjunto, origenes[conjunto["nombre"]]()
             )
+        self._seguir_renombres(liq)
 
         self.db.commit()
         return {

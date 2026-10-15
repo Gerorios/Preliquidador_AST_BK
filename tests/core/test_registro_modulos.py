@@ -73,6 +73,7 @@ CATALOGO_TERCEROS = [
     ("tarifario", "Tarifario", True),
     ("estaciones", "Estaciones", True),
     ("verificaciones", "Verificaciones", False),
+    ("recibos", "Órdenes de facturación", True),
 ]
 
 

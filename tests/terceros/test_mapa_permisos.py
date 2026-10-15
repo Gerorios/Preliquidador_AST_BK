@@ -2,14 +2,18 @@
 exige cada endpoint de `/api/terceros`.
 
 `ESPERADO` copia las filas 22 a 34 de la tabla 2.4 del plan
-(`docs/superpowers/plans/2026-10-09-esquema-permisos.md`). El mapa real se lee
+(`docs/superpowers/plans/2026-10-09-esquema-permisos.md`), más las de la
+pantalla Órdenes de facturación, que llegó con la etapa 11. El mapa real se lee
 de `app.routes`: cada dependencia de `requiere_pantalla` expone `.requisito`.
 Una ruta nueva sin su fila, una fila sin ruta o un permiso distinto del de la
 tabla hacen fallar el test.
 """
+from pathlib import Path
+
 from fastapi.routing import APIRoute
 
 from app.main import app
+from tests.roles_de_prueba import AGREGADOS
 
 PREFIJO = "/api/terceros"
 
@@ -21,7 +25,8 @@ def _exige(nivel, *pantallas):
     return (M, frozenset(pantallas), nivel)
 
 
-VER_CUALQUIERA = _exige("ver", "inicio", "quincena", "tarifario", "estaciones", "verificaciones")
+VER_CUALQUIERA = _exige("ver", "inicio", "quincena", "tarifario", "estaciones", "verificaciones",
+                        "recibos")
 VER_INICIO = _exige("ver", "inicio")
 EDITAR_INICIO = _exige("editar", "inicio")
 VER_INICIO_O_QUINCENA = _exige("ver", "inicio", "quincena")
@@ -33,6 +38,8 @@ EDITAR_TARIFARIO = _exige("editar", "tarifario")
 VER_ESTACIONES = _exige("ver", "estaciones")
 EDITAR_ESTACIONES = _exige("editar", "estaciones")
 VER_VERIFICACIONES = _exige("ver", "verificaciones")
+VER_RECIBOS = _exige("ver", "recibos")
+EDITAR_RECIBOS = _exige("editar", "recibos")
 
 T = PREFIJO
 
@@ -88,6 +95,23 @@ ESPERADO = {
     # 34
     ("GET", f"{T}/verificaciones"): VER_VERIFICACIONES,
     ("GET", f"{T}/alertas"): VER_VERIFICACIONES,
+    # Órdenes de facturación (etapa 11)
+    ("GET", f"{T}/recibos"): VER_RECIBOS,
+    ("GET", f"{T}/recibos/detalle"): VER_RECIBOS,
+    ("GET", f"{T}/saldos-iniciales"): VER_RECIBOS,
+    ("POST", f"{T}/recibos/emitir"): EDITAR_RECIBOS,
+    ("POST", f"{T}/recibos/reabrir"): EDITAR_RECIBOS,
+    ("PUT", f"{T}/recibos/empresas"): EDITAR_RECIBOS,
+    ("PUT", f"{T}/recibos/factura"): EDITAR_RECIBOS,
+    ("POST", f"{T}/recibos/factura/aprobar"): EDITAR_RECIBOS,
+    ("POST", f"{T}/recibos/factura/rechazar"): EDITAR_RECIBOS,
+    ("PUT", f"{T}/recibos/pago"): EDITAR_RECIBOS,
+    ("PUT", f"{T}/recibos/revision"): EDITAR_RECIBOS,
+    ("PUT", f"{T}/saldos-iniciales"): EDITAR_RECIBOS,
+    ("POST", f"{T}/recibos/ajustes"): EDITAR_RECIBOS,
+    ("PUT", f"{T}/recibos/ajustes/{{id_}}"): EDITAR_RECIBOS,
+    ("DELETE", f"{T}/recibos/ajustes/{{id_}}"): EDITAR_RECIBOS,
+    ("POST", f"{T}/recibos/llegadas/descartar"): EDITAR_RECIBOS,
 }
 
 
@@ -123,8 +147,17 @@ def _mapa_real():
     return mapa
 
 
-def test_la_tabla_tiene_las_38_rutas():
-    assert len(ESPERADO) == 38
+def test_la_migracion_013_le_suma_la_pantalla_nueva_al_liquidador():
+    """Sin esa fila, quien liquida terceros no vería Órdenes de facturación."""
+    sql = (Path(__file__).resolve().parents[2]
+           / "migrations/terceros/013_pantalla_ordenes_de_facturacion.sql").read_text("utf-8")
+    for rol, modulo, pantalla, nivel in AGREGADOS:
+        assert f"'{rol}'" in sql
+        assert f"'{modulo}', '{pantalla}', '{nivel}'" in sql
+
+
+def test_la_tabla_tiene_las_54_rutas():
+    assert len(ESPERADO) == 54
 
 
 def test_cada_endpoint_exige_la_pantalla_y_el_nivel_de_la_tabla():

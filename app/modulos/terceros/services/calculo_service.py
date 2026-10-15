@@ -31,9 +31,10 @@ from sqlalchemy.orm import Session
 
 from app.modulos.terceros.models import (
     CALCULADO, NO_APROBADA, NO_COBRAR, SIGNO, SIN_CANTIDAD, SIN_DIMENSION,
-    SIN_TARIFA, SIN_TERCERO, TARIFA_AMBIGUA, UNIDAD_HORA_MAQUINA,
-    CargaCombustible, CuotaRepuesto, HoraReparacion, HoraServicio, Liquidacion,
-    PrecioSeguro, Repuesto, Viaje,
+    SIN_TARIFA, SIN_TERCERO, TARIFA_AMBIGUA, UNIDAD_BINS, UNIDAD_HORA_MAQUINA,
+    UNIDAD_JORNAL, UNIDAD_TONELADAS, UNIDADES_DE_LA_TAREA, HORAS_POR_JORNAL, KILOS_POR_BIN,
+    Ajuste, CargaCombustible, CuotaRepuesto, HoraReparacion, HoraServicio,
+    Liquidacion, PrecioSeguro, Repuesto, Viaje,
 )
 from app.modulos.terceros.services.consulta_taller import ESTADO_APROBADO
 from app.modulos.terceros.services.tarifario_service import TIPOS, especificidad
@@ -110,10 +111,31 @@ class Buscador:
 # nadie va a cobrar.
 
 def _cant_servicio(hecho, tarifa):
-    """La tarifa elige la medida: la hora de máquina o lo que midió la tarea."""
-    if tarifa.unidad_base == UNIDAD_HORA_MAQUINA:
-        return hecho.horas_maquina, UNIDAD_HORA_MAQUINA
-    return hecho.unidades, tarifa.unidad_base
+    """La tarifa elige la medida.
+
+    Bins y toneladas son lo que midió la tarea, y sólo si la tarea mide eso:
+    una tarifa por bins sobre una tarea de tancadas no tiene qué multiplicar,
+    y devolver la cantidad igual sería pagar tancadas como si fueran bins.
+    Sin cantidad, la línea queda SIN_CANTIDAD y se ve.
+
+    La excepción son las toneladas de una tarea medida en bins: son los bins
+    por KILOS_POR_BIN. La carga de fruta se mide en bins y se paga por tonelada.
+    """
+    unidad = tarifa.unidad_base
+    if unidad == UNIDAD_HORA_MAQUINA:
+        return hecho.horas_maquina, unidad
+    if unidad == UNIDAD_JORNAL:
+        if hecho.horas_jornal is None:
+            return None, unidad
+        return Decimal(str(hecho.horas_jornal)) / HORAS_POR_JORNAL, unidad
+    medida = (hecho.unidad or "").strip().upper()
+    if unidad == UNIDAD_TONELADAS and medida in UNIDADES_DE_LA_TAREA[UNIDAD_BINS]:
+        if hecho.unidades is None:
+            return None, unidad
+        return Decimal(str(hecho.unidades)) * KILOS_POR_BIN / 1000, unidad
+    if medida not in UNIDADES_DE_LA_TAREA.get(unidad, ()):
+        return None, unidad
+    return hecho.unidades, unidad
 
 
 def sin_cuotas(consulta, modelo):
@@ -143,7 +165,8 @@ CONCEPTOS = {
         "modelo": HoraServicio,
         "tarifario": "servicio",
         "dimensiones": lambda h: {"tercero": h.tercero, "cliente": h.cliente,
-                                  "finca": h.finca, "tarea": h.tarea},
+                                  "finca": h.finca, "tarea": h.tarea,
+                                  "maquinaria": h.maquinaria},
         "cantidad": _cant_servicio,
         "bloqueo": None,
         "etiqueta": "Horas de servicio",
@@ -357,6 +380,8 @@ class CalculoService:
                 por_tercero[tercero] = {
                     "tercero": tercero,
                     **{c: CERO for c in CONCEPTOS},
+                    # Con signo: a favor del tercero si es positivo.
+                    "ajustes": CERO,
                     "seguros": CERO,
                     "total_a_facturar": CERO,
                     "total_a_pagar": CERO,
@@ -373,9 +398,14 @@ class CalculoService:
         for tercero, suma in self._sumar_seguros(quincena):
             entrada(tercero)["seguros"] = suma
 
+        for tercero, suma in (self.db.query(Ajuste.tercero, func.sum(Ajuste.importe))
+                              .filter(Ajuste.quincena == quincena)
+                              .group_by(Ajuste.tercero).all()):
+            entrada(tercero)["ajustes"] = suma
+
         for fila in por_tercero.values():
             fila["total_a_facturar"] = sum(
-                (SIGNO[c] * fila[c] for c in CONCEPTOS), CERO)
+                (SIGNO[c] * fila[c] for c in CONCEPTOS), CERO) + fila["ajustes"]
             fila["total_a_pagar"] = (fila["total_a_facturar"]
                                      + SIGNO["seguros"] * fila["seguros"])
         return sorted(por_tercero.values(), key=lambda f: f["tercero"])
@@ -425,7 +455,7 @@ class CalculoService:
         segundo son ciento cuarenta y cuatro viajes a una base que está en otro
         servidor.
         """
-        salida: dict = defaultdict(lambda: {c: CERO for c in SIGNO})
+        salida: dict = defaultdict(lambda: {**{c: CERO for c in SIGNO}, "ajustes": CERO})
 
         for concepto, conf in CONCEPTOS.items():
             modelo = conf["modelo"]
@@ -448,11 +478,16 @@ class CalculoService:
                                .group_by(PrecioSeguro.quincena).all()):
             salida[quincena]["seguros"] = suma or CERO
 
+        for quincena, suma in (self.db.query(Ajuste.quincena, func.sum(Ajuste.importe))
+                               .group_by(Ajuste.quincena).all()):
+            salida[quincena]["ajustes"] = suma or CERO
+
         # El total es el neto del recibo: lo que se paga menos lo que se
         # descuenta, seguros incluidos. Es el número con el que se compara una
-        # quincena contra otra.
+        # quincena contra otra. Los ajustes ya traen su signo.
         for datos in salida.values():
-            datos["total"] = sum((SIGNO[c] * datos[c] for c in SIGNO), CERO)
+            datos["total"] = (sum((SIGNO[c] * datos[c] for c in SIGNO), CERO)
+                              + datos.get("ajustes", CERO))
         return dict(salida)
 
     # ─── Lo que hay que cargar en el tarifario ──────────────────────────────

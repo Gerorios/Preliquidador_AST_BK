@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.database import Base
 from app.modulos.terceros.models import (
     CALCULADO, NO_APROBADA, NO_COBRAR, SIN_CANTIDAD, SIN_TARIFA, SIN_TERCERO,
-    TARIFA_AMBIGUA, UNIDAD_CANTIDAD, UNIDAD_HORA_MAQUINA,
+    TARIFA_AMBIGUA, UNIDAD_BINS, UNIDAD_HORA_MAQUINA, UNIDAD_JORNAL, UNIDAD_TONELADAS,
     CargaCombustible, HoraReparacion, HoraServicio, Liquidacion, PrecioSeguro,
     Repuesto, Viaje,
 )
@@ -194,13 +194,14 @@ def test_un_repuesto_sin_dueno_tampoco_se_cobra(db, calculo):
     assert r.estado_calculo == SIN_TERCERO
 
 
-def test_una_tarifa_por_cantidad_sobre_una_linea_sin_cantidad_no_paga_cero(db, calculo, tarifario):
-    """Una tarea pactada por cantidad sobre una planilla que sólo midió horas.
+def test_una_tarifa_por_bins_sobre_una_linea_sin_cantidad_no_paga_cero(db, calculo, tarifario):
+    """Una tarea pactada por bins sobre una planilla que sólo midió horas.
     Es un tarifario mal armado, y decirlo es distinto de cobrar cero."""
     tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
-                                    "unidad_base": UNIDAD_CANTIDAD, "precio": "1000"})
+                                    "unidad_base": UNIDAD_BINS, "precio": "1000"})
     h = HoraServicio(liquidacion_id=_liq(db).id, tercero="ARANDA, HUGO",
-                     planilla="COSECHA", horas_maquina=Decimal("8"), unidades=None)
+                     planilla="COSECHA", horas_maquina=Decimal("8"), unidades=None,
+                     unidad="BINS")
     db.add(h)
     db.commit()
 
@@ -238,13 +239,13 @@ def test_la_unidad_base_decide_sobre_que_medida_se_multiplica(db, calculo, tarif
     tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO", "tarea": "COSECHA",
                                     "unidad_base": UNIDAD_HORA_MAQUINA, "precio": "10000"})
     tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO", "tarea": "BINS",
-                                    "unidad_base": UNIDAD_CANTIDAD, "precio": "500"})
+                                    "unidad_base": UNIDAD_BINS, "precio": "500"})
     por_hora = HoraServicio(liquidacion_id=_liq(db).id, tercero="ARANDA, HUGO",
                             tarea="COSECHA", horas_maquina=Decimal("8"),
-                            unidades=Decimal("40"))
+                            unidades=Decimal("40"), unidad="BINS")
     por_cantidad = HoraServicio(liquidacion_id=_liq(db).id, tercero="ARANDA, HUGO",
                                 tarea="BINS", horas_maquina=Decimal("8"),
-                                unidades=Decimal("40"))
+                                unidades=Decimal("40"), unidad="BINS")
     db.add_all([por_hora, por_cantidad])
     db.commit()
 
@@ -252,8 +253,105 @@ def test_la_unidad_base_decide_sobre_que_medida_se_multiplica(db, calculo, tarif
     db.refresh(por_hora), db.refresh(por_cantidad)
     assert por_hora.unidad_base == UNIDAD_HORA_MAQUINA
     assert por_hora.importe == Decimal("80000.00")      # 8 horas
-    assert por_cantidad.unidad_base == UNIDAD_CANTIDAD
-    assert por_cantidad.importe == Decimal("20000.00")  # 40 unidades
+    assert por_cantidad.unidad_base == UNIDAD_BINS
+    assert por_cantidad.importe == Decimal("20000.00")  # 40 bins
+
+
+def _hora(db, **campos):
+    h = HoraServicio(liquidacion_id=_liq(db).id, tercero="ARANDA, HUGO", **campos)
+    db.add(h)
+    db.commit()
+    return h
+
+
+def test_el_jornal_son_las_horas_de_jornal_divididas_por_diez(db, calculo, tarifario):
+    """Lo definió el usuario (2026-10-05): 8,5 horas de jornal son 0,85
+    jornales."""
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                    "unidad_base": UNIDAD_JORNAL, "precio": "150000"})
+    h = _hora(db, horas_maquina=Decimal("6"), horas_jornal=Decimal("8.5"))
+
+    calculo.calcular(Q)
+    db.refresh(h)
+    assert h.cantidad_base == Decimal("0.85")
+    assert h.importe == Decimal("127500.00")
+
+
+def test_por_jornal_sin_horas_de_jornal_no_paga_cero(db, calculo, tarifario):
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                    "unidad_base": UNIDAD_JORNAL, "precio": "150000"})
+    h = _hora(db, horas_maquina=Decimal("6"), horas_jornal=None)
+
+    calculo.calcular(Q)
+    db.refresh(h)
+    assert h.estado_calculo == SIN_CANTIDAD
+
+
+def test_por_toneladas_toma_la_cantidad_de_una_tarea_medida_en_tn(db, calculo, tarifario):
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                    "unidad_base": UNIDAD_TONELADAS, "precio": "3000"})
+    h = _hora(db, unidades=Decimal("12.5"), unidad="TN")
+
+    calculo.calcular(Q)
+    db.refresh(h)
+    assert h.importe == Decimal("37500.00")
+
+
+def test_por_toneladas_sobre_una_tarea_medida_en_bins_son_400_kilos_por_bin(
+        db, calculo, tarifario):
+    """La carga de fruta se mide en bins y se paga por tonelada (lo dijo el
+    usuario, 2026-10-07): 201 bins de 400 kilos son 80,4 toneladas."""
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                    "unidad_base": UNIDAD_TONELADAS, "precio": "5000"})
+    h = _hora(db, unidades=Decimal("201"), unidad="BINS")
+
+    calculo.calcular(Q)
+    db.refresh(h)
+    assert (h.cantidad_base, h.importe) == (Decimal("80.40"), Decimal("402000.00"))
+
+
+def test_por_toneladas_sobre_una_tarea_de_tancadas_no_paga(db, calculo, tarifario):
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                    "unidad_base": UNIDAD_TONELADAS, "precio": "5000"})
+    h = _hora(db, unidades=Decimal("40"), unidad="TANCADAS")
+
+    calculo.calcular(Q)
+    db.refresh(h)
+    assert h.estado_calculo == SIN_CANTIDAD
+
+
+def test_por_bins_sobre_una_tarea_medida_en_otra_cosa_no_paga(db, calculo, tarifario):
+    """Pagar tancadas como si fueran bins sería pagar un número que mide otra
+    cosa. Queda sin cantidad, a la vista."""
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                    "unidad_base": UNIDAD_BINS, "precio": "500"})
+    h = _hora(db, unidades=Decimal("40"), unidad="TANCADAS")
+
+    calculo.calcular(Q)
+    db.refresh(h)
+    assert h.estado_calculo == SIN_CANTIDAD
+
+
+def test_la_maquina_es_una_dimension_de_la_tarifa(db, calculo, tarifario):
+    """El precio varía según la máquina: la regla con máquina le gana a la
+    general del mismo tercero."""
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                    "unidad_base": UNIDAD_HORA_MAQUINA, "precio": "10000"})
+    tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO", "maquinaria": "CARGADORA 1",
+                                    "unidad_base": UNIDAD_HORA_MAQUINA, "precio": "14000"})
+    con = _hora(db, maquinaria="CARGADORA 1", horas_maquina=Decimal("2"))
+    sin = _hora(db, maquinaria="TRACTOR 7", horas_maquina=Decimal("2"))
+
+    calculo.calcular(Q)
+    db.refresh(con), db.refresh(sin)
+    assert (con.importe, sin.importe) == (Decimal("28000.00"), Decimal("20000.00"))
+
+
+def test_la_unidad_base_es_una_de_las_cuatro(tarifario):
+    from app.modulos.terceros.services.tarifario_service import TarifaInvalida
+    with pytest.raises(TarifaInvalida):
+        tarifario.crear("servicio", Q, {"tercero": "ARANDA, HUGO",
+                                        "unidad_base": "unidades", "precio": "1"})
 
 
 # ─── Los totales del recibo ─────────────────────────────────────────────────
