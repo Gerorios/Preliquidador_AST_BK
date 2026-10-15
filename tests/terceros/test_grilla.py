@@ -105,17 +105,20 @@ def test_una_hora_de_taller_trae_el_sub_rubro_en_su_campo(db, grilla):
     assert f["estado"] == NO_APROBADA
 
 
-def test_un_repuesto_trae_maquina_repuesto_y_rubro(db, grilla):
+def test_un_repuesto_trae_maquina_tipo_de_insumo_repuesto_y_rubro(db, grilla):
+    """El recibo lo describe como máquina, tipo de insumo e insumo (lo pidió el
+    usuario, 2026-10-05): el tipo tiene que llegar en la línea."""
     db.add(Repuesto(
         liquidacion_id=_liq(db).id, tercero="RUBEN MUÑOZ", fecha=Q,
-        maquina="SER-TEC", repuesto='TORNILLO 3/8X2"', rubro="BULONERIA",
+        maquina="SER-TEC", tipo_insumo="REPUESTOS",
+        repuesto='TORNILLO 3/8X2"', rubro="BULONERIA",
         cantidad=Decimal("3"), monto_total=Decimal("789.81"),
         importe=Decimal("789.81"), estado_calculo=CALCULADO))
     db.commit()
 
     f = _una(grilla.lineas(Q), "repuestos")
-    assert (f["maquina"], f["repuesto"], f["rubro"]) == (
-        "SER-TEC", 'TORNILLO 3/8X2"', "BULONERIA")
+    assert (f["maquina"], f["tipo_insumo"], f["repuesto"], f["rubro"]) == (
+        "SER-TEC", "REPUESTOS", 'TORNILLO 3/8X2"', "BULONERIA")
     # No lleva precio unitario: el que tiene es del sistema de compras, no uno
     # pactado con el tercero.
     assert f["precio"] is None
@@ -138,6 +141,17 @@ def test_una_hora_de_servicio_dice_sobre_que_medida_se_paga(db, grilla):
     # La fila tiene las dos medidas cargadas; la que se cobró es ésta.
     assert f["unidad"] == UNIDAD_HORA_MAQUINA
     assert f["cantidad"] == Decimal("6")
+
+
+@pytest.mark.parametrize("unidad, bins", [("BINS", Decimal("297")), ("TANCADAS", None)])
+def test_una_hora_de_servicio_muestra_los_bins_si_la_tarea_los_mide(db, grilla, unidad, bins):
+    """La carga de fruta se paga por tonelada y se cuenta en bins: se ven los
+    dos números. Las tancadas no son bins."""
+    db.add(HoraServicio(
+        liquidacion_id=_liq(db).id, tercero="BARRIOS", fecha=Q,
+        tarea="CARGA FRUTA POR BINS", unidades=Decimal("297"), unidad=unidad))
+    db.commit()
+    assert _una(grilla.lineas(Q), "servicio")["bins"] == bins
 
 
 def test_un_seguro_es_la_tarifa_y_no_tiene_fecha(db, grilla):

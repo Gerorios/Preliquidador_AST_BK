@@ -67,6 +67,18 @@ ESTADOS = {"aprobadas": 1, "pendientes": 2, "rechazadas": 3,
 
 
 class ExternaFalsa:
+    def duenos_de_maquinas(self):
+        return {"CARGADORA MANITOU N°9872 PABLO ROJAS": "PABLO ROJAS"}
+
+    def bienes_terceros(self):
+        return []
+
+    def duenos_por_id(self):
+        return {}
+
+    def duenos_de_colectivos_por_id(self):
+        return {}
+
     def __init__(self, error=None):
         self.error = error
         self.quincenas_pedidas = []
@@ -484,10 +496,17 @@ def test_generar_deja_la_quincena_con_los_precios_puestos():
     app.dependency_overrides[get_usuario_actual] = lambda: LIQUIDADOR
     app.dependency_overrides[api.get_calculo] = lambda: calculo
     app.dependency_overrides[api.get_liquidacion] = lambda: LiquidacionFalsa()
+    app.dependency_overrides[api.get_recibos] = lambda: RecibosFalsos()
     r = TestClient(app).post("/api/terceros/liquidaciones/generar",
                              json={"quincena": Q})
     assert r.status_code == 200
     assert calculo.calculadas == [date(2026, 8, 1)]
+
+
+class RecibosFalsos:
+    """Sin recibos emitidos: generar no toca la quincena anterior."""
+    def tiene_emitidos(self, quincena):
+        return False
 
 
 class LiquidacionFalsa:

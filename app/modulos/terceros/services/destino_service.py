@@ -15,6 +15,12 @@ Un repuesto con cuotas deja de descontarse en su quincena y se descuenta en
 cada una de las de sus cuotas. Por eso no se lo puede además mover: serían dos
 respuestas distintas a la misma pregunta.
 
+**Nada de lo que está en un recibo emitido se mueve.** El recibo emitido es
+una foto: si una línea suya se mandara a otra quincena, quedaría a la vez en la
+foto y en el recibo al que va, y se le cobraría dos veces. Para moverla hay que
+reabrirlo. Lo que llegó después de emitir no está en la foto, y ése sí se mueve:
+es justamente lo que hay que llevar al recibo abierto.
+
 **Mover no cambia el precio.** Se cobra siempre con el tarifario de la quincena
 en la que se generó el hecho (lo decidió el usuario, 2026-09-30): un viaje que
 llegó tarde se paga lo que valía cuando se hizo. Y el repuesto no tiene
@@ -29,6 +35,9 @@ from sqlalchemy.orm import Session
 from app.modulos.terceros.models import CALCULADO, CuotaRepuesto, Repuesto
 from app.modulos.terceros.services import quincenas
 from app.modulos.terceros.services.calculo_service import CONCEPTOS
+from app.modulos.terceros.services.recibo_service import (
+    en_alguna_foto, quincenas_emitidas,
+)
 
 # Un año de quincenas. No es una regla del negocio: es la baranda contra un
 # cero de más tipeado sin querer, que repartiría un repuesto en 240 cuotas.
@@ -81,6 +90,8 @@ class DestinoService:
                 "cambiá las cuotas.")
 
         origen = hecho.liquidacion.quincena
+        self._no_emitidas(hecho.tercero, {quincena})
+        self._no_en_foto(hecho.tercero, concepto, id_, {hecho.quincena_efectiva or origen})
         if quincena == origen:
             hecho.quincena_efectiva = None
             hecho.motivo_efectiva = None
@@ -88,8 +99,9 @@ class DestinoService:
             motivo = (motivo or "").strip()
             if not motivo:
                 raise DestinoInvalido(
-                    "Mover una línea de quincena pide el motivo: el recibo lo "
-                    "muestra como un ajuste y tiene que poder leerse por qué.")
+                    "Mover una línea de quincena pide el motivo: la orden de "
+                    "facturación lo muestra como un ajuste y tiene que poder "
+                    "leerse por qué.")
             hecho.quincena_efectiva = quincena
             hecho.motivo_efectiva = motivo
         # Sin recalcular: el precio sale del tarifario de la quincena en la que
@@ -125,6 +137,15 @@ class DestinoService:
                 "Este repuesto no tiene un importe que descontar, así que no "
                 "se puede repartir en cuotas.")
 
+        quincenas_plan = []
+        q = desde
+        for _ in range(cuotas):
+            quincenas_plan.append(q)
+            q = quincenas.siguiente(q)
+        self._no_emitidas(repuesto.tercero, set(quincenas_plan))
+        self._no_en_foto(repuesto.tercero, "repuestos", repuesto_id,
+                         self._donde_se_liquida(repuesto))
+
         self._borrar_cuotas(repuesto_id)
         # El plan manda sobre cualquier movimiento anterior: con cuotas, la
         # quincena del repuesto ya no dice nada.
@@ -132,21 +153,25 @@ class DestinoService:
         repuesto.motivo_efectiva = None
 
         motivo = (motivo or "").strip() or None
-        quincena = desde
-        nuevas = []
-        for numero, importe in enumerate(
-                repartir(Decimal(str(repuesto.importe)), cuotas), start=1):
-            nuevas.append(CuotaRepuesto(
-                repuesto_id=repuesto_id, numero=numero, de=cuotas,
-                quincena=quincena, importe=importe, motivo=motivo,
-                creado_por=usuario_id))
-            quincena = quincenas.siguiente(quincena)
+        nuevas = [
+            CuotaRepuesto(repuesto_id=repuesto_id, numero=numero, de=cuotas,
+                          quincena=q, importe=importe, motivo=motivo,
+                          creado_por=usuario_id)
+            for numero, (q, importe) in enumerate(
+                zip(quincenas_plan, repartir(Decimal(str(repuesto.importe)), cuotas)),
+                start=1)
+        ]
         self.db.add_all(nuevas)
         self.db.commit()
         return nuevas
 
     def quitar_cuotas(self, repuesto_id: int) -> int:
         """Vuelve a descontarlo entero, en su quincena."""
+        repuesto = self.db.get(Repuesto, repuesto_id)
+        if repuesto is not None:
+            self._no_emitidas(repuesto.tercero, {repuesto.liquidacion.quincena})
+            self._no_en_foto(repuesto.tercero, "repuestos", repuesto_id,
+                             self._donde_se_liquida(repuesto))
         n = self._borrar_cuotas(repuesto_id)
         self.db.commit()
         return n
@@ -157,6 +182,26 @@ class DestinoService:
                 .order_by(CuotaRepuesto.numero).all())
 
     # ─── Interno ────────────────────────────────────────────────────────────
+
+    def _donde_se_liquida(self, repuesto: Repuesto) -> set:
+        """Las quincenas en las que hoy se descuenta: las de sus cuotas, o la
+        suya si se descuenta entero."""
+        plan = {c.quincena for c in self.cuotas_de(repuesto.id)}
+        return plan or {repuesto.quincena_efectiva or repuesto.liquidacion.quincena}
+
+    def _no_emitidas(self, tercero: str, en_juego: set) -> None:
+        emitidas = quincenas_emitidas(self.db, tercero, en_juego)
+        if emitidas:
+            raise DestinoInvalido(
+                "La orden de facturación de %s de %s ya está emitida. Para "
+                "cambiar esto hay que reabrirla primero." % (tercero, ", ".join(
+                    quincenas.nombre(q) for q in sorted(emitidas))))
+
+    def _no_en_foto(self, tercero: str, concepto: str, id_: int, quincenas_: set) -> None:
+        if en_alguna_foto(self.db, tercero, concepto, id_, quincenas_):
+            raise DestinoInvalido(
+                "Esta línea está en una orden de facturación de %s ya emitida. "
+                "Para cambiarla hay que reabrir esa orden primero." % tercero)
 
     def _tiene_cuotas(self, repuesto_id: int) -> bool:
         return (self.db.query(CuotaRepuesto.id)

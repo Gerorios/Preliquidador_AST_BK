@@ -55,3 +55,12 @@ core/003_borrar_usuario_modulo.sql
 facturacion/001_unidad_por_tarea.sql
 facturacion/002_borrar_unidad_por_tarea.sql
 facturacion/003_comprobantes.sql
+
+# Liquidación Terceros, etapa 11. Todavía no están en producción: van con
+# el deploy de la etapa 11.
+terceros/008_recibo.sql
+terceros/009_ajustes.sql
+terceros/010_servicio_por_maquina_y_jornal.sql
+terceros/011_reparto_de_facturas.sql
+terceros/012_maquina_por_id.sql
+terceros/013_pantalla_ordenes_de_facturacion.sql

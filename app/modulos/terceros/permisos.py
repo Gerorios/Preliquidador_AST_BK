@@ -15,6 +15,7 @@ PANTALLAS = (
     Pantalla("tarifario", "Tarifario"),
     Pantalla("estaciones", "Estaciones"),
     Pantalla("verificaciones", "Verificaciones", editable=False),
+    Pantalla("recibos", "Órdenes de facturación"),
 )
 
 # Dependencias con nombre, definidas una sola vez: FastAPI cachea por objeto.
@@ -49,3 +50,8 @@ editar_estaciones = requiere_pantalla(MODULO, "estaciones", nivel="editar")
 
 # Verificaciones y alertas de cruce (sólo Ver).
 ver_verificaciones = requiere_pantalla(MODULO, "verificaciones")
+
+# Órdenes de facturación (etapa 11): emitirlas, la factura de cada empresa, el
+# pago, los ajustes, lo que llegó tarde y los saldos iniciales.
+ver_recibos = requiere_pantalla(MODULO, "recibos")
+editar_recibos = requiere_pantalla(MODULO, "recibos", nivel="editar")

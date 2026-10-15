@@ -24,12 +24,21 @@ SEMILLA = (
     ("Liquidador de terceros", "terceros", "verificaciones", "ver"),
 )
 
+# Lo que migraciones posteriores le suman a esos roles. `SEMILLA` sigue siendo
+# exactamente lo que carga core/002 (lo verifica test_migracion_roles.py); con
+# esto, el rol de prueba es el que queda en una base con todas las migraciones.
+AGREGADOS = (
+    # terceros/013: la pantalla Órdenes de facturación, de la etapa 11.
+    ("Liquidador de terceros", "terceros", "recibos", "editar"),
+)
+
 
 def rol_de_semilla(nombre: str) -> SimpleNamespace:
-    """El rol `nombre` de `SEMILLA`, como objeto simulado con `nombre` y `permisos`."""
+    """El rol `nombre` de `SEMILLA`, con lo que le suman `AGREGADOS`, como objeto
+    simulado con `nombre` y `permisos`."""
     permisos = [
         SimpleNamespace(modulo=m, pantalla=p, nivel=n)
-        for r, m, p, n in SEMILLA
+        for r, m, p, n in SEMILLA + AGREGADOS
         if r == nombre
     ]
     if not permisos:

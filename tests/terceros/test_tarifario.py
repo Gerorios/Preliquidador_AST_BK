@@ -7,9 +7,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
+from app.modulos.terceros.api.terceros import _tarifa_a_dict
 from app.modulos.terceros.models import TarifaViaje
+from app.modulos.terceros.schemas import (
+    CombinacionResponse, TarifaRequest, TarifaResponse,
+)
+from app.modulos.terceros.services.calculo_service import CONCEPTOS
 from app.modulos.terceros.services.tarifario_service import (
-    TarifaInvalida, TarifarioService, especificidad,
+    TIPOS, TarifaInvalida, TarifarioService, especificidad,
 )
 
 Q = date(2026, 8, 1)
@@ -116,15 +121,33 @@ def test_un_precio_en_cero_se_acepta(s):
     assert s.crear("viajes", Q, {"tercero": "X", "precio": "0"}).precio == Decimal("0")
 
 
-def test_la_unidad_base_del_servicio_tiene_que_ser_una_de_las_dos(s):
+def test_la_unidad_base_del_servicio_tiene_que_ser_una_de_las_cuatro(s):
+    """La «cantidad» genérica ya no existe: se dice si son bins o toneladas."""
     with pytest.raises(TarifaInvalida) as e:
         s.crear("servicio", Q, {"tercero": "BARRIOS", "precio": "100",
-                                "unidad_base": "hsjornal"})
-    assert "hora de máquina o por cantidad" in str(e.value)
+                                "unidad_base": "unidades"})
+    assert "por jornal, por bins o por toneladas" in str(e.value)
 
 
-@pytest.mark.parametrize("unidad", ["hsmaquina", "unidades"])
-def test_las_dos_unidades_base_validas(unidad, s):
+@pytest.mark.parametrize("tipo", TIPOS)
+def test_cada_dimension_viaja_por_la_api(tipo):
+    """Una dimensión que falta en los schemas no da error: pydantic la descarta
+    callada. La regla se guarda sin ella y alcanza a más hechos de los que se
+    quiso, y la pantalla no la puede mostrar ni ofrecer."""
+    for dimension in TIPOS[tipo]["dimensiones"]:
+        assert dimension in TarifaRequest.model_fields, dimension
+        assert dimension in TarifaResponse.model_fields, dimension
+        if any(c["tarifario"] == tipo for c in CONCEPTOS.values()):
+            assert dimension in CombinacionResponse.model_fields, dimension
+
+    fila = TIPOS[tipo]["modelo"](**{d: "X" for d in TIPOS[tipo]["dimensiones"]})
+    salida = _tarifa_a_dict(fila)
+    for dimension in TIPOS[tipo]["dimensiones"]:
+        assert salida[dimension] == "X", dimension
+
+
+@pytest.mark.parametrize("unidad", ["hsmaquina", "jornal", "bins", "toneladas"])
+def test_las_cuatro_unidades_base_validas(unidad, s):
     t = s.crear("servicio", Q, {"tercero": "BARRIOS", "precio": "100", "unidad_base": unidad})
     assert t.unidad_base == unidad
 
@@ -241,12 +264,12 @@ def test_copiar_sobre_la_misma_quincena_se_rechaza(s):
 
 def test_copiar_conserva_la_unidad_base_y_el_tipo_de_viaje(s):
     s.crear("viajes", ANTERIOR, {"tercero": "A", "precio": "1", "tipo_viaje": "CORTO"})
-    s.crear("servicio", ANTERIOR, {"tercero": "A", "precio": "2", "unidad_base": "unidades"})
+    s.crear("servicio", ANTERIOR, {"tercero": "A", "precio": "2", "unidad_base": "bins"})
 
     s.copiar(ANTERIOR, Q)
 
     assert s.listar("viajes", Q)[0].tipo_viaje == "CORTO"
-    assert s.listar("servicio", Q)[0].unidad_base == "unidades"
+    assert s.listar("servicio", Q)[0].unidad_base == "bins"
 
 
 # ─── El resumen del tablero ─────────────────────────────────────────────────

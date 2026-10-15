@@ -59,7 +59,8 @@ def viaje(db, q=Q, **campos) -> Viaje:
 
 def repuesto(db, monto="100000", q=Q, **campos) -> Repuesto:
     base = dict(tercero="ARANDA, HUGO", maquina="COLECTIVO FAP480",
-                repuesto="EMBRAGUE", fecha=q, monto_total=Decimal(monto))
+                tipo_insumo="REPUESTOS", repuesto="EMBRAGUE", fecha=q,
+                monto_total=Decimal(monto))
     fila = Repuesto(liquidacion_id=_liq(db, q).id, **{**base, **campos})
     db.add(fila)
     db.commit()
@@ -206,6 +207,9 @@ def test_la_cuota_aparece_en_la_grilla_con_su_numero(db, destino):
         ("1 de 3", Decimal("30000.00"), None)]
     assert [(f["cuota"], f["viene_de"], f["motivo"]) for f in en_s] == [
         ("2 de 3", Q, "se le financia")]
+    # Una cuota se describe igual que el repuesto entero.
+    assert [(f["maquina"], f["tipo_insumo"], f["repuesto"]) for f in en_s] == [
+        ("COLECTIVO FAP480", "REPUESTOS", "EMBRAGUE")]
 
 
 def test_la_portada_suma_las_cuotas_en_su_quincena(db, destino):

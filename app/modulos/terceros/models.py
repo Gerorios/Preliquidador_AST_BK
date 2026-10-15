@@ -139,10 +139,14 @@ class HoraServicio(Base):
     finca          = Column(String(150), nullable=True)
     tarea          = Column(String(200), nullable=True)
     maquinaria     = Column(String(200), nullable=True)
+    # El id de la máquina en el sistema de campo: el nombre cambia y el id no.
+    id_maquinaria  = Column(Integer, nullable=True)
     supervisor     = Column(String(150), nullable=True)
     # Las dos medidas sobre las que se puede pactar. Cuál se paga lo decide la
     # Unidad base de la tarifa, no el dato.
     horas_maquina  = Column(Numeric(10, 2), nullable=True)
+    # Las del jornal, para las tarifas que se pagan por jornal (÷ HORAS_POR_JORNAL).
+    horas_jornal  = Column(Numeric(10, 2), nullable=True)
     unidades       = Column(Numeric(12, 2), nullable=True)   # sólo planilla MAQUINARIA
     unidad         = Column(String(30), nullable=True)       # BINS, TANCADAS… informativa
     quincena_efectiva = Column(Date, nullable=True)
@@ -265,11 +269,32 @@ class HoraReparacion(Base):
 
 SIN_DIMENSION = ""
 
-# Sobre qué medida se calcula una Tarifa de servicio. Los mismos valores que la
-# Unidad base de Preliquidación, a propósito: es el mismo concepto.
+# Sobre qué medida se calcula una Tarifa de servicio (lo definió el usuario,
+# 2026-10-05):
+#   - hora de máquina: las horas de máquina del parte;
+#   - jornal: las horas de jornal del parte divididas por HORAS_POR_JORNAL;
+#   - bins y toneladas: lo que midió la tarea, sólo si la tarea mide eso.
 UNIDAD_HORA_MAQUINA = "hsmaquina"
-UNIDAD_CANTIDAD = "unidades"
-UNIDADES_BASE = (UNIDAD_HORA_MAQUINA, UNIDAD_CANTIDAD)
+UNIDAD_JORNAL = "jornal"
+UNIDAD_BINS = "bins"
+UNIDAD_TONELADAS = "toneladas"
+UNIDADES_BASE = (UNIDAD_HORA_MAQUINA, UNIDAD_JORNAL, UNIDAD_BINS, UNIDAD_TONELADAS)
+
+# Cuántas horas de jornal hacen un jornal.
+HORAS_POR_JORNAL = 10
+
+# Cuántos kilos tiene un bin. Una tarea medida en bins se puede pagar por
+# toneladas: son los bins por este peso (lo dijo el usuario, 2026-10-07).
+KILOS_POR_BIN = 400
+
+# Cómo escribe el sistema de campo la unidad de una tarea que se paga por bins
+# o por toneladas. Una tarifa por bins sobre una tarea medida en tancadas no
+# tiene qué multiplicar: queda sin cantidad, a la vista, en vez de pagar un
+# número que mide otra cosa.
+UNIDADES_DE_LA_TAREA = {
+    UNIDAD_BINS: ("BINS", "BIN"),
+    UNIDAD_TONELADAS: ("TN", "TON", "TONELADA", "TONELADAS"),
+}
 
 TIPO_VIAJE_CORTO = "CORTO"
 TIPO_VIAJE_LARGO = "LARGO"
@@ -316,17 +341,24 @@ class TarifaServicio(Base):
     cliente     = Column(String(150), nullable=False, default=SIN_DIMENSION)
     finca       = Column(String(150), nullable=False, default=SIN_DIMENSION)
     tarea       = Column(String(200), nullable=False, default=SIN_DIMENSION)
-    # 'hsmaquina' o 'unidades': qué se multiplica por el precio.
+    # El precio varía según la máquina.
+    maquinaria  = Column(String(200), nullable=False, default=SIN_DIMENSION)
+    # El id de esa máquina en el sistema de campo. Con él, la regla sigue a su
+    # máquina cuando le cambian el nombre (ver LiquidacionService).
+    id_maquinaria = Column(Integer, nullable=True)
+    # Qué se multiplica por el precio: ver UNIDADES_BASE.
     unidad_base = Column(String(20), nullable=False)
     precio      = Column(Numeric(14, 2), nullable=False)
     heredada    = Column(Boolean, nullable=False, default=False)
     creado_en   = Column(DateTime, nullable=False, default=datetime.now)
     creado_por  = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
-    DIMENSIONES = ("tercero", "cliente", "finca", "tarea")
+    DIMENSIONES = ("tercero", "cliente", "finca", "tarea", "maquinaria")
 
+    # En MySQL tarea y máquina entran al índice por sus primeros 150
+    # caracteres (ver migrations/terceros/010): enteras, la clave no entra.
     __table_args__ = (
-        UniqueConstraint("quincena", "tercero", "cliente", "finca", "tarea",
+        UniqueConstraint("quincena", "tercero", "cliente", "finca", "tarea", "maquinaria",
                          name="uq_terceros_tarifa_servicio"),
     )
 
@@ -394,6 +426,11 @@ class PrecioSeguro(Base):
     tipo_seguro = Column(String(30), nullable=False)
     # La máquina o la persona que cubre la póliza.
     sujeto      = Column(String(200), nullable=False)
+    # El bien del padrón que cubre la póliza —'colectivo', 'maquinaria' o
+    # 'chofer'— y su id en el sistema de campo. Con él, el seguro sigue a su
+    # bien cuando le cambian el nombre o el dueño.
+    origen      = Column(String(20), nullable=True)
+    id_origen   = Column(Integer, nullable=True)
     # Cómo se lo identifica: la patente si es un bien, el CUIL si es alguien.
     referencia  = Column(String(60), nullable=True)
     importe     = Column(Numeric(14, 2), nullable=False)
@@ -495,4 +532,169 @@ class CuotaRepuesto(Base):
 
     __table_args__ = (
         UniqueConstraint("repuesto_id", "numero", name="uq_cuota_repuesto"),
+    )
+
+
+# ─── El recibo (etapa 11) ───────────────────────────────────────────────────
+
+# A quién le puede facturar un tercero. Es una lista cerrada, y cambia de una
+# quincena a otra: por eso se elige en cada recibo.
+EMPRESAS = ("La Asturiana", "Pamplona", "Baleares", "La Sevilla")
+
+FACTURA_RECIBIDA = "RECIBIDA"
+FACTURA_APROBADA = "APROBADA"
+FACTURA_RECHAZADA = "RECHAZADA"
+
+PAGO_TOTAL = "TOTAL"
+PAGO_PARCIAL = "PARCIAL"
+
+
+class Recibo(Base):
+    """El recibo de un tercero en una quincena.
+
+    Nace al emitirse, y guarda una **foto** (`contenido`) en vez de volver a
+    armarse: lo que se le mandó a un tercero no puede cambiar solo porque
+    alguien corrigió un dato viejo en el origen. Reabrir borra la foto y deja
+    la fila, con sus facturas y su historia.
+
+    A qué empresas factura, y la factura de cada una, están en `facturas`: una
+    orden puede repartirse entre varias.
+    """
+    __tablename__ = "terceros_recibo"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    quincena         = Column(Date, nullable=False)
+    tercero          = Column(String(150), nullable=False, index=True)
+    emitido_en       = Column(DateTime, nullable=True)
+    emitido_por      = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    contenido        = Column(JSON, nullable=True)
+    total_a_facturar = Column(Numeric(14, 2), nullable=True)
+    seguros          = Column(Numeric(14, 2), nullable=True)
+    total_a_pagar    = Column(Numeric(14, 2), nullable=True)
+    saldo_anterior   = Column(Numeric(14, 2), nullable=True)
+    en_revision      = Column(Boolean, nullable=False, default=False)
+    motivo_revision  = Column(String(255), nullable=True)
+    pago             = Column(String(10), nullable=True)
+    pago_importe     = Column(Numeric(14, 2), nullable=True)
+    pago_fecha       = Column(Date, nullable=True)
+
+    eventos = relationship("ReciboEvento", back_populates="recibo",
+                           order_by="ReciboEvento.id")
+    facturas = relationship("ReciboFactura", back_populates="recibo",
+                            order_by="ReciboFactura.id", cascade="all, delete-orphan")
+
+    __table_args__ = (UniqueConstraint("quincena", "tercero", name="uq_recibo"),)
+
+
+class ReciboFactura(Base):
+    """Lo que el tercero le factura a una empresa, y la factura que mandó.
+
+    Una orden de facturación tiene una por empresa: a algunos terceros se les
+    pide que facturen una parte a una y el resto a otra.
+    """
+    __tablename__ = "terceros_recibo_factura"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    recibo_id       = Column(Integer, ForeignKey("terceros_recibo.id"), nullable=False)
+    empresa         = Column(String(40), nullable=False)
+    # Con una sola empresa queda vacío mientras la orden está abierta: es el
+    # Total a facturar, que todavía puede cambiar. Al emitir se escribe.
+    importe         = Column(Numeric(14, 2), nullable=True)
+    numero          = Column(String(40), nullable=True)
+    fecha           = Column(Date, nullable=True)
+    importe_factura = Column(Numeric(14, 2), nullable=True)
+    estado          = Column(String(20), nullable=True)
+    motivo          = Column(String(255), nullable=True)
+
+    recibo = relationship("Recibo", back_populates="facturas")
+
+    __table_args__ = (
+        UniqueConstraint("recibo_id", "empresa", name="uq_recibo_factura"),
+    )
+
+
+class ReciboEvento(Base):
+    """Cada cosa que le pasa a un recibo, con quién y por qué.
+
+    Sin esto, un recibo reabierto y vuelto a emitir no deja rastro de que
+    alguna vez dijo otra cosa.
+    """
+    __tablename__ = "terceros_recibo_evento"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    recibo_id  = Column(Integer, ForeignKey("terceros_recibo.id"), nullable=False, index=True)
+    tipo       = Column(String(20), nullable=False)
+    motivo     = Column(String(255), nullable=True)
+    detalle    = Column(JSON, nullable=True)
+    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    recibo = relationship("Recibo", back_populates="eventos")
+
+
+class SaldoInicial(Base):
+    """Con qué saldo arranca un tercero en el módulo.
+
+    El Excel no se importa: el saldo que traía se carga a mano una vez, y
+    después el módulo lo arrastra solo. Positivo, la empresa le debe;
+    negativo, el tercero le debe.
+    """
+    __tablename__ = "terceros_saldo_inicial"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    tercero    = Column(String(150), nullable=False, unique=True)
+    # La primera quincena que se liquida acá. El saldo es el de ANTES de ella.
+    quincena   = Column(Date, nullable=False)
+    importe    = Column(Numeric(14, 2), nullable=False)
+    motivo     = Column(String(255), nullable=True)
+    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+
+# ─── Ajustes y lo que llegó tarde (etapa 11) ────────────────────────────────
+
+# De qué puede ser un ajuste. Es lo que permite que el recibo diga «Ajuste
+# combustible»; «otro» es para lo que no es de ninguno, como un daño en la finca.
+AJUSTE_CONCEPTOS = ("viajes", "servicio", "combustible", "repuestos", "reparacion", "otro")
+
+
+class Ajuste(Base):
+    """Una corrección con signo sobre el recibo abierto de un tercero.
+
+    Por algo que ningún sistema de origen sabe, o por lo que cambió en un
+    recibo ya emitido. El importe va a favor del tercero: positivo se le paga
+    más, negativo se le descuenta. Entra al Total a facturar.
+    """
+    __tablename__ = "terceros_ajuste"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    quincena        = Column(Date, nullable=False)
+    tercero         = Column(String(150), nullable=False)
+    concepto        = Column(String(20), nullable=False)
+    importe         = Column(Numeric(14, 2), nullable=False)
+    motivo          = Column(String(255), nullable=False)
+    quincena_origen = Column(Date, nullable=True)
+    # La línea de un recibo emitido que corrige, si corrige una.
+    origen_clave    = Column(String(60), nullable=True)
+    creado_en       = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por      = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+
+class LlegadaDescartada(Base):
+    """Algo que llegó tarde a un recibo emitido y se decidió dejar como está.
+
+    Sin esto el aviso volvería a aparecer cada vez que se mire.
+    """
+    __tablename__ = "terceros_llegada_descartada"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    quincena   = Column(Date, nullable=False)
+    tercero    = Column(String(150), nullable=False)
+    clave      = Column(String(60), nullable=False)
+    motivo     = Column(String(255), nullable=False)
+    creado_en  = Column(DateTime, nullable=False, default=datetime.now)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("quincena", "tercero", "clave", name="uq_descartada"),
     )
